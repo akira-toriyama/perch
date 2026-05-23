@@ -1,0 +1,88 @@
+# perch — keyboard-driven UI navigator for macOS.
+#
+# This file is the SOURCE OF TRUTH for what perch does. The app
+# never writes to it and never auto-generates an example — what
+# you see here is what perch will do.
+#
+# Install:
+#   curl --create-dirs -o ~/.config/perch/config.toml \
+#     https://raw.githubusercontent.com/akira-toriyama/perch/main/config.toml
+#
+# Reload after edits: perch --reload  (or just save — perch watches
+# the file for changes when running as a daemon).
+
+# ---- Activation ---------------------------------------------------
+[hotkey]
+# Global hotkey that toggles hint mode. Modifiers: any combination
+# of "shift", "ctrl", "alt", "cmd" joined with `+`. The trailing key
+# is a single character or a named key (space, return, esc, fN).
+#
+# Default: shift+space  — matches Homerow's primary trigger; easy
+# to chord with the spacebar resting under your thumb.
+combo = "shift+space"
+
+
+# ---- Label alphabet ----------------------------------------------
+[labels]
+# Characters used to label clickable elements, in priority order.
+# The first len(elements) characters are used; if there are more
+# elements than letters, two-character labels are generated from
+# the same alphabet ("a", "s", ..., "aa", "as", ...).
+#
+# Default order biases the keyboard home row (asdf jkl;) so a single
+# keystroke can hit the most prominent element on screen — exactly
+# the namesake of Homerow.
+alphabet = "asdfjklghqweruiopzxcvbnm"
+
+# Match-priority hint: when more elements exist than first-tier
+# alphabet letters, the labeler assigns the easiest keys to the
+# elements closest to screen center (the eye's natural anchor).
+prioritise-center = true
+
+
+# ---- Overlay appearance ------------------------------------------
+[overlay]
+# Background color of each hint pill (hex). #fde047 = a high-contrast
+# pale yellow that pops on both light and dark UI without looking
+# clinical.
+background = "#fde047"
+
+# Text color (hex). #1f2937 = dark slate — readable on the yellow
+# background at any zoom level.
+foreground = "#1f2937"
+
+# Hint pill font size (pt). Clamped 8..32.
+font-size = 14
+
+# Dim the rest of the screen by this fraction (0.0..0.6) so the
+# yellow labels read as the only foreground. 0.0 = off.
+dim = 0.25
+
+
+# ---- Behaviour ---------------------------------------------------
+[behavior]
+# When ONE candidate remains after partial input, auto-click without
+# waiting for the user to finish typing. Saves a keystroke on the
+# common case but can feel jumpy when used to multi-letter labels.
+auto-click-on-unique = true
+
+# Roles to label. AX role names without the `AX` prefix. The
+# default covers everything users typically reach for a mouse
+# to click; remove entries to declutter dense panels.
+roles = [
+    "Button",
+    "MenuItem",
+    "MenuButton",
+    "CheckBox",
+    "RadioButton",
+    "PopUpButton",
+    "Link",
+    "TabGroup",
+    "Tab",
+    "TextField",
+    "SearchField",
+]
+
+# Bundle IDs to ignore (perch won't activate over these apps).
+# Useful for things that handle their own keyboard nav.
+exclude-apps = []

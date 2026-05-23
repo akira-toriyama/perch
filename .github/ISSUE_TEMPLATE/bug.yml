@@ -1,0 +1,76 @@
+name: Bug report
+description: A hint doesn't appear, a press hits the wrong element, the daemon misbehaves.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The most useful single thing you can attach is the
+        output of `perch --doctor` plus the relevant tail of `/tmp/perch.log`
+        (run the daemon with `perch --debug` for a full trace).
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: perch --doctor
+      description: Paste the output. It includes the version, Accessibility state, config path, hotkey, and alphabet length.
+      placeholder: |
+        perch doctor
+          ✓  Accessibility: granted
+          …
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: /tmp/perch.log excerpt
+      description: |
+        The trace from the failing activation. The gold-standard trace is
+        `hotkey: bound → ax: front=… → ax: enumerated N hint(s) → activate: N hint(s) → dispatch: AXPress …`
+        — paste whichever lines surround the symptom.
+      placeholder: |
+        2026-… hotkey: bound shift+space
+        2026-… ax: front=com.apple.Safari pid=1234
+        2026-… ax: enumerated 0 hint(s) in com.apple.Safari   ← problem here
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: What was the frontmost app? What hotkey did you press? What did you expect to happen?
+      placeholder: |
+        1. Safari frontmost, showing https://example.com
+        2. Press shift+space
+        3. Expected: hint pills on every link / button
+        4. Actual: overlay flashes, no pills
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config.toml snippet
+      description: The block involved (`[hotkey]`, `[labels]`, `[behavior]`). Trim secrets.
+      render: toml
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.5 (23F79) — `sw_vers`"
+    validations:
+      required: true
+
+  - type: input
+    id: install
+    attributes:
+      label: How did you install perch?
+      placeholder: "brew install akira-toriyama/tap/perch / built from source / Perch.zip from a Release"
+    validations:
+      required: true

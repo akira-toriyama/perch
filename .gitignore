@@ -1,0 +1,23 @@
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj/
+*.xcworkspace/
+
+# macOS
+.DS_Store
+*.swp
+
+# App bundles produced by local build scripts
+*.app/
+
+# Icon generator scratch (scripts/make-icon.sh)
+.icon-build/
+Perch.iconset/
+
+# Code signing (setup-signing-cert.sh writes the identity name here)
+.signing-id
+
+# Logs (local dev)
+/tmp/*.log

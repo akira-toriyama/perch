@@ -1,0 +1,90 @@
+// Backend-neutral data types crossing the Core/Adapter seam.
+//
+// `UIElement` describes a clickable thing in the frontmost app: its
+// on-screen frame (so the overlay can position a label), a role tag,
+// an optional title (for debugging / diagnostics), and an opaque
+// `id` the adapter uses to look the live AX handle up at dispatch
+// time. Core must never touch AX directly — same policy as facet's
+// `Window` vs adapter-side `RFWorkspace`.
+
+import CoreGraphics
+import Foundation
+
+/// One clickable UI element the overlay can label. Identity is the
+/// `id` field — the adapter keeps a side-table keyed on it so the
+/// live `AXUIElement` doesn't have to enter Core.
+public struct UIElement: Sendable, Hashable {
+    /// Adapter-opaque identifier. For PerchAdapterMacOS it's a
+    /// concatenation of `(pid, address)` of the AXUIElement so a
+    /// dispatcher round-trip can resolve it back. Test adapter is
+    /// free to use anything stable across a single enumeration.
+    public let id: String
+
+    /// AX role without the `AX` prefix ("Button", "Link", …).
+    public let role: String
+
+    /// AX title / value for debugging. Not shown in the overlay.
+    public let label: String
+
+    /// On-screen frame in screen coordinates (top-left origin).
+    public let frame: CGRect
+
+    public init(id: String, role: String, label: String, frame: CGRect) {
+        self.id = id
+        self.role = role
+        self.label = label
+        self.frame = frame
+    }
+}
+
+/// A label assigned by the Labeler to a UIElement. `keys` is the
+/// sequence the user must type to trigger this element (e.g. "a",
+/// "as", "jk"). The overlay renders `keys` on top of the element at
+/// `frame`'s top-left corner.
+public struct Hint: Sendable, Hashable {
+    public let keys: String
+    public let element: UIElement
+    public init(keys: String, element: UIElement) {
+        self.keys = keys
+        self.element = element
+    }
+}
+
+/// Parsed `[hotkey].combo` value.
+public struct HotkeyCombo: Sendable, Equatable {
+    public let modifiers: Modifiers
+    public let key: String          // canonical lowercase ("space", "j", "f1")
+
+    public struct Modifiers: OptionSet, Sendable, Hashable {
+        public let rawValue: Int
+        public init(rawValue: Int) { self.rawValue = rawValue }
+        public static let shift = Modifiers(rawValue: 1 << 0)
+        public static let ctrl  = Modifiers(rawValue: 1 << 1)
+        public static let alt   = Modifiers(rawValue: 1 << 2)
+        public static let cmd   = Modifiers(rawValue: 1 << 3)
+    }
+
+    public init(modifiers: Modifiers, key: String) {
+        self.modifiers = modifiers
+        self.key = key
+    }
+
+    /// Parse `"shift+space"` / `"ctrl+alt+j"` etc. Order-insensitive,
+    /// case-insensitive. Returns `nil` on a malformed string — caller
+    /// (Config) is expected to fall back to the default.
+    public static func parse(_ s: String) -> HotkeyCombo? {
+        let parts = s.lowercased().split(separator: "+").map(String.init)
+        guard let last = parts.last, !last.isEmpty else { return nil }
+        var mods: Modifiers = []
+        for p in parts.dropLast() {
+            switch p {
+            case "shift": mods.insert(.shift)
+            case "ctrl", "control": mods.insert(.ctrl)
+            case "alt", "opt", "option": mods.insert(.alt)
+            case "cmd", "command", "meta": mods.insert(.cmd)
+            default: return nil
+            }
+        }
+        return HotkeyCombo(modifiers: mods, key: last)
+    }
+}
