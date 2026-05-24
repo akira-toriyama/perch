@@ -57,7 +57,7 @@ cd perch
 
 ```toml
 [hotkey]
-combo = "shift+space"
+active = "shift+space"
 
 [labels]
 alphabet = "asdfjklghqweruiopzxcvbnm"
@@ -86,10 +86,17 @@ exclude-apps = []
 | `--debug` | server | stderr にもログ |
 | `--validate` | standalone | config.toml を検証 |
 | `--doctor` | standalone | ヘルスチェック (AX / 設定 / デーモン / ホットキー) |
+| `--activate` | client | ヒント overlay を表示 (ホットキーの代替) |
+| `--cancel` | client | overlay 表示中ならキャンセル |
 | `--reload` | client | デーモンに設定再読み込みを通知 |
 | `--quit` | client | デーモンを終了 |
 | `--status` | client | 現在のホットキー / 最終アクティベーションを表示 |
 | `--help` | standalone | ヘルプ |
+
+`--activate` / `--cancel` があるので Karabiner / skhd / Raycast の
+スクリプトコマンドからも起動でき、perch 標準のホットキーを残した
+まま別トリガーを併用できる。overlay 表示中は `Esc` で常にキャンセル、
+ラベルにマッチしない文字をタイプしてもキャンセル。
 
 終了コード: 0 = 成功 · 1 = `--doctor` が赤 · 2 = 不正な
 フラグ / 設定 · 3 = デーモン未起動。

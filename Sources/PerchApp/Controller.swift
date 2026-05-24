@@ -61,6 +61,14 @@ final class Controller {
 
     // MARK: - Hot flow
 
+    /// Programmatic cancel — used by the `--cancel` IPC command.
+    /// Idempotent; no-op when hint mode isn't active.
+    func cancel() {
+        guard active else { return }
+        overlay.hide()
+        active = false
+    }
+
     private func activate() {
         if active {
             // Second hotkey press while up: cancel.
@@ -112,6 +120,16 @@ final class Controller {
                 switch cmd {
                 case "reload":
                     self.reload(cause: "ipc")
+                case "activate":
+                    // Same entry point the hotkey trampoline calls.
+                    // Symmetric: a second --activate while overlay is
+                    // up cancels (matches Carbon hotkey behaviour).
+                    Log.line("controller: --activate received")
+                    self.activate()
+                case "cancel":
+                    // Tear down the overlay if it's up; no-op otherwise.
+                    Log.line("controller: --cancel received")
+                    self.cancel()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     exit(0)

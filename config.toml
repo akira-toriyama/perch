@@ -13,13 +13,19 @@
 
 # ---- Activation ---------------------------------------------------
 [hotkey]
-# Global hotkey that toggles hint mode. Modifiers: any combination
+# Global hotkey that activates hint mode. Modifiers: any combination
 # of "shift", "ctrl", "alt", "cmd" joined with `+`. The trailing key
 # is a single character or a named key (space, return, esc, fN).
 #
 # Default: shift+space — easy to chord with the spacebar resting
 # under your thumb.
-combo = "shift+space"
+#
+# You can also activate from the CLI without the hotkey:
+#   perch --activate    request the running daemon to show hints
+#   perch --cancel      dismiss hints if any are showing
+# Bind these from Karabiner / skhd / Raycast if you prefer a different
+# trigger or want multiple triggers.
+active = "shift+space"
 
 
 # ---- Label alphabet ----------------------------------------------

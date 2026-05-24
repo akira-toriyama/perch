@@ -53,7 +53,7 @@ perch never writes to it.
 
 ```toml
 [hotkey]
-combo = "shift+space"            # also: ctrl+alt+j, cmd+f1, ...
+active = "shift+space"           # also: ctrl+alt+j, cmd+f1, ...
 
 [labels]
 alphabet = "asdfjklghqweruiopzxcvbnm"
@@ -82,10 +82,17 @@ watches the file for changes when running as a daemon).
 | `--debug` | server | mirror logs to stderr too |
 | `--validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
 | `--doctor` | standalone | health check (AX, config, daemon, hotkey) |
+| `--activate` | client | show hint overlay now (CLI alternative to the hotkey) |
+| `--cancel` | client | dismiss the overlay if showing |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
 | `--help` | standalone | show help |
+
+`--activate` / `--cancel` let you bind a different trigger (Karabiner,
+skhd, Raycast script command) without giving up perch's built-in
+hotkey, or trigger from scripts. Inside the overlay, `Esc` always
+cancels — type a non-matching letter to cancel too.
 
 Exit codes: 0 = ok · 1 = `--doctor` red · 2 = bad flag /
 invalid config · 3 = client cmd with no running daemon.
