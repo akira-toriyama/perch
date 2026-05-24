@@ -304,22 +304,23 @@ stray instances before relaunching.
 
 - **Flags**: `--debug` (server, verbose), `--validate` /
   `--doctor` / `--help` (standalone), `--activate` / `--scroll`
-  / `--cancel` / `--reload` / `--quit` / `--status` (client). Any
-  unrecognised flag exits `2` with a stderr message (no silent
-  fallback — facet's *Rule of Repair* discipline).
+  / `--search` / `--cancel` / `--reload` / `--quit` / `--status`
+  (client). Any unrecognised flag exits `2` with a stderr
+  message (no silent fallback — facet's *Rule of Repair*
+  discipline).
 - **`--doctor`** reports Accessibility (`AXTrust.isTrusted()`),
   config, daemon liveness, configured hotkey, and alphabet length.
   Exit 1 if AX fails.
-- **`--activate` / `--scroll` / `--cancel` are the CLI mirror
-  of the global hotkey**, posted over the same DNC channel as
-  `--reload`. They let Karabiner / skhd / Raycast script commands
-  trigger hint or scroll mode without giving up perch's built-in
-  Carbon hotkey, and make shell-script triggers cheap.
-  `--activate` and `--scroll` are symmetric with their entry
-  points: a second invocation while the mode is up cancels (same
-  path as `--cancel`). Hint and scroll mode are **mutually
-  exclusive** — entering one while the other is up tears the
-  first one down first so the single KeyTap installs cleanly.
+- **`--activate` / `--scroll` / `--search` / `--cancel` are the
+  CLI mirror of the global hotkey**, posted over the same DNC
+  channel as `--reload`. They let Karabiner / skhd / Raycast
+  script commands trigger any of the three modes without giving
+  up perch's built-in Carbon hotkey, and make shell-script
+  triggers cheap. Each is symmetric with its entry point: a
+  second invocation while the mode is up cancels (same path as
+  `--cancel`). All three modes are **mutually exclusive** —
+  entering one while any other is up tears the first one down
+  first so the single session-level KeyTap installs cleanly.
   Don't tee these through a second IPC mechanism —
   `installControlObserver` is the single observer.
 - **`--reload` / `--quit` talk to the running daemon over
