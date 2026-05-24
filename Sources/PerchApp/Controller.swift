@@ -1,9 +1,14 @@
-// Orchestrator. Owns the hotkey monitor, overlay, AX source, and
-// the config snapshot. The hotkey callback runs the full flow:
-//   1. enumerate UIElements
-//   2. Labeler.assign → hints
-//   3. overlay.show(hints) → blocking key capture
-//   4. on resolve → source.press(id:)
+// Orchestrator. Owns the hotkey monitor, AX source, overlay, and
+// the live config snapshot. The hotkey trampoline (Carbon callback,
+// also `perch --activate` over DNC) lands on `activate()`, which
+// runs the full flow:
+//   1. source.enumerate()         AX walk in the adapter
+//   2. Labeler.assign → hints     pure logic in Core
+//   3. overlay.show(hints)        installs KeyTap (CGEventTap),
+//                                  paints panel, returns immediately
+//                                  — keypresses come back via the
+//                                  onResolve / onCancel callbacks
+//   4. on resolve → source.press(id:)  AXUIElementPerformAction
 
 import AppKit
 import CoreGraphics

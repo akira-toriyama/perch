@@ -350,6 +350,14 @@ re-confirmation.
   equivalent that swallows the underlying keypress. Every
   serious launcher (Raycast, Alfred, Hammerspoon) uses this
   same API. See `HotkeyMonitor.swift`.
+- [Quartz Event Services — CGEventTap](https://developer.apple.com/documentation/coregraphics/quartz_event_services)
+  *(reviewed 2026-05-24)* — the session-level event tap perch
+  uses for **in-overlay** key capture (`KeyTap.swift`). Returning
+  `nil` from the callback swallows the event, so a typed hint
+  letter doesn't leak into the focused text field. Same
+  mechanism stroke uses for its mouse tap; the
+  `tapDisabledByTimeout`/`UserInput` self-heal pattern carries
+  over.
 - [NSPanel — non-activating panel](https://developer.apple.com/documentation/appkit/nspanel/styleemask/nonactivatingpanel)
   *(reviewed 2026-05-24)* — the style mask that lets perch
   paint an overlay without taking focus from the frontmost app

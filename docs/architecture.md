@@ -35,12 +35,19 @@ or by a fixture (`SyntheticUIElementSource` in
        │                                        │
 ┌──────┴────────────────┐         ┌──────────────┴───────┐
 │  PerchAdapterMacOS    │         │  PerchAdapterTest    │  adapter
-│   AX enumeration +    │         │   SyntheticUIElement │
-│   AXPress dispatch +  │         │   Source             │
-│   RegisterEventHotKey │         │   (no real AX;       │
-│   + NSPanel overlay   │         │    feeds canned      │
-│   (the only place AX/ │         │    elements)         │
-│   AppKit/Carbon live) │         │                      │
+│   AXSource            │         │   SyntheticUIElement │
+│     (AX enumerate     │         │   Source             │
+│      + AXPress)       │         │                      │
+│   HotkeyMonitor       │         │   (no real AX;       │
+│     (Carbon hotkey)   │         │    feeds canned      │
+│   KeyTap              │         │    elements)         │
+│     (CGEventTap for   │         │                      │
+│      keyDown capture) │         │                      │
+│   OverlayWindow       │         │                      │
+│     (NSPanel)         │         │                      │
+│   (the only place AX/ │         │                      │
+│   AppKit/Carbon/CG    │         │                      │
+│   live)               │         │                      │
 └───────────────────────┘         └──────────────────────┘
 ```
 
@@ -52,7 +59,7 @@ app startup.
 ## The activation flow
 
 ```
-hotkey shift+space pressed
+hotkey shift+space  (or `perch --activate` over DNC)
   │
   ▼
 Controller.activate()
@@ -65,17 +72,20 @@ Labeler.assign(elements, alphabet,
                screenSize) → [Hint]      ← pure logic, fully tested
   │
   ▼
-overlay.show(hints) { resolved in
-    source.press(id: resolved.element.id)
-}
-  │
-  ▼  user types "as"
-  │
+overlay.show(hints) { resolved in        ← installs KeyTap
+    source.press(id: resolved.element.id)   (CGEventTap),
+}                                           orderFront panel,
+  │                                         returns immediately
+  ▼  user types "as"  (KeyTap swallows the keys; perch is
+  │                    NEVER frontmost, so the target app
+  │                    keeps focus)
   ▼
 Labeler.resolve(hints, "as") → Hint
   │
   ▼
 source.press("1234:7") ─→ AXUIElementPerformAction(_, kAXPressAction)
+                          (focus is still where it was —
+                           the press lands without a focus dance)
 ```
 
 Every clickable element gets a stable id within one enumeration
@@ -113,21 +123,50 @@ suite pins this contract.
 | `--debug` | server | mirror logs to stderr too |
 | `--validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
 | `--doctor` | standalone | health check; exit 0/1 |
+| `--activate` | client | show hint overlay now (CLI mirror of the hotkey) |
+| `--cancel` | client | dismiss the overlay if showing |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
 | `--help` | standalone | show help |
 
-Client commands (`--reload`, `--quit`) talk to the running daemon
-via `DistributedNotificationCenter` (notification name
-`com.perch.app.control` — deliberately distinct from the bundle
-id so the bundle id can change without breaking clients). Refuse
-with exit 3 if no daemon is running.
+Client commands (`--activate`, `--cancel`, `--reload`, `--quit`)
+talk to the running daemon via `DistributedNotificationCenter`
+(notification name `com.perch.app.control` — deliberately
+distinct from the bundle id so the bundle id can change without
+breaking clients). Refuse with exit 3 if no daemon is running.
+`--activate` / `--cancel` exist so external triggers (Karabiner,
+skhd, Raycast script commands) can drive hint mode without giving
+up perch's built-in Carbon hotkey, and so shell-script triggers
+are cheap.
+
+`--status` is one-way the other direction: DNC can't reply, so
+the daemon maintains a small status file at `/tmp/perch.status`
+that `--status` reads.
+
+## Keyboard input — the second seam
+
+While the overlay is up, keyboard input is captured by `KeyTap`
+([Sources/PerchAdapterMacOS/KeyTap.swift](../Sources/PerchAdapterMacOS/KeyTap.swift)),
+a session-level `CGEventTap`. The earlier design used an
+`NSEvent.addLocalMonitorForEvents` + transient `NSApp.activate(...)`
+pair, which captured keys but stole focus from the underlying app
+— after AXPress the caret blinked in the wrong window. The tap
+swallows the typed letters by returning `nil` from its callback
+without ever activating perch, so the target window stays key
+throughout the hint flow.
+
+Events with `Cmd` / `Ctrl` / `Option` held are intentionally **not**
+swallowed: the user can still `⌘Q` the focused app or `⌘Tab`
+away with the overlay up. The cancel key is configurable via
+`[hotkey].cancel` (default `"esc"`); the overlay resolves the
+name through `HotkeyMonitor.keyCode(for:)`.
 
 ## Roadmap
 
 - **M1** *(current)* — native AppKit / SwiftUI apps only.
-  Single-screen overlay, vim-style hint pills, AXPress dispatch.
+  Single-screen overlay, vim-style hint pills, AXPress dispatch,
+  CGEventTap key capture (focus-preserving), CLI activation.
 - **M2** — multi-monitor refinement (panel per screen, hint
   pills clamped to their owning screen).
 - **M3** — additional roles (treat `kAXChildren`-less custom
