@@ -84,7 +84,7 @@ public struct PerchConfig: Sendable {
     public static func parse(_ source: String) -> PerchConfig {
         let doc = TOML.parse(source)
 
-        let hk = doc["hotkey"]?["combo"]?.asString
+        let hk = doc["hotkey"]?["active"]?.asString
             .flatMap(HotkeyCombo.parse) ?? defaultHotkey
 
         let alphabet = (doc["labels"]?["alphabet"]?.asString)

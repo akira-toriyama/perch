@@ -30,6 +30,8 @@ enum PerchApp {
                                       /tmp/perch.log
 
         CLIENT COMMANDS — need a running daemon (exit 3 if none)
+          perch --activate            show hint overlay now (alt. to hotkey)
+          perch --cancel              dismiss the overlay if showing
           perch --reload              re-read ~/.config/perch/config.toml
           perch --status              print active hotkey, alphabet, last event
           perch --quit                terminate the running daemon
@@ -68,8 +70,9 @@ enum PerchApp {
         // looking at the rest (no silent fallback — facet/stroke
         // Rule of Repair discipline).
         let recognised: Set<String> = [
-            "--help", "--debug", "--validate",
-            "--reload", "--quit", "--status", "--doctor",
+            "--help", "--debug", "--validate", "--doctor",
+            "--activate", "--cancel",
+            "--reload", "--quit", "--status",
         ]
         for a in argv where !recognised.contains(a) {
             let msg = "perch: unknown flag \"\(a)\" — see "
@@ -91,9 +94,11 @@ enum PerchApp {
         }
 
         // Client commands — require a running daemon.
-        if argv.contains("--status") { runStatus() }
-        if argv.contains("--reload") { runClient(cmd: "reload") }
-        if argv.contains("--quit")   { runClient(cmd: "quit") }
+        if argv.contains("--status")   { runStatus() }
+        if argv.contains("--activate") { runClient(cmd: "activate") }
+        if argv.contains("--cancel")   { runClient(cmd: "cancel") }
+        if argv.contains("--reload")   { runClient(cmd: "reload") }
+        if argv.contains("--quit")     { runClient(cmd: "quit") }
 
         // ----- Server mode -----
         runServer()

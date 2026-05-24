@@ -104,6 +104,11 @@ frontmost app's focused window**. The seam is captured at
   an example, never persists runtime overrides. Same policy as
   stroke / facet: the file is the only thing the user has to
   look at to know what perch will do.
+- **`[hotkey].active` is the key name**, not `combo`. It mirrors
+  the CLI surface (`perch --activate`) — same verb on both sides
+  of the seam. Don't rename it back; existing user configs that
+  carry the old `combo` key will silently fall back to the
+  default hotkey (the typo-tolerance policy below).
 - **There is no settings GUI** — by design. Don't propose
   adding NSPanel-based preferences. Memory: facet's
   `config-default-behavior` pattern.
@@ -244,13 +249,22 @@ stray instances before relaunching.
 ### CLI surface
 
 - **Flags**: `--debug` (server, verbose), `--validate` /
-  `--doctor` / `--help` (standalone), `--reload` / `--quit` /
-  `--status` (client). Any unrecognised flag exits `2` with a
-  stderr message (no silent fallback — facet's *Rule of Repair*
-  discipline).
+  `--doctor` / `--help` (standalone), `--activate` / `--cancel`
+  / `--reload` / `--quit` / `--status` (client). Any unrecognised
+  flag exits `2` with a stderr message (no silent fallback —
+  facet's *Rule of Repair* discipline).
 - **`--doctor`** reports Accessibility (`AXTrust.isTrusted()`),
   config, daemon liveness, configured hotkey, and alphabet length.
   Exit 1 if AX fails.
+- **`--activate` / `--cancel` are the CLI mirror of the global
+  hotkey**, posted over the same DNC channel as `--reload`. They
+  let Karabiner / skhd / Raycast script commands trigger hint
+  mode without giving up perch's built-in Carbon hotkey, and
+  make shell-script triggers cheap. `--activate` is symmetric
+  with the hotkey: a second `--activate` while the overlay is up
+  cancels (same path as `--cancel`). Don't tee these through a
+  second IPC mechanism — `installControlObserver` is the single
+  observer.
 - **`--reload` / `--quit` talk to the running daemon over
   Distributed Notification Center** (`com.perch.app.control`,
   see
