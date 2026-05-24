@@ -81,7 +81,7 @@ public struct PerchConfig: Sendable {
         alphabet: defaultAlphabet,
         prioritiseCenter: true,
         overlayAccent: "system",
-        overlayFontSize: 14,
+        overlayFontSize: 15,
         overlayBlurEnabled: true,
         overlayAnimEnabled: true,
         autoClickOnUnique: true,
@@ -125,7 +125,7 @@ public struct PerchConfig: Sendable {
             .flatMap(sanitiseAccent) ?? "system"
         let size = (doc["overlay"]?["font-size"]?.asDouble).map {
             min(max($0, 8), 32)
-        } ?? 14
+        } ?? 15
         let blur = doc["overlay"]?["blur-enabled"]?.asBool ?? true
         let anim = doc["overlay"]?["anim-enabled"]?.asBool ?? true
 
