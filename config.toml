@@ -17,8 +17,8 @@
 # of "shift", "ctrl", "alt", "cmd" joined with `+`. The trailing key
 # is a single character or a named key (space, return, esc, fN).
 #
-# Default: shift+space  — matches Homerow's primary trigger; easy
-# to chord with the spacebar resting under your thumb.
+# Default: shift+space — easy to chord with the spacebar resting
+# under your thumb.
 combo = "shift+space"
 
 
@@ -30,8 +30,7 @@ combo = "shift+space"
 # the same alphabet ("a", "s", ..., "aa", "as", ...).
 #
 # Default order biases the keyboard home row (asdf jkl;) so a single
-# keystroke can hit the most prominent element on screen — exactly
-# the namesake of Homerow.
+# keystroke can hit the most prominent element on screen.
 alphabet = "asdfjklghqweruiopzxcvbnm"
 
 # Match-priority hint: when more elements exist than first-tier

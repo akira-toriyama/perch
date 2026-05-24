@@ -5,9 +5,8 @@
 Keyboard-driven UI navigator for macOS. Press a global hotkey,
 type a two-letter label, click anything — no mouse, no trackpad.
 
-> An open-source MVP of [Homerow](https://www.homerow.app/),
-> covering native Mac apps (AppKit / SwiftUI). Chrome / Electron
-> are out of scope for the MVP.
+> Native Mac apps (AppKit / SwiftUI) only — Chrome / Electron are
+> out of scope for the MVP.
 
 ![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)
 ![Swift 6](https://img.shields.io/badge/Swift-6-orange)
