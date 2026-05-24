@@ -102,16 +102,38 @@ watches the file for changes when running as a daemon).
 | `--validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
 | `--doctor` | standalone | health check (AX, config, daemon, hotkey) |
 | `--activate` | client | show hint overlay now (CLI alternative to the hotkey) |
+| `--scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
 | `--cancel` | client | dismiss the overlay if showing |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
 | `--help` | standalone | show help |
 
-`--activate` / `--cancel` let you bind a different trigger (Karabiner,
-skhd, Raycast script command) without giving up perch's built-in
-hotkey, or trigger from scripts. Inside the overlay, `Esc` always
-cancels — type a non-matching letter to cancel too.
+`--activate` / `--scroll` / `--cancel` let you bind a different
+trigger (Karabiner, skhd, Raycast script command) without giving
+up perch's built-in hotkey, or trigger from scripts. Inside the
+overlay, `Esc` always cancels — type a non-matching letter to
+cancel too.
+
+### Scroll mode
+
+`perch --scroll` (bind it to a hotkey externally for one-key
+entry) puts perch into scroll mode and intercepts:
+
+| Key | Effect |
+|---|---|
+| `j` | scroll down one notch |
+| `k` | scroll up one notch |
+| `d` | scroll down half a screen |
+| `u` | scroll up half a screen |
+| `gg` | jump to top |
+| `Shift+g` | jump to bottom |
+| `esc` (or the configured cancel key) | exit scroll mode |
+| any other key | exit + let the key through |
+
+Scroll dispatches via `CGEvent.scrollWheelEvent` against the
+focused window, so perch itself stays headless and the scroll
+lands wherever the user's caret was.
 
 Exit codes: 0 = ok · 1 = `--doctor` red · 2 = bad flag /
 invalid config · 3 = client cmd with no running daemon.

@@ -105,11 +105,31 @@ exclude-apps = []
 | `--validate` | standalone | config.toml を検証 |
 | `--doctor` | standalone | ヘルスチェック (AX / 設定 / デーモン / ホットキー) |
 | `--activate` | client | ヒント overlay を表示 (ホットキーの代替) |
+| `--scroll` | client | スクロールモード (`j/k/d/u/gg/G`, `esc` で抜ける) |
 | `--cancel` | client | overlay 表示中ならキャンセル |
 | `--reload` | client | デーモンに設定再読み込みを通知 |
 | `--quit` | client | デーモンを終了 |
 | `--status` | client | 現在のホットキー / 最終アクティベーションを表示 |
 | `--help` | standalone | ヘルプ |
+
+### スクロールモード
+
+`perch --scroll` (外部キーマッパで好きなキーに割当て可) で
+スクロールモードに入る。以下を受け付ける:
+
+| キー | 効果 |
+|---|---|
+| `j` | 1 ノッチ下スクロール |
+| `k` | 1 ノッチ上スクロール |
+| `d` | 半画面下 |
+| `u` | 半画面上 |
+| `gg` | 一番上 |
+| `Shift+g` | 一番下 |
+| `esc` (or 設定したキャンセルキー) | 抜ける |
+| その他のキー | 抜けて + キーは通過 |
+
+スクロールは `CGEvent.scrollWheelEvent` で前面ウィンドウに発射。
+perch 自身は headless のままなのでフォーカスは奪わない。
 
 `--activate` / `--cancel` があるので Karabiner / skhd / Raycast の
 スクリプトコマンドからも起動でき、perch 標準のホットキーを残した
