@@ -7,8 +7,7 @@ Guidance for working in this repository.
 `perch` — keyboard-driven UI navigator for macOS. Press a global
 hotkey (default `shift+space`); perch labels every clickable
 element in the frontmost native app with a short letter
-sequence; type a label to click. Same idea as
-[Homerow](https://www.homerow.app/), open source.
+sequence; type a label to click.
 
 **MVP scope is native Mac apps only** — Chrome / Electron / web
 views are explicitly excluded (their AX trees are huge and need
@@ -378,13 +377,6 @@ re-confirmation.
 
 ### Inspiration
 
-- [Homerow (superultra)](https://www.homerow.app/)
-  *(reviewed 2026-05-24)* — the commercial macOS app perch is
-  the open-source MVP of. Reference for design feel and the
-  expected user-facing vocabulary (hint labels, home-row
-  letter priority, single-keystroke navigation). MVP scope
-  deliberately drops Homerow's Chrome / Electron support;
-  see *M2+* in [docs/architecture.md](docs/architecture.md).
 - [Vimium (philc)](https://github.com/philc/vimium)
   *(reviewed 2026-05-24)* — the original "f to label every
   link" vim-style navigator (Chrome extension). The disjoint

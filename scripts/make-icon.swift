@@ -10,8 +10,7 @@
 // horizontal "home row" guideline, on a yellow squircle. The yellow
 // matches the overlay's `[overlay].background` so the app icon and
 // the live hint pills share an identity. The home-row guide is the
-// visual nod to the namesake of Homerow / the keyboard row perch
-// biases its labels toward.
+// visual nod to the keyboard row perch biases its labels toward.
 
 import AppKit
 import CoreGraphics
