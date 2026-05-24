@@ -106,17 +106,22 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return []
         }
         let window = focused as! AXUIElement   // checked via AXUIElementGetTypeID
-        // Prefer Quartz's on-screen bounds (CGWindowListCopyWindowInfo)
-        // over AX's kAXPosition+kAXSize. Electron / web-shell apps
-        // routinely report an AX window frame that spans the entire
-        // screen (covering Dock and menu bar) even when the visible
-        // window is smaller — Quartz's view of the window list is the
-        // ground truth the WindowServer uses to composite, so it
-        // matches what the user actually sees. Falls back to the AX
-        // frame when Quartz can't find a matching window (rare —
-        // headless / off-screen-mirror-style windows).
-        windowFrame = onScreenBounds(forPid: front.processIdentifier)
-            ?? frameOf(window) ?? .zero
+        // Belt + braces bounds for filtering:
+        //   - CGWindow bounds (Quartz's view of the visible window)
+        //   - AX kAXPosition+kAXSize (per-app reported frame)
+        // Intersect them with `NSScreen.main.visibleFrame` (the
+        // user-usable area = screen minus menu bar minus a Dock
+        // that isn't auto-hidden) so even when an app over-reports
+        // its window frame to span the menu bar or Dock area, the
+        // visible-screen intersection clips us back to what the
+        // user can actually see.
+        let cgFrame = onScreenBounds(forPid: front.processIdentifier)
+        let axFrame = frameOf(window)
+        let baseFrame = cgFrame ?? axFrame ?? .zero
+        windowFrame = clampToVisibleScreen(baseFrame)
+        Log.debug("ax: bounds cg=\(cgFrame.map(rectString) ?? "nil") "
+                  + "ax=\(axFrame.map(rectString) ?? "nil") "
+                  + "→ filter=\(rectString(windowFrame))")
 
         var raw: [UIElement] = []
         walk(window, depth: 0, pid: front.processIdentifier, into: &raw)
@@ -339,6 +344,35 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return CGRect(x: x, y: y, width: w, height: h)
         }
         return nil
+    }
+
+    /// Intersect `rect` with `NSScreen.main.visibleFrame` (the
+    /// user-usable area: screen minus menu bar minus an on-Dock).
+    /// Returns the clipped rect in **top-left-origin** screen
+    /// coords (same convention AX uses), so it lines up with AX
+    /// element frames at filter time. `visibleFrame` itself is in
+    /// Cocoa (Y-up) coords keyed off the *primary* display's
+    /// bottom-left, so a sign-flip via the primary screen height
+    /// is the conversion.
+    private func clampToVisibleScreen(_ rect: CGRect) -> CGRect {
+        guard let main = NSScreen.main else { return rect }
+        let vis = main.visibleFrame
+        let totalH = main.frame.height
+        // Cocoa → CG. visibleFrame.maxY (Cocoa) is the y of the
+        // visibleFrame's TOP edge from primary bottom; subtract
+        // from totalH to get the same edge measured from primary
+        // TOP — that's our CG y for the visible-area top.
+        let cgVis = CGRect(
+            x: vis.origin.x,
+            y: totalH - vis.maxY,
+            width: vis.width,
+            height: vis.height)
+        return rect.intersection(cgVis)
+    }
+
+    private func rectString(_ r: CGRect) -> String {
+        if r.isNull { return "null" }
+        return "(\(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))×\(Int(r.height)))"
     }
 
     /// Drop elements whose top-left corner is within `proximityPx`
