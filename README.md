@@ -54,6 +54,7 @@ perch never writes to it.
 ```toml
 [hotkey]
 active = "shift+space"           # also: ctrl+alt+j, cmd+f1, ...
+cancel = "esc"                   # dismiss hint mode; bare key, no modifiers
 
 [labels]
 alphabet = "asdfjklghqweruiopzxcvbnm"

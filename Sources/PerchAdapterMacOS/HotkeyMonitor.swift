@@ -102,7 +102,12 @@ public final class HotkeyMonitor: @unchecked Sendable {
 
     // MARK: - Key name → keycode
 
-    private static func keyCode(for key: String) -> Int? {
+    /// Translate a config-style key name (`"space"`, `"esc"`,
+    /// `"a"` …) to a Carbon virtual keycode. Returns `nil` for
+    /// unknown names. Public because `OverlayWindow` needs the
+    /// same mapping to resolve `[hotkey].cancel`; centralising
+    /// it here keeps the canonical list in one place.
+    public static func keyCode(for key: String) -> Int? {
         switch key {
         case "space":  return kVK_Space
         case "return", "enter": return kVK_Return

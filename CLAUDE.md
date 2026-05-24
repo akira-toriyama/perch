@@ -171,16 +171,36 @@ frontmost app's focused window**. The seam is captured at
   on the right window when the user resolves a hint. Don't
   switch to `NSWindow` "to enable proper key handling" — it
   breaks the press dispatch.
-- **`NSEvent.addLocalMonitorForEvents`** is what intercepts
-  keyDown during hint mode. It only fires for the active app —
-  perch transiently calls `NSApp.activate(...)` while the
-  overlay is up, then deactivates on hide. A *global* monitor
-  cannot swallow events; the *local* monitor can.
-- **Esc cancels; non-letter keys cancel.** Both paths take the
-  same `onCancel()` branch. Don't try to be "helpful" by
-  treating non-letter keys as no-ops — silent input is the
-  worst UX in a modal overlay (user types `J`, gets nothing,
-  has no idea why).
+- **Keyboard capture uses a `KeyTap` (CGEventTap)**, not
+  `NSEvent.addLocalMonitorForEvents`. The first attempt at this
+  module used the local monitor + a transient
+  `NSApp.activate(...)` to make our process key while the overlay
+  was up. That worked for capturing keys but moved focus AWAY
+  from the underlying app — the user reported it as a "focus
+  jumped out from under me" feel, especially right after AXPress
+  (caret was no longer where they expected). The CGEventTap
+  approach intercepts keys system-wide AND swallows them
+  (return `nil` from the callback) without ever activating
+  perch, so the underlying app stays key throughout. See
+  [Sources/PerchAdapterMacOS/KeyTap.swift](Sources/PerchAdapterMacOS/KeyTap.swift).
+  **Don't reintroduce `NSApp.activate` + local monitor** — the
+  whole point of the daemon is to be invisible until the user
+  finishes typing a label.
+- **Cancel key is configurable** via `[hotkey].cancel`
+  (default `"esc"`). The overlay resolves the name → keycode
+  through `HotkeyMonitor.keyCode(for:)`; unknown names silently
+  fall back to Esc. Modifiers in the cancel key aren't
+  supported on purpose — using a bare key keeps the cancel
+  surface separate from the activation hotkey.
+- **Cancel key cancels; non-letter keys cancel; non-matching
+  letter cancels.** All three paths take the same `onCancel()`
+  branch. Don't try to be "helpful" by treating non-letter keys
+  as no-ops — silent input is the worst UX in a modal overlay
+  (user types `J`, gets nothing, has no idea why).
+- **Modified keys (Cmd / Ctrl) are NOT swallowed.** The KeyTap
+  callback returns `false` for them, so the user can still
+  Cmd-Q the focused app or Cmd-Tab away with the overlay up.
+  Bare letters and the cancel key are the only ones we consume.
 
 ### Logging
 
