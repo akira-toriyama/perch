@@ -6,10 +6,23 @@ final class ConfigTests: XCTestCase {
     func testDefaultsWhenFileMissing() {
         let cfg = PerchConfig.parse("")
         XCTAssertEqual(cfg.hotkey, PerchConfig.defaultHotkey)
+        XCTAssertEqual(cfg.cancelKey, PerchConfig.defaultCancelKey)
         XCTAssertEqual(cfg.alphabet, PerchConfig.defaultAlphabet)
         XCTAssertEqual(cfg.overlayBackground, "#fde047")
         XCTAssertEqual(cfg.overlayDim, 0.25, accuracy: 0.0001)
         XCTAssertTrue(cfg.autoClickOnUnique)
+    }
+
+    func testCancelKeyParsing() {
+        let src = """
+        [hotkey]
+        cancel = "q"
+        """
+        XCTAssertEqual(PerchConfig.parse(src).cancelKey, "q")
+        // Empty / whitespace falls back to default.
+        XCTAssertEqual(
+            PerchConfig.parse("[hotkey]\ncancel = \"  \"").cancelKey,
+            PerchConfig.defaultCancelKey)
     }
 
     func testHotkeyParsing() {

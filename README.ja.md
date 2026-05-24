@@ -58,6 +58,7 @@ cd perch
 ```toml
 [hotkey]
 active = "shift+space"
+cancel = "esc"                   # キャンセルキー(モディファイア不可)
 
 [labels]
 alphabet = "asdfjklghqweruiopzxcvbnm"

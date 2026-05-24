@@ -27,6 +27,13 @@
 # trigger or want multiple triggers.
 active = "shift+space"
 
+# Key that dismisses an active overlay. Single key, no modifiers
+# (e.g. "esc", "q", "tab"). Unknown names silently fall back to esc.
+# Inside hint mode, typing a non-letter or a letter that doesn't
+# match any label prefix also cancels — this knob is for users who
+# prefer a different "abort" key under their thumb.
+cancel = "esc"
+
 
 # ---- Label alphabet ----------------------------------------------
 [labels]

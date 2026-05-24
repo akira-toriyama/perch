@@ -5,12 +5,18 @@
 // stroke uses for `GestureOverlay`).
 //
 // Lifecycle:
-//   show(hints:cfg:onResolve:onCancel:)   activate, install local
-//                                          keyDown monitor, redraw
-//   redraw(filtered:)                      called after every typed
-//                                          character to refresh the
-//                                          surviving pills
-//   hide()                                 deactivate, remove monitor
+//   show(hints:onResolve:onCancel:)   install KeyTap (CGEventTap),
+//                                      orderFront the panel, paint
+//   set(hints:typed:)                  called after every typed
+//                                      character to refresh the
+//                                      surviving pills
+//   hide()                             uninstall tap, orderOut
+//
+// The panel never activates the app and never steals key focus —
+// the underlying app stays frontmost throughout, so the AXPress on
+// resolve lands without any focus dance. Keyboard input comes from
+// `KeyTap` (session-level CGEventTap), which swallows the events so
+// the typed letters don't leak into the focused text field.
 
 import AppKit
 import CoreGraphics
@@ -22,7 +28,8 @@ public final class OverlayWindow {
 
     private let panel: NSPanel
     private let contentView: OverlayContentView
-    private var monitor: Any?
+    private var keyTap: KeyTap?
+    private var cancelKeyCode: CGKeyCode = 53        // Esc by default
     private var hints: [Hint] = []
     private var typed = ""
     private var onResolve: ((Hint) -> Void)?
@@ -57,16 +64,19 @@ public final class OverlayWindow {
         p.contentView = cv
         self.panel = p
         self.contentView = cv
+        self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
     }
 
     public func updateConfig(_ cfg: PerchConfig) {
         self.config = cfg
+        self.cancelKeyCode = Self.resolveCancelKeyCode(cfg.cancelKey)
         contentView.updateConfig(cfg)
         contentView.needsDisplay = true
     }
 
     /// Show the overlay with the given hints. `onResolve` fires when
-    /// the user types a unique label. `onCancel` fires on Esc / on a
+    /// the user types a unique label. `onCancel` fires on the
+    /// configured cancel key, on a non-letter keypress, or on a
     /// keypress that doesn't match any label prefix.
     public func show(
         hints: [Hint],
@@ -89,29 +99,41 @@ public final class OverlayWindow {
         }
 
         contentView.set(hints: hints, typed: typed)
+        // .orderFrontRegardless paints the panel without activating
+        // perch — the underlying app stays key, its caret keeps
+        // blinking, and we avoid the "focus jumped out from under
+        // me" experience after AXPress.
         panel.orderFrontRegardless()
 
-        // A LOCAL monitor would only fire when our panel is key,
-        // which it isn't (we deliberately don't activate). A
-        // GLOBAL monitor wouldn't let us swallow the event. The
-        // installed monitor in `addLocalMonitorForEvents` works
-        // because perch transiently becomes the active app
-        // (NSApp.activate(...) below) only during hint mode.
-        NSApp.activate(ignoringOtherApps: true)
-        monitor = NSEvent.addLocalMonitorForEvents(
-            matching: .keyDown
-        ) { [weak self] event in
-            guard let self else { return event }
-            self.handleKeyDown(event)
-            return nil       // swallow — don't pass to the focused app
+        // KeyTap captures keyDown system-wide so we don't need to
+        // become the active app to read keys. The tap callback runs
+        // on the main thread (CGEventTap dispatches via the run loop
+        // source we register on the main loop). We mark @MainActor
+        // unconditionally inside `handleKeyDown` for clarity.
+        let tap = KeyTap { [weak self] keyCode, flags, str in
+            guard let self else { return false }
+            return MainActor.assumeIsolated {
+                self.handleTapKeyDown(
+                    keyCode: keyCode, flags: flags, char: str)
+            }
         }
+        guard tap.install() else {
+            Log.line("overlay: keytap install failed — "
+                     + "cancelling activation")
+            panel.orderOut(nil)
+            let cb = onCancel
+            self.onCancel = nil
+            self.onResolve = nil
+            self.hints = []
+            cb()
+            return
+        }
+        keyTap = tap
     }
 
     public func hide() {
-        if let m = monitor {
-            NSEvent.removeMonitor(m)
-            monitor = nil
-        }
+        keyTap?.uninstall()
+        keyTap = nil
         panel.orderOut(nil)
         hints = []
         typed = ""
@@ -121,31 +143,53 @@ public final class OverlayWindow {
 
     // MARK: - Key handling
 
-    private func handleKeyDown(_ event: NSEvent) {
-        // Esc — cancel.
-        if event.keyCode == 53 {
+    /// Returns `true` if the event should be swallowed (the user
+    /// is in hint mode, the key is one of ours), `false` otherwise.
+    /// Letting modified keys (Cmd / Ctrl / Option) through means
+    /// the user can still Cmd-Q the focused app or Cmd-Tab out
+    /// without the overlay snagging them.
+    private func handleTapKeyDown(
+        keyCode: CGKeyCode, flags: CGEventFlags, char: String
+    ) -> Bool {
+        // Cancel key (configurable; Esc by default). Match keyCode
+        // regardless of modifiers so the user can mash Esc with
+        // anything held.
+        if keyCode == cancelKeyCode {
             let cb = onCancel
             hide()
             cb?()
-            return
-        }
-        // Backspace — drop the last typed character.
-        if event.keyCode == 51 {
-            if !typed.isEmpty { typed.removeLast() }
-            contentView.set(hints: filtered(), typed: typed)
-            return
+            return true
         }
 
-        guard let chars = event.charactersIgnoringModifiers?.lowercased(),
-              let ch = chars.first,
-              ch.isLetter
-        else {
-            // Non-letter keypress: cancel rather than confuse the user.
+        // Anything with Cmd / Ctrl / Option held is not for us —
+        // bail loudly enough to leave hint mode (so the user isn't
+        // stuck with a stale overlay) but DON'T swallow the event.
+        // The user gets to Cmd-Q the focused app etc.
+        let mods: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate]
+        if !flags.intersection(mods).isEmpty {
             let cb = onCancel
             hide()
             cb?()
-            return
+            return false
         }
+
+        // Backspace — drop the last typed character.
+        if keyCode == 51 {
+            if !typed.isEmpty { typed.removeLast() }
+            contentView.set(hints: filtered(), typed: typed)
+            return true
+        }
+
+        // Anything that didn't produce a printable character (arrow
+        // keys, F-keys, modifiers alone): cancel and let it through
+        // — silent input would be confusing.
+        guard let ch = char.first, ch.isLetter else {
+            let cb = onCancel
+            hide()
+            cb?()
+            return false
+        }
+
         typed.append(ch)
 
         let surviving = filtered()
@@ -153,7 +197,7 @@ public final class OverlayWindow {
             let cb = onCancel
             hide()
             cb?()
-            return
+            return true
         }
         // Auto-click on unique candidate (configurable).
         if config.autoClickOnUnique, surviving.count == 1 {
@@ -161,20 +205,32 @@ public final class OverlayWindow {
             let cb = onResolve
             hide()
             cb?(only)
-            return
+            return true
         }
         // Exact match wins immediately.
         if let resolved = Labeler.resolve(hints: hints, keys: typed) {
             let cb = onResolve
             hide()
             cb?(resolved)
-            return
+            return true
         }
         contentView.set(hints: surviving, typed: typed)
+        return true
     }
 
     private func filtered() -> [Hint] {
         Labeler.filter(hints: hints, prefix: typed)
+    }
+
+    /// Translate a config key name into a CGKeyCode for the
+    /// cancel-key comparison. Unknown names silently fall back to
+    /// Esc — that's the `typo-can't-break-the-daemon` policy.
+    private static func resolveCancelKeyCode(_ name: String) -> CGKeyCode {
+        if let kc = HotkeyMonitor.keyCode(for: name) {
+            return CGKeyCode(kc)
+        }
+        Log.line("overlay: unknown cancel key \"\(name)\" — using esc")
+        return 53        // kVK_Escape
     }
 }
 

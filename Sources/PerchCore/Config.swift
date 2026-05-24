@@ -15,6 +15,12 @@ public struct PerchConfig: Sendable {
 
     public let hotkey: HotkeyCombo
 
+    /// Name of the key that dismisses an active overlay (single
+    /// key, no modifiers). Default `"esc"`. Canonical list lives
+    /// in `HotkeyMonitor.keyCode(for:)` — values that don't
+    /// resolve there silently fall back to `"esc"`.
+    public let cancelKey: String
+
     // MARK: - [labels]
 
     public let alphabet: String
@@ -45,6 +51,7 @@ public struct PerchConfig: Sendable {
 
     public static let defaultHotkey = HotkeyCombo(
         modifiers: .shift, key: "space")
+    public static let defaultCancelKey = "esc"
     public static let defaultAlphabet = "asdfjklghqweruiopzxcvbnm"
     public static let defaultRoles = [
         "Button", "MenuItem", "MenuButton", "CheckBox",
@@ -55,6 +62,7 @@ public struct PerchConfig: Sendable {
     /// Built-in defaults — what perch does when no config file exists.
     public static let `default` = PerchConfig(
         hotkey: defaultHotkey,
+        cancelKey: defaultCancelKey,
         alphabet: defaultAlphabet,
         prioritiseCenter: true,
         overlayBackground: "#fde047",
@@ -86,6 +94,10 @@ public struct PerchConfig: Sendable {
 
         let hk = doc["hotkey"]?["active"]?.asString
             .flatMap(HotkeyCombo.parse) ?? defaultHotkey
+        let cancel = (doc["hotkey"]?["cancel"]?.asString)
+            .flatMap { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            .flatMap { $0.isEmpty ? nil : $0 }
+            ?? defaultCancelKey
 
         let alphabet = (doc["labels"]?["alphabet"]?.asString)
             .flatMap { sanitiseAlphabet($0) } ?? defaultAlphabet
@@ -109,6 +121,7 @@ public struct PerchConfig: Sendable {
 
         return PerchConfig(
             hotkey: hk,
+            cancelKey: cancel,
             alphabet: alphabet,
             prioritiseCenter: priority,
             overlayBackground: bg,
