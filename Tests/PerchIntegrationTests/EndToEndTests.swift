@@ -32,20 +32,38 @@ final class EndToEndTests: XCTestCase {
         XCTAssertNotNil(resolved)
         XCTAssertEqual(resolved?.element.id, "ui-0")
 
-        // Dispatch path: source.press records the call.
-        _ = source.press(id: resolved!.element.id)
-        XCTAssertEqual(source.pressed, ["ui-0"])
+        // Dispatch path: source.act records the call.
+        _ = source.act(id: resolved!.element.id, as: .press)
+        XCTAssertEqual(source.actions.count, 1)
+        XCTAssertEqual(source.actions.first?.id, "ui-0")
+        XCTAssertEqual(source.actions.first?.action, .press)
     }
 
-    /// Failure path: `press` returning `false` is surfaced to the
-    /// caller (the controller logs "AXPress failed" — this just
+    /// Failure path: `act` returning `false` is surfaced to the
+    /// caller (the controller logs the failure — this just
     /// verifies the return propagates).
-    func testPressFailurePropagates() {
+    func testActFailurePropagates() {
         let elements = [UIElement(
             id: "x", role: "Button", label: "nope",
             frame: CGRect(x: 0, y: 0, width: 10, height: 10))]
         let source = SyntheticUIElementSource(elements: elements)
-        source.pressResult = false
-        XCTAssertFalse(source.press(id: "x"))
+        source.actResult = false
+        XCTAssertFalse(source.act(id: "x", as: .press))
+    }
+
+    /// Each action variant routes through `act` with the expected
+    /// tag so adapter implementations can map them to AX calls.
+    func testAllActionVariantsRecorded() {
+        let elements = [UIElement(
+            id: "ui", role: "Button", label: "ok",
+            frame: CGRect(x: 0, y: 0, width: 10, height: 10))]
+        let source = SyntheticUIElementSource(elements: elements)
+        _ = source.act(id: "ui", as: .press)
+        _ = source.act(id: "ui", as: .rightClick)
+        _ = source.act(id: "ui", as: .copyTitle)
+        _ = source.act(id: "ui", as: .focus)
+        XCTAssertEqual(
+            source.actions.map(\.action),
+            [.press, .rightClick, .copyTitle, .focus])
     }
 }

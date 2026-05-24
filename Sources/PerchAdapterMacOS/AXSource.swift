@@ -86,17 +86,61 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         return out
     }
 
-    public func press(id: String) -> Bool {
+    public func act(id: String, as action: HintAction) -> Bool {
         guard let elt = liveById[id] else {
             Log.line("dispatch: no live element for id=\(id)")
             return false
         }
-        let err = AXUIElementPerformAction(elt, kAXPressAction as CFString)
-        if err == .success {
-            Log.line("dispatch: AXPress ok → id=\(id)")
+        switch action {
+        case .press:
+            return perform(elt, action: kAXPressAction as CFString,
+                           tag: "AXPress", id: id)
+        case .rightClick:
+            return perform(elt, action: kAXShowMenuAction as CFString,
+                           tag: "AXShowMenu", id: id)
+        case .focus:
+            // kAXFocusedAttribute is a boolean attribute, not an
+            // action — settable via AXUIElementSetAttributeValue.
+            let err = AXUIElementSetAttributeValue(
+                elt, kAXFocusedAttribute as CFString,
+                kCFBooleanTrue)
+            if err == .success {
+                Log.line("dispatch: AXFocus ok → id=\(id)")
+                return true
+            }
+            Log.line("dispatch: AXFocus failed (\(err.rawValue)) → id=\(id)")
+            return false
+        case .copyTitle:
+            // Resolve title from the side-table'd UIElement.label
+            // would require keeping it post-enumeration; cheaper
+            // to re-read the live attribute at copy time.
+            let title = (copyAttribute(elt, kAXTitleAttribute) as? String)
+                ?? (copyAttribute(elt, kAXValueAttribute) as? String)
+                ?? ""
+            guard !title.isEmpty else {
+                Log.line("dispatch: copyTitle empty → id=\(id)")
+                return false
+            }
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(title, forType: .string)
+            Log.line("dispatch: copyTitle ok (\(title.count) chars) → id=\(id)")
             return true
         }
-        Log.line("dispatch: AXPress failed (\(err.rawValue)) → id=\(id)")
+    }
+
+    /// Common path for the two action verbs that both go through
+    /// `AXUIElementPerformAction` — folds the success / failure
+    /// log into one place.
+    private func perform(
+        _ elt: AXUIElement, action: CFString, tag: String, id: String
+    ) -> Bool {
+        let err = AXUIElementPerformAction(elt, action)
+        if err == .success {
+            Log.line("dispatch: \(tag) ok → id=\(id)")
+            return true
+        }
+        Log.line("dispatch: \(tag) failed (\(err.rawValue)) → id=\(id)")
         return false
     }
 

@@ -17,8 +17,19 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// overlay.
     func enumerate() -> [UIElement]
 
-    /// Click / press the element identified by `id`. The id was
-    /// produced by the most recent `enumerate()` call; live AX
-    /// handles are kept adapter-side.
-    func press(id: String) -> Bool
+    /// Perform `action` against the element identified by `id`.
+    /// The id was produced by the most recent `enumerate()` call;
+    /// live AX handles are kept adapter-side. Returns `false`
+    /// when the underlying AX call refuses (most often: the
+    /// element doesn't support the requested action).
+    func act(id: String, as action: HintAction) -> Bool
+}
+
+public extension UIElementSource {
+    /// Shorthand for the default `.press` action. Tests written
+    /// before action-modes use this; new callers should pass the
+    /// explicit action.
+    func press(id: String) -> Bool {
+        act(id: id, as: .press)
+    }
 }

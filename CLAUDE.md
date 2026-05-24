@@ -226,10 +226,15 @@ frontmost app's focused window**. The seam is captured at
   branch. Don't try to be "helpful" by treating non-letter keys
   as no-ops — silent input is the worst UX in a modal overlay
   (user types `J`, gets nothing, has no idea why).
-- **Modified keys (Cmd / Ctrl) are NOT swallowed.** The KeyTap
-  callback returns `false` for them, so the user can still
-  Cmd-Q the focused app or Cmd-Tab away with the overlay up.
-  Bare letters and the cancel key are the only ones we consume.
+- **Modifier-held letters select an action mode**, not cancel.
+  Cmd / Alt / Shift held during the resolving keystroke route
+  the resolution through `HintAction` (`.copyTitle` / `.focus` /
+  `.rightClick` respectively) instead of the default `.press`.
+  `actionFor(flags:)` in
+  [Sources/PerchAdapterMacOS/OverlayWindow.swift](Sources/PerchAdapterMacOS/OverlayWindow.swift)
+  is the single source of truth for the mapping. Ctrl is the
+  only modifier that still cancels — reserved for the user's
+  own shortcuts (Ctrl-C etc.) so system bindings keep working.
 
 ### Logging
 

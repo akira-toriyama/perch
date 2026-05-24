@@ -11,13 +11,14 @@ public final class SyntheticUIElementSource: UIElementSource, @unchecked Sendabl
 
     public let elements: [UIElement]
 
-    /// Recorded ids passed to `press(id:)`, oldest first.
-    public private(set) var pressed: [String] = []
+    /// Recorded `(id, action)` tuples passed to `act`, oldest first.
+    /// Tests assert on this to verify the action-mode dispatch.
+    public private(set) var actions: [(id: String, action: HintAction)] = []
 
-    /// Optional pre-set return value for `press(id:)`. Defaults to
-    /// `true` (success). Set to `false` to drive the
-    /// "AXPress failed" path in tests.
-    public var pressResult: Bool = true
+    /// Optional pre-set return value for `act(id:as:)`. Defaults
+    /// to `true` (success). Set to `false` to drive the
+    /// "AX action failed" path in tests.
+    public var actResult: Bool = true
 
     public init(elements: [UIElement]) {
         self.elements = elements
@@ -25,8 +26,8 @@ public final class SyntheticUIElementSource: UIElementSource, @unchecked Sendabl
 
     public func enumerate() -> [UIElement] { elements }
 
-    public func press(id: String) -> Bool {
-        pressed.append(id)
-        return pressResult
+    public func act(id: String, as action: HintAction) -> Bool {
+        actions.append((id: id, action: action))
+        return actResult
     }
 }
