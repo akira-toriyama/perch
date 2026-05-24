@@ -29,6 +29,10 @@ final class Controller {
     // matches its lifecycle (only set while the daemon is running).
     private var hotkey: HotkeyMonitor?
     private var active = false
+    /// Set when scroll mode owns the KeyTap. Hint mode and scroll
+    /// mode are mutually exclusive — Controller tears the other
+    /// down before starting either.
+    private var scroll: ScrollMode?
 
     init(config: PerchConfig) {
         self.config = config
@@ -67,14 +71,50 @@ final class Controller {
     // MARK: - Hot flow
 
     /// Programmatic cancel — used by the `--cancel` IPC command.
-    /// Idempotent; no-op when hint mode isn't active.
+    /// Tears down whichever mode owns the KeyTap (hint OR scroll).
+    /// Idempotent; no-op when nothing is active.
     func cancel() {
-        guard active else { return }
-        overlay.hide()
-        active = false
+        if active {
+            overlay.hide()
+            active = false
+        }
+        if let s = scroll {
+            s.stop()
+            scroll = nil
+        }
+    }
+
+    /// Enter scroll mode. Mutually exclusive with hint mode — if
+    /// hint mode is up, we tear it down first. `--scroll` invoked
+    /// while already in scroll mode exits (symmetric with
+    /// `--activate`).
+    func enterScrollMode() {
+        if active {
+            overlay.hide()
+            active = false
+        }
+        if scroll != nil {
+            scroll?.stop()
+            scroll = nil
+            return
+        }
+        let sm = ScrollMode(cancelKey: config.cancelKey) { [weak self] in
+            Task { @MainActor [weak self] in self?.scroll = nil }
+        }
+        if sm.start() {
+            scroll = sm
+            writeStatus(reason: "scroll mode")
+        }
     }
 
     private func activate() {
+        if let s = scroll {
+            // Hint and scroll are mutually exclusive. Activating
+            // hint mode while scroll mode is up tears scroll down
+            // first so the KeyTap installs cleanly.
+            s.stop()
+            scroll = nil
+        }
         if active {
             // Second hotkey press while up: cancel.
             overlay.hide()
@@ -136,6 +176,9 @@ final class Controller {
                     // Tear down the overlay if it's up; no-op otherwise.
                     Log.line("controller: --cancel received")
                     self.cancel()
+                case "scroll":
+                    Log.line("controller: --scroll received")
+                    self.enterScrollMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     exit(0)
