@@ -59,9 +59,10 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// (Cursor, VS Code, Slack) often expose a stack of 3-5 nodes
     /// at the same place (container ➜ wrapper ➜ button); we keep
     /// the first one that supports `kAXPressAction` and drop the
-    /// rest. 4pt is tight enough not to collapse genuinely
-    /// adjacent toolbar buttons.
-    private let proximityPx: CGFloat = 4
+    /// rest. 8pt is still tight enough not to collapse genuinely
+    /// adjacent toolbar buttons (those are typically ≥ 20pt apart
+    /// on macOS).
+    private let proximityPx: CGFloat = 8
 
     /// Window frame captured at the top of each `enumerate()` for
     /// the in-bounds filter. `.zero` means "no clipping" (we
@@ -211,14 +212,32 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
                 id: id, role: role, label: title, frame: frame))
         }
 
-        // Recurse: walk visible children if any. `kAXChildren` is
-        // the universal recursion edge — every container exposes it.
-        if let children
-            = copyAttribute(node, kAXChildrenAttribute) as? [AXUIElement] {
-            for child in children {
-                walk(child, depth: depth + 1, pid: pid, into: &out)
-            }
+        // Recurse: prefer `kAXVisibleChildrenAttribute` when the
+        // node exposes it — that's the AX subset that's actually
+        // on screen right now, which dramatically cuts the noise
+        // from scroll-area / web-shell trees (Cursor / VS Code /
+        // Slack expose every scrolled-out DOM child via plain
+        // `kAXChildren`; pre-filter via `kAXVisibleChildren` lets
+        // us skip walking them in the first place). Plain
+        // `kAXChildren` is the universal fallback.
+        let children = visibleChildrenIfAvailable(of: node)
+        for child in children {
+            walk(child, depth: depth + 1, pid: pid, into: &out)
         }
+    }
+
+    /// `kAXVisibleChildren` first; `kAXChildren` if the node
+    /// doesn't expose the visible-only subset. Returning `[]` is
+    /// fine — the walker just stops recursing through this node.
+    private func visibleChildrenIfAvailable(
+        of node: AXUIElement
+    ) -> [AXUIElement] {
+        if let v = copyAttribute(node, kAXVisibleChildrenAttribute)
+                    as? [AXUIElement], !v.isEmpty {
+            return v
+        }
+        return (copyAttribute(node, kAXChildrenAttribute)
+                  as? [AXUIElement]) ?? []
     }
 
     /// Position + size of an AX node, in screen coordinates (top-left
