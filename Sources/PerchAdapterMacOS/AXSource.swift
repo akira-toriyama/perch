@@ -106,7 +106,17 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return []
         }
         let window = focused as! AXUIElement   // checked via AXUIElementGetTypeID
-        windowFrame = frameOf(window) ?? .zero
+        // Prefer Quartz's on-screen bounds (CGWindowListCopyWindowInfo)
+        // over AX's kAXPosition+kAXSize. Electron / web-shell apps
+        // routinely report an AX window frame that spans the entire
+        // screen (covering Dock and menu bar) even when the visible
+        // window is smaller — Quartz's view of the window list is the
+        // ground truth the WindowServer uses to composite, so it
+        // matches what the user actually sees. Falls back to the AX
+        // frame when Quartz can't find a matching window (rare —
+        // headless / off-screen-mirror-style windows).
+        windowFrame = onScreenBounds(forPid: front.processIdentifier)
+            ?? frameOf(window) ?? .zero
 
         var raw: [UIElement] = []
         walk(window, depth: 0, pid: front.processIdentifier, into: &raw)
@@ -291,15 +301,44 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             || names.contains(kAXShowMenuAction as String)
     }
 
-    /// `true` when `frame` overlaps the focused window's frame.
-    /// Drops elements positioned outside the visible window — the
-    /// off-screen scroll tail of a large AX tree, modal-backed
-    /// elements still in the tree, etc. Falls open (always true)
+    /// `true` when `frame`'s CENTRE is inside the focused window's
+    /// frame. Stricter than `intersects` — drops elements that
+    /// dangle off the visible window (the off-screen scroll tail
+    /// of a large AX tree, hidden modal backers, items still in
+    /// the tree from a recent resize). Falls open (always true)
     /// when we couldn't read the window's frame.
     private func insideWindow(_ frame: CGRect) -> Bool {
         guard windowFrame.width > 0, windowFrame.height > 0
         else { return true }
-        return windowFrame.intersects(frame)
+        let centre = CGPoint(x: frame.midX, y: frame.midY)
+        return windowFrame.contains(centre)
+    }
+
+    /// Quartz-level on-screen bounds for the topmost normal-layer
+    /// window of `pid`. Returned in top-left-origin screen coords
+    /// (same convention as AX `kAXPosition`). Returns `nil` when
+    /// the app has no on-screen windows (Quartz hasn't indexed it
+    /// yet, or the process is purely background).
+    private func onScreenBounds(forPid pid: pid_t) -> CGRect? {
+        let opts: CGWindowListOption = [.optionOnScreenOnly,
+                                         .excludeDesktopElements]
+        guard let infos
+            = CGWindowListCopyWindowInfo(opts, kCGNullWindowID)
+                as? [[String: Any]]
+        else { return nil }
+        for info in infos {
+            guard let owner = info[kCGWindowOwnerPID as String] as? pid_t,
+                  owner == pid,
+                  let layer = info[kCGWindowLayer as String] as? Int,
+                  layer == 0,
+                  let b = info[kCGWindowBounds as String] as? [String: CGFloat],
+                  let x = b["X"], let y = b["Y"],
+                  let w = b["Width"], let h = b["Height"],
+                  w > 0, h > 0
+            else { continue }
+            return CGRect(x: x, y: y, width: w, height: h)
+        }
+        return nil
     }
 
     /// Drop elements whose top-left corner is within `proximityPx`
