@@ -29,7 +29,7 @@ jobs:
       # compiled module artefacts warm and shaves the cold-build cost.
       # Key invalidates on Package.swift edits; the restore-key still
       # warm-starts across minor toolchain changes.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             .build
