@@ -103,6 +103,7 @@ watches the file for changes when running as a daemon).
 | `--doctor` | standalone | health check (AX, config, daemon, hotkey) |
 | `--activate` | client | show hint overlay now (CLI alternative to the hotkey) |
 | `--scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
+| `--search` | client | enter search mode (type text, `1-9` picks a match) |
 | `--cancel` | client | dismiss the overlay if showing |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
@@ -134,6 +135,30 @@ entry) puts perch into scroll mode and intercepts:
 Scroll dispatches via `CGEvent.scrollWheelEvent` against the
 focused window, so perch itself stays headless and the scroll
 lands wherever the user's caret was.
+
+### Search mode
+
+`perch --search` enters search mode for apps with many
+clickables (Xcode, Logic, the System Settings sidebar). Type a
+substring of the element's visible title; matching elements get
+numbered pills `1` through `9` overlaid on them. Press a digit
+to fire the action against that match.
+
+| Key | Effect |
+|---|---|
+| any letter / number / punctuation / space | append to the query |
+| `backspace` | drop the last char |
+| `1` … `9` (when there are matches) | activate match #N |
+| `Enter` | activate match #1 |
+| `esc` (or the configured cancel key) | exit search mode |
+
+The same modifier conventions from hint mode apply: `Shift+1`
+right-clicks match #1, `Cmd+1` copies its title, `Alt+1` focuses
+it without firing.
+
+A digit typed when the match list is empty (no current matches)
+is treated as a query character so you can still search for
+"v2" / "API 3" / etc.
 
 Exit codes: 0 = ok · 1 = `--doctor` red · 2 = bad flag /
 invalid config · 3 = client cmd with no running daemon.

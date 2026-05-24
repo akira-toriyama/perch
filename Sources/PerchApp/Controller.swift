@@ -33,6 +33,9 @@ final class Controller {
     /// mode are mutually exclusive — Controller tears the other
     /// down before starting either.
     private var scroll: ScrollMode?
+    /// Set when search mode owns the KeyTap. Mutually exclusive
+    /// with hint mode and scroll mode.
+    private var search: SearchMode?
 
     init(config: PerchConfig) {
         self.config = config
@@ -71,8 +74,8 @@ final class Controller {
     // MARK: - Hot flow
 
     /// Programmatic cancel — used by the `--cancel` IPC command.
-    /// Tears down whichever mode owns the KeyTap (hint OR scroll).
-    /// Idempotent; no-op when nothing is active.
+    /// Tears down whichever mode owns the KeyTap (hint / scroll /
+    /// search). Idempotent; no-op when nothing is active.
     func cancel() {
         if active {
             overlay.hide()
@@ -82,6 +85,10 @@ final class Controller {
             s.stop()
             scroll = nil
         }
+        if let s = search {
+            s.stop()
+            search = nil
+        }
     }
 
     /// Enter scroll mode. Mutually exclusive with hint mode — if
@@ -89,15 +96,8 @@ final class Controller {
     /// while already in scroll mode exits (symmetric with
     /// `--activate`).
     func enterScrollMode() {
-        if active {
-            overlay.hide()
-            active = false
-        }
-        if scroll != nil {
-            scroll?.stop()
-            scroll = nil
-            return
-        }
+        cancel()                            // tear down any other mode
+        if scroll != nil { return }
         let sm = ScrollMode(cancelKey: config.cancelKey) { [weak self] in
             Task { @MainActor [weak self] in self?.scroll = nil }
         }
@@ -107,14 +107,39 @@ final class Controller {
         }
     }
 
-    private func activate() {
-        if let s = scroll {
-            // Hint and scroll are mutually exclusive. Activating
-            // hint mode while scroll mode is up tears scroll down
-            // first so the KeyTap installs cleanly.
-            s.stop()
-            scroll = nil
+    /// Enter search mode. Same mutual-exclusion rules as scroll
+    /// mode. Resolves to a `(UIElement, HintAction)` tuple just
+    /// like hint mode so the dispatch path is shared.
+    func enterSearchMode() {
+        cancel()
+        if search != nil { return }
+        let sm = SearchMode(
+            source: source,
+            config: config,
+            onResolve: { [weak self] element, action in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.search = nil
+                    _ = self.source.act(id: element.id, as: action)
+                    self.writeStatus(
+                        reason: "search → \(action.rawValue)")
+                }
+            },
+            onExit: { [weak self] in
+                Task { @MainActor [weak self] in self?.search = nil }
+            })
+        if sm.start() {
+            search = sm
+            writeStatus(reason: "search mode")
         }
+    }
+
+    private func activate() {
+        // Hint, scroll, and search modes share the single
+        // session-level KeyTap, so activating hint mode while any
+        // other mode is up tears that mode down first.
+        if let s = scroll { s.stop(); scroll = nil }
+        if let s = search { s.stop(); search = nil }
         if active {
             // Second hotkey press while up: cancel.
             overlay.hide()
@@ -179,6 +204,9 @@ final class Controller {
                 case "scroll":
                     Log.line("controller: --scroll received")
                     self.enterScrollMode()
+                case "search":
+                    Log.line("controller: --search received")
+                    self.enterSearchMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     exit(0)
