@@ -3,11 +3,21 @@
 // On every `enumerate()` call we:
 //   1. Resolve the frontmost app via NSWorkspace.
 //   2. Get its focused window via AXUIElement(kAXFocusedWindow).
-//   3. Walk the AX subtree of that window, depth-first.
-//   4. Keep only nodes whose role (without `AX`) is in `roles`.
-//   5. Build a backend-neutral `UIElement` for each match, store
-//      the live `AXUIElement` in a side-table keyed by the same
-//      synthetic id so a later `press(id:)` can resolve back.
+//   3. Capture the window's frame so we can drop AX nodes whose
+//      visible position is outside the window (Electron / web AX
+//      trees expose a lot of off-screen content and we don't
+//      want pills floating over the desktop).
+//   4. Walk the AX subtree of that window, depth-first.
+//   5. Keep only nodes whose role (without `AX`) is in `roles`,
+//      that support `kAXPressAction` (rules out decorative
+//      divs that map to a role but don't actually click), and
+//      whose frame intersects the window's frame.
+//   6. De-duplicate near-overlapping pills (within `proximityPx`)
+//      so a tightly nested AX tree doesn't pile a wall of pills
+//      on the same visible button.
+//   7. Build a backend-neutral `UIElement` for each survivor;
+//      store the live `AXUIElement` in a side-table keyed by the
+//      same synthetic id so a later `act(id:as:)` can resolve back.
 //
 // Core never sees `AXUIElement` — same policy as stroke / facet.
 // The side-table is owned by this adapter and cleared at the start
@@ -42,6 +52,22 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     // for a native window; we cap deep recursions so a buggy app
     // can't lock the daemon in an enumeration storm.
     private let maxDepth = 32
+
+    /// Two elements whose top-left corners are within this many
+    /// points are considered "the same visible target" for the
+    /// purposes of de-duplication. AX trees from web-shell apps
+    /// (Cursor, VS Code, Slack) often expose a stack of 3-5 nodes
+    /// at the same place (container ➜ wrapper ➜ button); we keep
+    /// the first one that supports `kAXPressAction` and drop the
+    /// rest. 4pt is tight enough not to collapse genuinely
+    /// adjacent toolbar buttons.
+    private let proximityPx: CGFloat = 4
+
+    /// Window frame captured at the top of each `enumerate()` for
+    /// the in-bounds filter. `.zero` means "no clipping" (we
+    /// couldn't read the window's frame for some reason — falls
+    /// open rather than hiding everything).
+    private var windowFrame: CGRect = .zero
 
     public init(config: PerchConfig) {
         self.roles = Set(config.roles)
@@ -79,11 +105,23 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return []
         }
         let window = focused as! AXUIElement   // checked via AXUIElementGetTypeID
+        windowFrame = frameOf(window) ?? .zero
 
-        var out: [UIElement] = []
-        walk(window, depth: 0, pid: front.processIdentifier, into: &out)
-        Log.line("ax: enumerated \(out.count) hint(s) in \(bundleID)")
-        return out
+        var raw: [UIElement] = []
+        walk(window, depth: 0, pid: front.processIdentifier, into: &raw)
+        let pruned = dedupNearOverlaps(raw)
+        if pruned.count != raw.count {
+            Log.debug("ax: de-dup \(raw.count) → \(pruned.count)")
+        }
+        // Rebuild liveById so dropped ids don't keep stale AXUIElement
+        // handles around — the dedup loop keeps the FIRST element at
+        // each cluster, so we just remove the dropped ids.
+        let kept = Set(pruned.map(\.id))
+        for id in liveById.keys where !kept.contains(id) {
+            liveById.removeValue(forKey: id)
+        }
+        Log.line("ax: enumerated \(pruned.count) hint(s) in \(bundleID)")
+        return pruned
     }
 
     public func act(id: String, as action: HintAction) -> Bool {
@@ -159,7 +197,10 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let role = rawRole.hasPrefix("AX")
             ? String(rawRole.dropFirst(2)) : rawRole
 
-        if roles.contains(role), let frame = frameOf(node) {
+        if roles.contains(role),
+           let frame = frameOf(node),
+           supportsPress(node),
+           insideWindow(frame) {
             let title = (copyAttribute(node, kAXTitleAttribute) as? String)
                 ?? (copyAttribute(node, kAXValueAttribute) as? String)
                 ?? ""
@@ -210,5 +251,55 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             node, name as CFString, &value)
         guard err == .success else { return nil }
         return value
+    }
+
+    /// `true` when the element advertises `kAXPressAction` (or
+    /// `kAXShowMenuAction` — those are the two activation paths
+    /// perch can dispatch). Filters out role-bearing-but-inert
+    /// elements, which are common in web-shell apps where
+    /// containers report a "Button" role without supporting click.
+    private func supportsPress(_ node: AXUIElement) -> Bool {
+        var actions: CFArray?
+        let err = AXUIElementCopyActionNames(node, &actions)
+        guard err == .success,
+              let names = actions as? [String]
+        else {
+            // Couldn't read the action list — be permissive (keep
+            // the element) rather than hide a legitimate hint.
+            return true
+        }
+        return names.contains(kAXPressAction as String)
+            || names.contains(kAXShowMenuAction as String)
+    }
+
+    /// `true` when `frame` overlaps the focused window's frame.
+    /// Drops elements positioned outside the visible window — the
+    /// off-screen scroll tail of a large AX tree, modal-backed
+    /// elements still in the tree, etc. Falls open (always true)
+    /// when we couldn't read the window's frame.
+    private func insideWindow(_ frame: CGRect) -> Bool {
+        guard windowFrame.width > 0, windowFrame.height > 0
+        else { return true }
+        return windowFrame.intersects(frame)
+    }
+
+    /// Drop elements whose top-left corner is within `proximityPx`
+    /// of another already-kept element's top-left. Keeps the
+    /// FIRST one encountered (depth-first, ancestors before
+    /// descendants), which is usually the most "container-like"
+    /// match — and either container or leaf is a fine click target
+    /// since they fire the same AX action.
+    private func dedupNearOverlaps(_ elements: [UIElement]) -> [UIElement] {
+        var kept: [UIElement] = []
+        kept.reserveCapacity(elements.count)
+        for e in elements {
+            let p = e.frame.origin
+            let collides = kept.contains { other in
+                abs(other.frame.origin.x - p.x) < proximityPx
+                    && abs(other.frame.origin.y - p.y) < proximityPx
+            }
+            if !collides { kept.append(e) }
+        }
+        return kept
     }
 }

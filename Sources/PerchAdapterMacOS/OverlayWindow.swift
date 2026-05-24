@@ -620,11 +620,11 @@ private final class HintPainter: NSView {
                     border = missColour.withAlphaComponent(0.95)
                     width = 2
                 case .idle:
-                    // White-on-frost hairline needs more presence
-                    // than stroke's 0.18 because perch's pills are
-                    // smaller (single-element vs stroke's full
-                    // gesture-card). Bumped to 0.35.
-                    border = NSColor.white.withAlphaComponent(0.35)
+                    // Faint accent-tinted hairline — gives each pill
+                    // a hint of identity colour even at idle, so they
+                    // don't read as anonymous grey rectangles when
+                    // the user is scanning the screen for hints.
+                    border = accent.withAlphaComponent(0.55)
                     width = 1
                 }
                 border.setStroke()
