@@ -25,9 +25,16 @@ final class LabelerTests: XCTestCase {
 
     /// More elements than alphabet → spills into two-letter labels.
     /// No single-letter label can be a prefix of a two-letter label.
+    ///
+    /// 5-letter alphabet × 10 elements: capacity is 5 singles or
+    /// 5 × 5 = 25 two-letter combinations, so the labeler reserves
+    /// some letters as prefixes and the rest stay single. This
+    /// exercises BOTH paths — a labeler that only emitted
+    /// single-letter labels would fail; one that always emitted
+    /// two-letter labels would fail the disjoint-prefix invariant.
     func testTwoLetterOverflowDisjointPrefix() {
         let n = 10
-        let alphabet = "asd"            // 3 chars
+        let alphabet = "asdfj"          // 5 chars
         let elements = mk(n)
         let hints = Labeler.assign(
             elements: elements, alphabet: alphabet,
@@ -38,6 +45,10 @@ final class LabelerTests: XCTestCase {
         let twoLetterPrefixes = Set(
             hints.map(\.keys).filter { $0.count == 2 }
                  .map { String($0.prefix(1)) })
+        XCTAssertFalse(singles.isEmpty,
+                       "expected at least one single-letter label")
+        XCTAssertFalse(twoLetterPrefixes.isEmpty,
+                       "expected at least one two-letter label")
         XCTAssertTrue(singles.intersection(twoLetterPrefixes).isEmpty,
                       "single-letter labels must not collide with "
                       + "two-letter prefixes (\(singles) vs \(twoLetterPrefixes))")
