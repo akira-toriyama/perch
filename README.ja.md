@@ -65,10 +65,11 @@ alphabet = "asdfjklghqweruiopzxcvbnm"
 prioritise-center = true
 
 [overlay]
-background = "#fde047"
-foreground = "#1f2937"
-font-size = 14
-dim = 0.25
+accent = "system"                # マッチ中ピル/入力済プリフィックスのアクセント
+                                 # "system" = macOS のアクセントカラー、#rrggbb 可
+font-size = 14                   # 8..32  monospaced semibold
+blur-enabled = true              # ピル背景のフロスト(磨りガラス)
+anim-enabled = true              # 出現 150ms scale-in + ミス時 200ms 赤フラッシュ
 
 [behavior]
 auto-click-on-unique = true

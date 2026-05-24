@@ -28,10 +28,25 @@ public struct PerchConfig: Sendable {
 
     // MARK: - [overlay]
 
-    public let overlayBackground: String
-    public let overlayForeground: String
+    /// Accent colour used for the typed-prefix highlight, the active
+    /// hint border, and the glow. `"system"` resolves to the user's
+    /// macOS accent colour (`NSColor.controlAccentColor`); a `#rrggbb`
+    /// literal overrides. Same colour vocabulary as stroke's overlay.
+    public let overlayAccent: String
+
     public let overlayFontSize: Double
-    public let overlayDim: Double
+
+    /// `true` to layer a `NSVisualEffectView` (`.hudWindow`,
+    /// `.behindWindow`) under the hint pills — the frosted-glass look.
+    /// `false` falls back to solid dark fills so the design degrades
+    /// gracefully on systems where blur is disabled by Accessibility
+    /// preferences or for performance.
+    public let overlayBlurEnabled: Bool
+
+    /// `true` to play the 150ms scale-in animation on appear and the
+    /// 200ms red flash on a missed keypress. `false` for users who
+    /// have Reduce Motion enabled or just dislike effects.
+    public let overlayAnimEnabled: Bool
 
     // MARK: - [behavior]
 
@@ -65,10 +80,10 @@ public struct PerchConfig: Sendable {
         cancelKey: defaultCancelKey,
         alphabet: defaultAlphabet,
         prioritiseCenter: true,
-        overlayBackground: "#fde047",
-        overlayForeground: "#1f2937",
+        overlayAccent: "system",
         overlayFontSize: 14,
-        overlayDim: 0.25,
+        overlayBlurEnabled: true,
+        overlayAnimEnabled: true,
         autoClickOnUnique: true,
         roles: defaultRoles,
         excludeApps: []
@@ -103,16 +118,16 @@ public struct PerchConfig: Sendable {
             .flatMap { sanitiseAlphabet($0) } ?? defaultAlphabet
         let priority = doc["labels"]?["prioritise-center"]?.asBool ?? true
 
-        let bg = (doc["overlay"]?["background"]?.asString)
-            .flatMap(sanitiseHex) ?? "#fde047"
-        let fg = (doc["overlay"]?["foreground"]?.asString)
-            .flatMap(sanitiseHex) ?? "#1f2937"
+        // Accept "system", a CSS-style colour name (subset that maps
+        // to NSColor.system*), or a `#rrggbb` literal. Anything else
+        // falls back to "system" so a typo never erases the accent.
+        let accent = (doc["overlay"]?["accent"]?.asString)
+            .flatMap(sanitiseAccent) ?? "system"
         let size = (doc["overlay"]?["font-size"]?.asDouble).map {
             min(max($0, 8), 32)
         } ?? 14
-        let dim = (doc["overlay"]?["dim"]?.asDouble).map {
-            min(max($0, 0), 0.6)
-        } ?? 0.25
+        let blur = doc["overlay"]?["blur-enabled"]?.asBool ?? true
+        let anim = doc["overlay"]?["anim-enabled"]?.asBool ?? true
 
         let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
@@ -124,10 +139,10 @@ public struct PerchConfig: Sendable {
             cancelKey: cancel,
             alphabet: alphabet,
             prioritiseCenter: priority,
-            overlayBackground: bg,
-            overlayForeground: fg,
+            overlayAccent: accent,
             overlayFontSize: size,
-            overlayDim: dim,
+            overlayBlurEnabled: blur,
+            overlayAnimEnabled: anim,
             autoClickOnUnique: autoClick,
             roles: roles,
             excludeApps: excludes)
@@ -148,10 +163,12 @@ public struct PerchConfig: Sendable {
         return out.isEmpty ? nil : out
     }
 
-    /// Validate `#RRGGBB` (case-insensitive). Returns the canonical
-    /// `#rrggbb` lowercase form, or `nil` on a malformed input.
-    private static func sanitiseHex(_ s: String) -> String? {
+    /// Accept "system" (system accent colour) or a `#rrggbb`
+    /// literal. Returns the canonical lowercase form, or `nil` on a
+    /// malformed input so the caller can clamp to the default.
+    private static func sanitiseAccent(_ s: String) -> String? {
         let t = s.trimmingCharacters(in: .whitespaces).lowercased()
+        if t == "system" || t == "accent" { return "system" }
         guard t.hasPrefix("#"), t.count == 7,
               t.dropFirst().allSatisfy({ "0123456789abcdef".contains($0) })
         else { return nil }

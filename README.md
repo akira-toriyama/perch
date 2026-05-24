@@ -61,10 +61,11 @@ alphabet = "asdfjklghqweruiopzxcvbnm"
 prioritise-center = true         # closest-to-center element gets 'a'
 
 [overlay]
-background = "#fde047"           # hint pill bg (hex)
-foreground = "#1f2937"           # hint pill text
-font-size = 14                   # 8..32
-dim = 0.25                       # 0..0.6  — black overlay alpha
+accent = "system"                # accent for matched pill / typed prefix
+                                 # "system" = user's macOS accent; #rrggbb also OK
+font-size = 14                   # 8..32 — monospaced semibold
+blur-enabled = true              # frosted-glass background per pill
+anim-enabled = true              # 150ms scale-in + 200ms red miss-flash
 
 [behavior]
 auto-click-on-unique = true      # fire as soon as one candidate remains

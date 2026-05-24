@@ -8,8 +8,9 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.hotkey, PerchConfig.defaultHotkey)
         XCTAssertEqual(cfg.cancelKey, PerchConfig.defaultCancelKey)
         XCTAssertEqual(cfg.alphabet, PerchConfig.defaultAlphabet)
-        XCTAssertEqual(cfg.overlayBackground, "#fde047")
-        XCTAssertEqual(cfg.overlayDim, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(cfg.overlayAccent, "system")
+        XCTAssertTrue(cfg.overlayBlurEnabled)
+        XCTAssertTrue(cfg.overlayAnimEnabled)
         XCTAssertTrue(cfg.autoClickOnUnique)
     }
 
@@ -42,13 +43,24 @@ final class ConfigTests: XCTestCase {
         let src = """
         [overlay]
         font-size = 999
-        dim = 5.0
-        background = "not-a-color"
+        accent = "not-a-color"
         """
         let cfg = PerchConfig.parse(src)
         XCTAssertEqual(cfg.overlayFontSize, 32)         // clamped to max
-        XCTAssertEqual(cfg.overlayDim, 0.6, accuracy: 0.0001)
-        XCTAssertEqual(cfg.overlayBackground, "#fde047")  // bad → default
+        XCTAssertEqual(cfg.overlayAccent, "system")     // bad → default
+    }
+
+    func testAccentParsing() {
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay]\naccent = \"#3b82f6\"")
+                .overlayAccent, "#3b82f6")
+        // Case-insensitive + system alias.
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay]\naccent = \"System\"")
+                .overlayAccent, "system")
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay]\naccent = \"accent\"")
+                .overlayAccent, "system")
     }
 
     /// Alphabet duplicates and non-letters are silently dropped.

@@ -171,6 +171,35 @@ frontmost app's focused window**. The seam is captured at
   on the right window when the user resolves a hint. Don't
   switch to `NSWindow` "to enable proper key handling" — it
   breaks the press dispatch.
+- **Two-layer canvas**:
+  [`OverlayCanvas`](Sources/PerchAdapterMacOS/OverlayWindow.swift)
+  holds an `NSVisualEffectView` (`.hudWindow`, `.behindWindow`)
+  at the bottom and an `HintPainter` on top. The blur layer's
+  `CAShapeLayer` mask is rebuilt every layout pass to a path
+  covering only the current pill rects — so the frost is bound
+  to the pills, not the whole screen. Ported wholesale from
+  stroke's `GestureOverlay` two-layer pattern.
+- **Pill style**: 10pt corner radius via
+  `NSBezierPath(roundedRect:xRadius:yRadius:)` (not layer-level
+  `cornerRadius`, which clips poorly under HiDPI scaling). 1pt
+  hairline border at white α=0.18 for idle; 2pt accent border
+  + `NSShadow` glow (blur 7pt, accent α=0.5) for the matched
+  pills once the user starts typing. Monospaced semibold 14pt,
+  12 × 9pt padding.
+- **Scale-in animation**: 150ms `0.85 → 1.0`, ease-out cubic
+  (`1 - pow(1-p, 3)`). Re-layouts every 1/60s while elapsed
+  < 150ms so the blur mask scales in lockstep with the painter
+  — otherwise the frost briefly extends past the visible pill
+  border. Opt-out via `[overlay].anim-enabled = false`.
+- **Miss flash**: a keypress that matches no label is held in
+  `typed` so the user sees which letter went unmatched, then
+  the overlay flashes red for 200ms before dismissing. Drives
+  `flashThenCancel` in OverlayWindow. Same opt-out knob as
+  scale-in.
+- **Accent colour**: `[overlay].accent` accepts `"system"` (the
+  user's macOS accent — `NSColor.controlAccentColor`) or a
+  `#rrggbb` literal. Anything else falls back to `"system"`
+  silently per the typo-tolerance policy.
 - **Keyboard capture uses a `KeyTap` (CGEventTap)**, not
   `NSEvent.addLocalMonitorForEvents`. The first attempt at this
   module used the local monitor + a transient
