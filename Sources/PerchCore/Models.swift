@@ -50,6 +50,25 @@ public struct Hint: Sendable, Hashable {
     }
 }
 
+/// What perch does with the element a hint resolves to. Selected
+/// by which modifier (if any) the user holds while typing the
+/// resolving label — see [hotkey] in the README for the bindings.
+public enum HintAction: String, Sendable, CaseIterable {
+    /// Default — AX `kAXPressAction`. Behaves like a left-click.
+    case press
+    /// Shift-held — AX `kAXShowMenuAction`. Opens the element's
+    /// context menu (the keyboard analogue of a right-click).
+    case rightClick
+    /// Cmd-held — copy the element's title / label text to the
+    /// system pasteboard. Useful for grabbing the visible name of
+    /// a control without retyping it.
+    case copyTitle
+    /// Alt-held — set AX `kAXFocusedAttribute` to true. Moves
+    /// keyboard focus to the element without firing its action.
+    /// Right for text fields you intend to type into.
+    case focus
+}
+
 /// Parsed `[hotkey].combo` value.
 public struct HotkeyCombo: Sendable, Equatable {
     public let modifiers: Modifiers

@@ -22,6 +22,23 @@ type a two-letter label, click anything — no mouse, no trackpad.
    matching element. No synthetic clicks, no focus jumps.
 4. Esc to cancel; type a non-matching letter to dismiss.
 
+### Action modifiers
+
+Hold one of these while typing the resolving label to change the
+action:
+
+| Modifier | Action | AX call |
+|---|---|---|
+| *(none)* | click | `AXPress` |
+| **Shift** | right-click / context menu | `AXShowMenu` |
+| **Cmd** | copy the element's title to the clipboard | pasteboard |
+| **Alt** | focus only — don't fire | `AXFocused = true` |
+
+Cmd-copy is useful for grabbing the visible name of a control
+without retyping. Alt-focus is right for text fields you intend
+to type into. Ctrl is left alone so system shortcuts (Ctrl-A
+etc.) still work — pressing Ctrl while the overlay is up cancels.
+
 Roles covered out of the box: `Button`, `MenuItem`, `Link`,
 `Tab`, `CheckBox`, `RadioButton`, `PopUpButton`, `TextField`,
 `SearchField`, `TabGroup`, `MenuButton`. Edit

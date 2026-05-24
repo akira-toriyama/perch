@@ -46,7 +46,7 @@ public final class OverlayWindow {
     private var cancelKeyCode: CGKeyCode = 53        // Esc by default
     private var hints: [Hint] = []
     private var typed = ""
-    private var onResolve: ((Hint) -> Void)?
+    private var onResolve: ((Hint, HintAction) -> Void)?
     private var onCancel: (() -> Void)?
     private var config: PerchConfig
 
@@ -96,7 +96,7 @@ public final class OverlayWindow {
     /// 200ms red-flash, when animations are enabled).
     public func show(
         hints: [Hint],
-        onResolve: @escaping (Hint) -> Void,
+        onResolve: @escaping (Hint, HintAction) -> Void,
         onCancel: @escaping () -> Void
     ) {
         guard !hints.isEmpty else { onCancel(); return }
@@ -179,17 +179,17 @@ public final class OverlayWindow {
             return true
         }
 
-        // Anything with Cmd / Ctrl / Option held is not for us —
-        // bail loudly enough to leave hint mode (so the user isn't
-        // stuck with a stale overlay) but DON'T swallow the event.
-        // The user gets to Cmd-Q the focused app etc.
-        let mods: CGEventFlags = [.maskCommand, .maskControl, .maskAlternate]
-        if !flags.intersection(mods).isEmpty {
+        // Control-held is reserved for the user's own shortcuts
+        // (Ctrl-C, system shortcuts, etc.) — bail without swallowing.
+        // Cmd / Alt / Shift are repurposed as action modifiers (see
+        // `actionFor(flags:)`), so they DON'T cancel.
+        if flags.contains(.maskControl) {
             let cb = onCancel
             hide()
             cb?()
             return false
         }
+        let action = Self.actionFor(flags: flags)
 
         // Backspace — drop the last typed character.
         if keyCode == 51 {
@@ -221,14 +221,14 @@ public final class OverlayWindow {
             let only = surviving[0]
             let cb = onResolve
             hide()
-            cb?(only)
+            cb?(only, action)
             return true
         }
         // Exact match wins immediately.
         if let resolved = Labeler.resolve(hints: hints, keys: typed) {
             let cb = onResolve
             hide()
-            cb?(resolved)
+            cb?(resolved, action)
             return true
         }
         canvas.present(hints: surviving, typed: typed)
@@ -255,6 +255,17 @@ public final class OverlayWindow {
 
     private func filtered() -> [Hint] {
         Labeler.filter(hints: hints, prefix: typed)
+    }
+
+    /// Map the modifier flags held while the user typed the
+    /// resolving letter to a `HintAction`. Cmd wins over Alt wins
+    /// over Shift if multiple are held; Ctrl is filtered out at
+    /// the call site (it cancels). Bare keypress → `.press`.
+    private static func actionFor(flags: CGEventFlags) -> HintAction {
+        if flags.contains(.maskCommand)   { return .copyTitle }
+        if flags.contains(.maskAlternate) { return .focus }
+        if flags.contains(.maskShift)     { return .rightClick }
+        return .press
     }
 
     /// Translate a config key name into a CGKeyCode for the

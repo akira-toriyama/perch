@@ -96,11 +96,12 @@ final class Controller {
         Log.line("activate: \(hints.count) hint(s)")
         overlay.show(
             hints: hints,
-            onResolve: { [weak self] hint in
+            onResolve: { [weak self] hint, action in
                 guard let self else { return }
                 self.active = false
-                _ = self.source.press(id: hint.element.id)
-                self.writeStatus(reason: "fired \(hint.keys)")
+                _ = self.source.act(id: hint.element.id, as: action)
+                self.writeStatus(
+                    reason: "fired \(hint.keys) (\(action.rawValue))")
             },
             onCancel: { [weak self] in
                 self?.active = false
