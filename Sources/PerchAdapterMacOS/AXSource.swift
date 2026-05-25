@@ -119,9 +119,13 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let axFrame = frameOf(window)
         let baseFrame = cgFrame ?? axFrame ?? .zero
         windowFrame = clampToVisibleScreen(baseFrame)
-        Log.debug("ax: bounds cg=\(cgFrame.map(rectString) ?? "nil") "
-                  + "ax=\(axFrame.map(rectString) ?? "nil") "
-                  + "→ filter=\(rectString(windowFrame))")
+        // Promoted to Log.line so the diagnostic shows up under
+        // release runs too — invaluable when triaging "pills
+        // outside the window" reports without asking the user to
+        // re-launch with --debug.
+        Log.line("ax: bounds cg=\(cgFrame.map(rectString) ?? "nil") "
+                 + "ax=\(axFrame.map(rectString) ?? "nil") "
+                 + "→ filter=\(rectString(windowFrame))")
 
         var raw: [UIElement] = []
         walk(window, depth: 0, pid: front.processIdentifier, into: &raw)
