@@ -41,7 +41,12 @@ enum PerchApp {
         STANDALONE COMMANDS — no daemon required
           perch --validate            parse config.toml; exit 0 if valid
           perch --doctor              health check: Accessibility, config,
-                                      daemon, hotkey
+                                      daemon, hotkey, screens, log file
+          perch --dump-ax             dump AX elements perch would label
+                                      in the current frontmost app
+                                      (one line per element; useful for
+                                      "why isn't this element labelled?"
+                                      triage)
           perch --help                this help
 
         EXIT CODES
@@ -72,7 +77,7 @@ enum PerchApp {
         // looking at the rest (no silent fallback — facet/stroke
         // Rule of Repair discipline).
         let recognised: Set<String> = [
-            "--help", "--debug", "--validate", "--doctor",
+            "--help", "--debug", "--validate", "--doctor", "--dump-ax",
             "--activate", "--cancel", "--scroll", "--search",
             "--reload", "--quit", "--status",
         ]
@@ -85,6 +90,7 @@ enum PerchApp {
 
         // Standalone modes — no running daemon required.
         if argv.contains("--doctor") { runDoctor() }
+        if argv.contains("--dump-ax") { runDumpAX() }
         if argv.contains("--validate") {
             let cfg = PerchConfig.load()
             FileHandle.standardError.write(Data((
@@ -124,14 +130,25 @@ enum PerchApp {
         exit(0)
     }
 
-    /// Health report: Accessibility, config, daemon. Exit 0 if
-    /// everything's green, 1 if any check fails.
+    /// Health report: Accessibility, config, daemon, screen layout,
+    /// log file. Exit 0 if everything's green, 1 if any check
+    /// fails. Every line is also useful information for a bug
+    /// report; copying the entire `perch --doctor` output is the
+    /// single most useful attachment for triage.
     private static func runDoctor() -> Never {
         func line(_ ok: Bool, _ label: String, _ detail: String) -> String {
             "  \(ok ? "✓" : "✗")  \(label.padding(toLength: 16, withPad: " ", startingAt: 0))\(detail)"
         }
+        func info(_ label: String, _ detail: String) -> String {
+            "  ·  \(label.padding(toLength: 16, withPad: " ", startingAt: 0))\(detail)"
+        }
         var ok = true
         print("perch doctor")
+
+        // Environment first — establishes what platform the rest of
+        // the checks are running against.
+        let osVer = ProcessInfo.processInfo.operatingSystemVersionString
+        print(info("macOS:", osVer))
 
         let ax = AXTrust.isTrusted()
         ok = ok && ax
@@ -153,14 +170,99 @@ enum PerchApp {
         print(line(running, "Daemon:",
                    running ? "running" : "not running — start with `perch`"))
 
-        print(line(true, "Hotkey:", human(cfg.hotkey)))
-        print(line(true, "Alphabet:",
+        print(info("Hotkey:", human(cfg.hotkey)))
+        print(info("Cancel key:", "\"\(cfg.cancelKey)\""))
+        print(info("Alphabet:",
                    "\"\(cfg.alphabet)\" (\(cfg.alphabet.count) chars)"))
         if !cfg.excludeApps.isEmpty {
-            print(line(true, "Excludes:",
+            print(info("Excludes:",
                        cfg.excludeApps.joined(separator: ", ")))
         }
+
+        // Screen layout — a frequent cause of "why are the pills
+        // showing up nowhere?" reports is an unexpected multi-
+        // monitor topology, so spell it out.
+        let screens = NSScreen.screens
+        print(info("Screens:", "\(screens.count) connected"))
+        for (i, s) in screens.enumerated() {
+            let marker = (s == NSScreen.main) ? " (main)" : ""
+            print(info("  screen \(i):",
+                       "\(Int(s.frame.minX)),\(Int(s.frame.minY)) "
+                       + "\(Int(s.frame.width))×\(Int(s.frame.height))"
+                       + marker))
+        }
+
+        // Frontmost app — the target perch would walk if you
+        // pressed shift+space right now. Often the missing piece
+        // when reproducing a bug ("oh, perch saw loginwindow, not
+        // Chrome").
+        if let front = NSWorkspace.shared.frontmostApplication {
+            let bid = front.bundleIdentifier ?? "<no bundle id>"
+            print(info("Frontmost:",
+                       "\(bid) (pid \(front.processIdentifier))"))
+        } else {
+            print(info("Frontmost:", "(none — no app currently frontmost)"))
+        }
+
+        // Log file — exists / size + a hint for where to look.
+        let logPath = Log.path
+        if let attrs = try? FileManager.default
+                .attributesOfItem(atPath: logPath),
+           let size = attrs[.size] as? Int {
+            print(info("Log:", "\(logPath) (\(size) bytes)"))
+        } else {
+            print(info("Log:", "\(logPath) (not yet created)"))
+        }
+
         exit(ok ? 0 : 1)
+    }
+
+    /// Dump every AX element perch's filter chain would label in
+    /// the current frontmost app. One line per element; the format
+    /// matches what `--debug` would log per walk but the standalone
+    /// path doesn't need the daemon running.
+    ///
+    /// Useful when answering "why isn't <button X> being labeled?"
+    /// — if `--dump-ax` shows the element, the bug is in label
+    /// assignment / overlay rendering; if it doesn't, the bug is
+    /// in the AX walk / filter chain (then re-run with `--debug`
+    /// for per-stage drop reasons).
+    @MainActor
+    private static func runDumpAX() -> Never {
+        guard AXTrust.isTrusted() else {
+            FileHandle.standardError.write(Data((
+                "perch: Accessibility not granted — grant it to perch "
+                + "(or to the bundled Perch.app) in System Settings → "
+                + "Privacy & Security → Accessibility, then re-run.\n"
+            ).utf8))
+            exit(1)
+        }
+        guard let front = NSWorkspace.shared.frontmostApplication else {
+            FileHandle.standardError.write(Data((
+                "perch: no frontmost app — focus the window you want "
+                + "to inspect, then re-run.\n"
+            ).utf8))
+            exit(1)
+        }
+        let bid = front.bundleIdentifier ?? "<no bundle id>"
+        print("perch dump-ax → \(bid) (pid \(front.processIdentifier))")
+
+        let cfg = PerchConfig.load()
+        let source = AXUIElementSource(config: cfg)
+        let elements = source.enumerate()
+        print("found \(elements.count) labelable element(s):")
+        for (i, e) in elements.enumerated() {
+            let label = e.label.isEmpty
+                ? "<no title>"
+                : "\"\(e.label.prefix(60))\""
+            let f = e.frame
+            print(String(format: "  %3d  %-15s  (%5d,%5d %4d×%4d)  %@",
+                         i + 1, e.role,
+                         Int(f.minX), Int(f.minY),
+                         Int(f.width), Int(f.height),
+                         label))
+        }
+        exit(0)
     }
 
     /// Print the running daemon's status from the status file it
