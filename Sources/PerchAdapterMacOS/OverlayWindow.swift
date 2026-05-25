@@ -507,14 +507,31 @@ private final class OverlayCanvas: NSView {
     /// Rebuild the blur mask path (so frost shows only behind pills)
     /// and refresh the painter. Called from `present`, `flashMiss`,
     /// and from itself while the scale-in animation runs.
+    ///
+    /// Coordinate-system note: `pill.rect` is in canvas's flipped
+    /// (top-left origin) coords because `OverlayCanvas.isFlipped`
+    /// is `true`. But `blurView` is a separate NSView that is NOT
+    /// flipped — its layer (and any sublayer mask) uses Y-up from
+    /// bottom-left. Passing the canvas-flipped rect straight into
+    /// the mask path silently inverted the frost vertically, which
+    /// surfaced visually as empty pill-shaped frost rectangles
+    /// mirrored to the bottom of the screen for every label drawn
+    /// at the top. Flip each rect explicitly when crossing into
+    /// the mask layer's coord system.
     private func layoutPills() {
         let scale = currentScale()
+        let canvasH = bounds.height
         if let mask = blurView.layer?.mask as? CAShapeLayer {
             let path = CGMutablePath()
             for p in pills {
-                let t = transform(for: p.rect, scale: scale)
+                let unflipped = CGRect(
+                    x: p.rect.minX,
+                    y: canvasH - p.rect.maxY,
+                    width: p.rect.width,
+                    height: p.rect.height)
+                let t = transform(for: unflipped, scale: scale)
                 path.addRoundedRect(
-                    in: p.rect,
+                    in: unflipped,
                     cornerWidth: Self.cornerRadius,
                     cornerHeight: Self.cornerRadius,
                     transform: t)
