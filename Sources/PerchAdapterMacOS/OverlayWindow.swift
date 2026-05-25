@@ -57,7 +57,15 @@ public final class OverlayWindow {
         // panels do not steal focus from the frontmost app — perch
         // needs that frontmost app to remain key so AXPress works
         // immediately on dismissal.
-        let frame = NSScreen.main?.frame ?? .zero
+        //
+        // Panel covers the UNION of every screen frame, not just
+        // NSScreen.main. AX element positions arrive in CG global
+        // coords (anchored to the primary display's top-left), so
+        // a pill for a Chrome window living on a secondary screen
+        // has a canvas-local X past the main screen's width — if
+        // the canvas only covered main, that pill would fall off
+        // the right edge. The union panel is the only honest fit.
+        let frame = Self.unionFrame()
         let p = NSPanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -77,6 +85,8 @@ public final class OverlayWindow {
         let cv = OverlayCanvas(
             frame: NSRect(origin: .zero, size: frame.size),
             config: config)
+        cv.unionFrame = frame
+        cv.primaryHeight = Self.primaryHeight()
         p.contentView = cv
         self.panel = p
         self.canvas = cv
@@ -105,14 +115,17 @@ public final class OverlayWindow {
         self.onResolve = onResolve
         self.onCancel = onCancel
 
-        // Cover whichever screen is currently key, fall back to
-        // main. MVP: single-screen — multi-monitor is a stretch
-        // goal (see CLAUDE.md).
-        if let screen = NSScreen.main {
-            panel.setFrame(screen.frame, display: false)
-            canvas.frame = NSRect(origin: .zero, size: screen.frame.size)
-            canvas.screenFrame = screen.frame
-        }
+        // Re-evaluate the screen union every show() so a display
+        // disconnect / reconnect between shows is reflected.
+        let union = Self.unionFrame()
+        let primaryH = Self.primaryHeight()
+        panel.setFrame(union, display: false)
+        canvas.frame = NSRect(origin: .zero, size: union.size)
+        canvas.unionFrame = union
+        canvas.primaryHeight = primaryH
+        Log.line("overlay: union=\(rectStr(union)) "
+                 + "primaryH=\(Int(primaryH)) "
+                 + "screens=\(NSScreen.screens.count)")
 
         canvas.present(hints: hints, typed: typed)
         // .orderFrontRegardless paints the panel without activating
@@ -257,6 +270,37 @@ public final class OverlayWindow {
         Labeler.filter(hints: hints, prefix: typed)
     }
 
+    /// Union of every connected screen's frame in Cocoa global
+    /// coordinates (Y-up from primary's bottom-left). When the
+    /// primary screen isn't the tallest, the union extends both
+    /// above primary (Cocoa y > primaryHeight) and / or below
+    /// (Cocoa y < 0), which the AX → canvas conversion accounts
+    /// for via `primaryHeight` separately. Same shape as stroke's
+    /// gesture-trail overlay.
+    private static func unionFrame() -> CGRect {
+        let screens = NSScreen.screens
+        guard var u = screens.first?.frame else {
+            return NSScreen.main?.frame ?? .zero
+        }
+        for s in screens.dropFirst() { u = u.union(s.frame) }
+        return u
+    }
+
+    /// Height of the screen at Cocoa origin (0, 0) — that's the
+    /// "primary" screen CG global coords are anchored to. Falls
+    /// back to NSScreen.main, then 0. Used by `OverlayCanvas` to
+    /// convert AX positions (CG, top-left primary) into
+    /// canvas-local flipped coords.
+    private static func primaryHeight() -> CGFloat {
+        NSScreen.screens
+            .first(where: { $0.frame.origin == .zero })?.frame.height
+            ?? NSScreen.main?.frame.height ?? 0
+    }
+
+    private func rectStr(_ r: CGRect) -> String {
+        "(\(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))×\(Int(r.height)))"
+    }
+
     /// Map the modifier flags held while the user typed the
     /// resolving letter to a `HintAction`. Cmd wins over Alt wins
     /// over Shift if multiple are held; Ctrl is filtered out at
@@ -290,10 +334,15 @@ public final class OverlayWindow {
 @MainActor
 private final class OverlayCanvas: NSView {
 
-    /// Cocoa-screen frame the canvas is mirroring. AX delivers
-    /// elements in screen coords (top-left); we subtract this
-    /// frame's origin to get canvas-local coords for drawing.
-    var screenFrame: CGRect = .zero
+    /// Union of every screen frame in Cocoa global coords. The
+    /// canvas covers this rect 1:1 (it's the panel's contentRect).
+    var unionFrame: CGRect = .zero
+
+    /// Height of the screen at Cocoa origin — the "primary" CG
+    /// global coords are anchored to. Used to convert AX positions
+    /// (CG, top-left primary) into canvas-local flipped coords:
+    /// `canvasCGTopY = primaryHeight - unionFrame.maxY`.
+    var primaryHeight: CGFloat = 0
 
     private var config: PerchConfig
     private var pills: [PillLayout] = []
@@ -430,18 +479,28 @@ private final class OverlayCanvas: NSView {
         let w = ceil(textW) + Self.pillPadX * 2
         let h = ceil(font.boundingRectForFont.height) + Self.pillPadY * 2
 
-        // AX frame is in screen coords; subtract screenFrame.origin
-        // for canvas-local coords. Canvas is Y-flipped so AX top-left
-        // origin is just origin.
+        // AX delivers element positions in CG global (top-left
+        // primary). Canvas covers `unionFrame` in Cocoa global
+        // (Y-up from primary's bottom-left) and is isFlipped, so
+        // its internal drawing origin is top-left of canvas. To
+        // convert:
+        //
+        //   canvas_x = CG_x − unionFrame.minX
+        //   canvas_y = CG_y − (primaryHeight − unionFrame.maxY)
+        //
+        // The Y offset accounts for screens above/below the
+        // primary in the union — when the primary IS the topmost
+        // screen, `primaryHeight − unionFrame.maxY` is 0 and the
+        // formula collapses to the single-screen identity.
         //
         // No edge clamping — clamping was introducing visible
-        // misalignment for elements near the screen edges (the pill
-        // moved a few pixels off the element). If a pill would
-        // clip against the canvas edge, AppKit clips it naturally
-        // at the bounds; far better to clip the pill than to
-        // displace it onto a different element.
-        let x = hint.element.frame.origin.x - screenFrame.origin.x
-        let y = hint.element.frame.origin.y - screenFrame.origin.y
+        // misalignment for elements near the screen edges (the
+        // pill moved a few pixels off the element). If a pill
+        // would clip against the canvas edge, AppKit clips it
+        // naturally; far better to clip than to displace.
+        let canvasCGTopY = primaryHeight - unionFrame.maxY
+        let x = hint.element.frame.origin.x - unionFrame.minX
+        let y = hint.element.frame.origin.y - canvasCGTopY
         return CGRect(x: x, y: y, width: w, height: h)
     }
 
