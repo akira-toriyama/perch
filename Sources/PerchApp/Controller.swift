@@ -8,7 +8,15 @@
 //                                  paints panel, returns immediately
 //                                  — keypresses come back via the
 //                                  onResolve / onCancel callbacks
-//   4. on resolve → source.press(id:)  AXUIElementPerformAction
+//   4. on resolve →
+//      source.act(id:as: action)  dispatches the chosen HintAction
+//                                  (press / rightClick / focus /
+//                                  copyTitle, picked by which
+//                                  modifier was held)
+//
+// `ScrollMode` and `SearchMode` are parallel orchestrations sharing
+// the same single-KeyTap rule: only one mode is up at a time.
+// `cancel()` tears down whichever is active.
 
 import AppKit
 import CoreGraphics

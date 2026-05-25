@@ -107,7 +107,7 @@ exclude-apps = []
 | `--activate` | client | ヒント overlay を表示 (ホットキーの代替) |
 | `--scroll` | client | スクロールモード (`j/k/d/u/gg/G`, `esc` で抜ける) |
 | `--search` | client | サーチモード (タイプして `1-9` で選択) |
-| `--cancel` | client | overlay 表示中ならキャンセル |
+| `--cancel` | client | hint / scroll / search のうち動いてるモードをキャンセル |
 | `--reload` | client | デーモンに設定再読み込みを通知 |
 | `--quit` | client | デーモンを終了 |
 | `--status` | client | 現在のホットキー / 最終アクティベーションを表示 |

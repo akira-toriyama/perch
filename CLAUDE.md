@@ -182,10 +182,11 @@ frontmost app's focused window**. The seam is captured at
 - **Pill style**: 10pt corner radius via
   `NSBezierPath(roundedRect:xRadius:yRadius:)` (not layer-level
   `cornerRadius`, which clips poorly under HiDPI scaling). 1pt
-  hairline border at white α=0.18 for idle; 2pt accent border
-  + `NSShadow` glow (blur 7pt, accent α=0.5) for the matched
-  pills once the user starts typing. Monospaced semibold 14pt,
-  12 × 9pt padding.
+  accent-tinted hairline border (α=0.55) for idle; 2pt accent
+  border + `NSShadow` glow (blur 7pt, accent α=0.5) for matched
+  pills once the user starts typing. Monospaced semibold 15pt,
+  12 × 9pt padding, drop shadow under every pill for the
+  "floating card" feel.
 - **Scale-in animation**: 150ms `0.85 → 1.0`, ease-out cubic
   (`1 - pow(1-p, 3)`). Re-layouts every 1/60s while elapsed
   < 150ms so the blur mask scales in lockstep with the painter
@@ -235,6 +236,63 @@ frontmost app's focused window**. The seam is captured at
   is the single source of truth for the mapping. Ctrl is the
   only modifier that still cancels — reserved for the user's
   own shortcuts (Ctrl-C etc.) so system bindings keep working.
+- **Panel covers the UNION of every connected NSScreen**, not
+  `NSScreen.main.frame`. AX positions arrive in CG global coords
+  anchored to the primary display's top-left, so a pill for a
+  window on a secondary display has a canvas-local X past the
+  main screen's width — if the canvas only covered main, that
+  pill would fall off the right edge. The conversion in
+  `OverlayCanvas.pillRect(for:)` accounts for both the union
+  origin AND the offset between primary-top and union-top:
+  `canvas_y = CG_y − (primaryHeight − unionFrame.maxY)`. When
+  primary IS the topmost screen the Y offset collapses to 0 and
+  we recover the single-screen identity — so the multi-screen
+  path is a strict superset.
+- **The blur-mask coordinate system is NOT canvas-local — flip Y
+  explicitly when crossing into it.** `OverlayCanvas` is
+  `isFlipped = true` (top-left origin); the `NSVisualEffectView`
+  underneath is NOT, so its `CALayer` mask uses Y-up from
+  bottom-left. Passing canvas-flipped pill rects straight into
+  the mask path silently mirrors the frost to the bottom of the
+  canvas — surfaces as empty pill-shaped rectangles below the
+  visible window for every label drawn at the top. `layoutPills()`
+  computes `mask_y = canvasHeight − pill.rect.maxY` before adding
+  to the mask path. **Don't drop this conversion** unless
+  `NSVisualEffectView.isFlipped` becomes overridable (today it
+  isn't). Same constraint applies to anything else we ever put
+  in the mask layer (scroll-area boxes, search header strip, …).
+- **AX enumeration runs through a 5-stage filter chain** (see
+  `docs/architecture.md` → "AX filter chain"):
+  visible-children walk → role allow-list → `supportsPress` →
+  `insideWindow` (Quartz bounds clamped to visibleFrame) →
+  `dedupNearOverlaps`. Each stage exists because of a specific
+  failure mode reported on web-shell apps; don't remove a stage
+  without checking the corresponding bug. Diagnostic
+  `ax: bounds … → filter=…` + `ax: de-dup M → N` lines are
+  Log.line (always on) so users can attach `/tmp/perch.log` to
+  bug reports without re-running with `--debug`.
+
+### Scroll mode + search mode
+
+- **`ScrollMode` and `SearchMode` are parallel to
+  `OverlayWindow`** — each owns its own KeyTap + (for search)
+  NSPanel, and they're **mutually exclusive** with hint mode.
+  `Controller.cancel()` tears down whichever is active. They
+  exist because hint mode's "type a label to click" UX has hard
+  limits: scrolling can't be expressed as a label-pick, and
+  apps with hundreds of clickables (Xcode, Logic) outrun the
+  alphabet.
+- **Scroll mode synthesises `CGEvent.scrollWheelEvent` events**
+  against the focused window. Perch never takes focus, so the
+  scroll lands where the user's caret was. `gg` / `Shift+g` go
+  top / bottom by firing 20 large notches (macOS clamps at the
+  scroll-view bounds — over-shooting is safe and avoids
+  per-app AX glue).
+- **Search mode caches the AX enumeration on entry** and filters
+  in memory per-keystroke rather than re-walking. Digit
+  resolution (`1-9` → match[N-1]) is **gated on a non-empty
+  match list** so digits remain typable as query characters
+  when there are no matches ("v2" / "API 3" etc.).
 
 ### Logging
 

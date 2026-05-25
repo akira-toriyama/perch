@@ -104,7 +104,7 @@ watches the file for changes when running as a daemon).
 | `--activate` | client | show hint overlay now (CLI alternative to the hotkey) |
 | `--scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
 | `--search` | client | enter search mode (type text, `1-9` picks a match) |
-| `--cancel` | client | dismiss the overlay if showing |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
