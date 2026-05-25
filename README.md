@@ -170,12 +170,22 @@ swift build                      # compile (CommandLineTools works)
 swift test                       # tests — needs Xcode
 ./run.sh                         # build release → launch Perch.app
 ./stop.sh                        # kill every running instance
+./scripts/dev.sh                 # one-shot stop + build + run + tail log
+./scripts/dev.sh --debug         # same, with --debug + foreground debug build
+perch --doctor                   # health check (accessibility, screens, …)
+perch --dump-ax                  # list AX elements perch would label
 ```
 
 Architecture: hexagonal Core / Adapter / App split (see
 [docs/architecture.md](docs/architecture.md)). Same shape as
 [stroke](https://github.com/akira-toriyama/stroke) and
 [facet](https://github.com/akira-toriyama/facet).
+
+Triaging a bug? Start with
+[docs/debugging.md](docs/debugging.md) and
+[docs/troubleshooting.md](docs/troubleshooting.md) — both list
+the diagnostic commands, the log-line format, and the bug
+signatures we've already seen.
 
 Commit convention: gitmoji + Conventional Commits
 ([docs/commit-convention.md](docs/commit-convention.md)).

@@ -312,29 +312,41 @@ frontmost app's focused window**. The seam is captured at
 perch is **headless** (`LSUIElement`, no Dock icon, no menubar
 item). The agent cannot "look at the screen" to see what it's
 doing — so the daemon is built to be debuggable entirely from
-the terminal. The workflow:
+the terminal.
 
-1. **Run in the foreground with `--debug`**:
-   `.build/debug/perch --debug`. This sets `debugMode = true`
-   (enables `Log.debug`) and mirrors every log line to stderr
-   in addition to `/tmp/perch.log`.
-2. **Tail the log** from a second shell:
-   `tail -f /tmp/perch.log`. Single source of observability.
-3. **Read the trace.** A successful hint press logs, in order:
-   ```
-   hotkey: bound shift+space
-   ax: front=com.apple.Safari pid=1234
-   ax: enumerated 12 hint(s) in com.apple.Safari
-   activate: 12 hint(s)
-   dispatch: AXPress ok → id=1234:7
-   ```
-   Each missing line localises the failure to one stage
-   (hotkey → AX enumeration → labeling → dispatch).
-4. **Check config** with `perch --validate` (exit 0 + summary,
-   or exit 2).
-5. **Health check**: `perch --doctor` reports Accessibility
-   grant, config presence, daemon liveness, hotkey binding,
-   and alphabet length.
+**Quick reference**: [docs/debugging.md](docs/debugging.md) has
+the full workflow + log-format reference;
+[docs/troubleshooting.md](docs/troubleshooting.md) has the
+catalogue of "this bug signature → that fix" entries the M1 fix
+wave produced.
+
+The five-second triage:
+
+1. **`./scripts/dev.sh --debug`** — stop any prior daemon,
+   rebuild, launch `.build/debug/perch --debug`, tail the log.
+   One command, no missed steps.
+2. **`perch --doctor`** — macOS / accessibility / config /
+   daemon / screens / frontmost / log file. Every line is
+   bug-report-grade information; copying the whole output is
+   the single most useful triage attachment.
+3. **`perch --dump-ax`** — print every AX element perch would
+   label in the current frontmost app. If the missing element
+   is in the dump, the bug is in label assignment / overlay
+   rendering; if it isn't, the bug is in the AX walk / filter
+   chain.
+
+A successful hint press leaves this trace in `/tmp/perch.log`:
+
+```
+hotkey: bound shift+space
+ax: bounds cg=(…) ax=(…) → filter=(…)
+ax: enumerated N hint(s) in <bundle-id>
+activate: N hint(s)
+dispatch: AXPress ok → id=<pid>:<seq>
+```
+
+Each missing line localises the failure to one stage (hotkey →
+filter / AX enumeration → labeling → dispatch).
 
 **AX grant after rebuild:** `swift build` ad-hoc re-signs the
 binary, which can drop the Accessibility grant — the symptom is
