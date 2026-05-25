@@ -67,7 +67,7 @@ public final class SearchMode {
         self.onExit = onExit
         self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
 
-        let frame = NSScreen.main?.frame ?? .zero
+        let frame = Self.unionFrame()
         let p = NSPanel(
             contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -86,19 +86,36 @@ public final class SearchMode {
         let cv = SearchCanvas(
             frame: NSRect(origin: .zero, size: frame.size),
             config: config)
+        cv.unionFrame = frame
+        cv.primaryHeight = Self.primaryHeight()
         p.contentView = cv
         self.panel = p
         self.canvas = cv
     }
 
+    private static func unionFrame() -> CGRect {
+        let screens = NSScreen.screens
+        guard var u = screens.first?.frame else {
+            return NSScreen.main?.frame ?? .zero
+        }
+        for s in screens.dropFirst() { u = u.union(s.frame) }
+        return u
+    }
+
+    private static func primaryHeight() -> CGFloat {
+        NSScreen.screens
+            .first(where: { $0.frame.origin == .zero })?.frame.height
+            ?? NSScreen.main?.frame.height ?? 0
+    }
+
     @discardableResult
     public func start() -> Bool {
         elements = source.enumerate()
-        if let screen = NSScreen.main {
-            panel.setFrame(screen.frame, display: false)
-            canvas.frame = NSRect(origin: .zero, size: screen.frame.size)
-            canvas.screenFrame = screen.frame
-        }
+        let union = Self.unionFrame()
+        panel.setFrame(union, display: false)
+        canvas.frame = NSRect(origin: .zero, size: union.size)
+        canvas.unionFrame = union
+        canvas.primaryHeight = Self.primaryHeight()
         recompute()
         panel.orderFrontRegardless()
 
@@ -223,7 +240,11 @@ public final class SearchMode {
 @MainActor
 private final class SearchCanvas: NSView {
 
-    var screenFrame: CGRect = .zero
+    /// Same conversion fields as `OverlayCanvas`. See its docstring
+    /// for the AX→canvas formula and why both `unionFrame` and
+    /// `primaryHeight` are needed.
+    var unionFrame: CGRect = .zero
+    var primaryHeight: CGFloat = 0
     private let config: PerchConfig
     private var query: String = ""
     private var matches: [UIElement] = []
@@ -293,8 +314,9 @@ private final class SearchCanvas: NSView {
             let w = ceil(tSize.width) + 20
             let h = ceil(font.boundingRectForFont.height) + 14
 
-            var x = e.frame.origin.x - screenFrame.origin.x
-            var y = e.frame.origin.y - screenFrame.origin.y
+            let canvasCGTopY = primaryHeight - unionFrame.maxY
+            var x = e.frame.origin.x - unionFrame.minX
+            var y = e.frame.origin.y - canvasCGTopY
             x = min(max(x, 6), bounds.width - w - 6)
             y = min(max(y, 6), bounds.height - h - 6)
             let r = CGRect(x: x, y: y, width: w, height: h)
