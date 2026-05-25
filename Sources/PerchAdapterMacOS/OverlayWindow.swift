@@ -433,12 +433,15 @@ private final class OverlayCanvas: NSView {
         // AX frame is in screen coords; subtract screenFrame.origin
         // for canvas-local coords. Canvas is Y-flipped so AX top-left
         // origin is just origin.
-        var x = hint.element.frame.origin.x - screenFrame.origin.x
-        var y = hint.element.frame.origin.y - screenFrame.origin.y
-        // Keep the pill inside the canvas — useful for elements
-        // sitting at the very top of a window.
-        x = min(max(x, 4), bounds.width - w - 4)
-        y = min(max(y, 4), bounds.height - h - 4)
+        //
+        // No edge clamping — clamping was introducing visible
+        // misalignment for elements near the screen edges (the pill
+        // moved a few pixels off the element). If a pill would
+        // clip against the canvas edge, AppKit clips it naturally
+        // at the bounds; far better to clip the pill than to
+        // displace it onto a different element.
+        let x = hint.element.frame.origin.x - screenFrame.origin.x
+        let y = hint.element.frame.origin.y - screenFrame.origin.y
         return CGRect(x: x, y: y, width: w, height: h)
     }
 
