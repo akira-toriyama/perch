@@ -123,9 +123,10 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // release runs too — invaluable when triaging "pills
         // outside the window" reports without asking the user to
         // re-launch with --debug.
-        Log.line("ax: bounds cg=\(cgFrame.map(rectString) ?? "nil") "
-                 + "ax=\(axFrame.map(rectString) ?? "nil") "
-                 + "→ filter=\(rectString(windowFrame))")
+        Log.line("ax: bounds "
+                 + "cg=\(cgFrame.map(OverlayCoords.rectString) ?? "nil") "
+                 + "ax=\(axFrame.map(OverlayCoords.rectString) ?? "nil") "
+                 + "→ filter=\(OverlayCoords.rectString(windowFrame))")
 
         var raw: [UIElement] = []
         walk(window, depth: 0, pid: front.processIdentifier, into: &raw)
@@ -372,11 +373,6 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             width: vis.width,
             height: vis.height)
         return rect.intersection(cgVis)
-    }
-
-    private func rectString(_ r: CGRect) -> String {
-        if r.isNull { return "null" }
-        return "(\(Int(r.minX)),\(Int(r.minY)) \(Int(r.width))×\(Int(r.height)))"
     }
 
     /// Drop elements whose top-left corner is within `proximityPx`
