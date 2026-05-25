@@ -51,5 +51,16 @@ let package = Package(
         .testTarget(
             name: "PerchIntegrationTests",
             dependencies: ["PerchCore", "PerchAdapterTest"]),
+        // Tests of the pure-mapping bits of the macOS adapter
+        // (e.g. `HotkeyMonitor.keyCode(for:)`). The system-bound
+        // parts (AXSource walks, KeyTap install, overlay rendering)
+        // can't be unit-tested without a live display + AX grant —
+        // those stay verified manually via `./run.sh` + the
+        // diagnostic log lines. Keep this target around as the
+        // landing pad for any future adapter logic that's
+        // testable in isolation.
+        .testTarget(
+            name: "PerchAdapterMacOSTests",
+            dependencies: ["PerchAdapterMacOS"]),
     ]
 )

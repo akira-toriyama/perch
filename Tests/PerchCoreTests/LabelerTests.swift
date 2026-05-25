@@ -85,4 +85,56 @@ final class LabelerTests: XCTestCase {
         XCTAssertEqual(Labeler.resolve(hints: hints, keys: "a")?.keys, "a")
         XCTAssertNil(Labeler.resolve(hints: hints, keys: "x"))
     }
+
+    /// No elements → no hints. Don't crash, don't return placeholder
+    /// labels.
+    func testEmptyElementsYieldsEmptyHints() {
+        let hints = Labeler.assign(
+            elements: [], alphabet: "asdf",
+            prioritiseCenter: true,
+            screenSize: CGSize(width: 800, height: 600))
+        XCTAssertTrue(hints.isEmpty)
+    }
+
+    /// Empty alphabet is the same kind of "no work to do" boundary
+    /// as no elements — return empty rather than crash.
+    func testEmptyAlphabetYieldsEmptyHints() {
+        let hints = Labeler.assign(
+            elements: mk(3), alphabet: "",
+            prioritiseCenter: false,
+            screenSize: CGSize(width: 800, height: 600))
+        XCTAssertTrue(hints.isEmpty)
+    }
+
+    /// 100 elements × default 24-letter alphabet: well within the
+    /// two-letter overflow capacity (24 + 23*24 = 576). Every
+    /// element should get a unique label; no element should be
+    /// dropped silently.
+    func testHugeElementSetAllLabeled() {
+        let elements = mk(100)
+        let hints = Labeler.assign(
+            elements: elements,
+            alphabet: "asdfjklghqweruiopzxcvbnm",
+            prioritiseCenter: false,
+            screenSize: CGSize(width: 1920, height: 1080))
+        XCTAssertEqual(hints.count, 100)
+        let keys = Set(hints.map(\.keys))
+        XCTAssertEqual(keys.count, 100, "expected all labels unique")
+    }
+
+    /// `filter` with a prefix that no label starts with → empty.
+    /// `resolve` with a non-existent / ambiguous key → nil. These
+    /// are the two early-out paths the overlay relies on to
+    /// decide between "narrow visible set" vs "fire" vs "miss".
+    func testFilterReturnsEmptyForUnknownPrefix() {
+        let hints = Labeler.assign(
+            elements: mk(3), alphabet: "asd",
+            prioritiseCenter: false,
+            screenSize: CGSize(width: 800, height: 600))
+        XCTAssertTrue(Labeler.filter(hints: hints, prefix: "z").isEmpty)
+        // An empty prefix passes everything through — useful for the
+        // "fresh overlay, nothing typed yet" state.
+        XCTAssertEqual(
+            Labeler.filter(hints: hints, prefix: "").count, hints.count)
+    }
 }
