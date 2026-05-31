@@ -1,3 +1,10 @@
+---
+title: perch 用語集
+tags: [glossary, macos, ax, hint]
+repo: perch
+aliases: []
+---
+
 # 用語集 — perch のユビキタス言語
 
 perch を構成する各パーツの **正規の呼び名** をまとめた規範ドキュメント。
@@ -127,7 +134,7 @@ adapter 側が `liveById: [String: AXUIElement]` の side-table を持って
 - **Don't call it:** modifier mode, chord, モディファイア組合せ
 
 ### unique-match
-タイプ中の文字列が **1 つの label にしか合致しない瞬間**、即座に発火する
+タイプ中の文字列が **1 つの [[label]] にしか合致しない瞬間**、即座に発火する
 振る舞い。`single-letter` ≠ `two-letter prefix` invariant が前提。
 - **Don't call it:** prefix match, instant fire, 確定マッチ
 
@@ -161,7 +168,7 @@ hint を描画する **唯一の UI surface**。`NSPanel`（`[.borderless,
 - **Don't call it:** hint hud, overlay panel, ヒント表示
 
 ### pill
-1 つの label を表す **角丸の小カード**。10pt corner radius を
+1 つの [[label]] を表す **角丸の小カード**。10pt corner radius を
 `NSBezierPath(roundedRect:xRadius:yRadius:)` で描画（layer-level
 `cornerRadius` は HiDPI で破綻する）。idle と matched で枠 / glow が変化。
 - **Don't call it:** chip, badge, hint card, バッジ, チップ
@@ -195,7 +202,7 @@ AX 列挙の 5 段フィルタ。各段は web-shell apps の **具体的な fai
 - **Don't call it:** ax pipeline, element filter, AX フィルタ
 
 ### `--dump-ax`
-**現在の frontmost app に対し perch が label しようとする AX エレメント
+**現在の frontmost app に対し perch が [[label]] しようとする AX エレメント
 すべてを列挙して print** する診断コマンド。"見えるはずの要素が出ない" 系
 バグの triage 一発目。
 - **Don't call it:** ax debug, dump elements, AX ダンプ
