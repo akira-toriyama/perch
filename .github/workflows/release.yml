@@ -107,7 +107,7 @@ jobs:
 
           Then grant **Accessibility** to *perch* (System Settings →
           Privacy & Security → Accessibility). Start the daemon with
-          `perch` (or `perch --debug` to mirror logs to stderr). See
+          `perch` (or `PERCH_DEBUG=1 perch` to mirror logs to stderr). See
           [README](https://github.com/akira-toriyama/perch#readme)
           for the config schema and the `--reload` / `--quit` /
           `--status` flags.

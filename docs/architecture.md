@@ -206,7 +206,6 @@ reports.
 | Flag | Mode | Purpose |
 |---|---|---|
 | *(none)* | server | run the daemon (hotkey loop) |
-| `--debug` | server | mirror logs to stderr too |
 | `--validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
 | `--doctor` | standalone | health check; exit 0/1 |
 | `--activate` | client | show hint overlay now (CLI mirror of the hotkey) |
@@ -217,6 +216,11 @@ reports.
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
 | `--help` | standalone | show help |
+
+Verbose logging is not a flag: set the `PERCH_DEBUG` env var
+(e.g. `PERCH_DEBUG=1 perch`) to mirror logs to stderr and enable
+the per-walk trace. The dev launcher sets it; a brew/raw launch
+stays quiet.
 
 Client commands all talk to the running daemon via
 `DistributedNotificationCenter` (notification name

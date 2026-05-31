@@ -56,11 +56,11 @@ found 23 labelable element(s):
 ```
 
 **If the element you expected appears in the list:** the bug is in
-label assignment or overlay rendering. Continue with `--debug` +
+label assignment or overlay rendering. Continue with `PERCH_DEBUG=1` +
 log inspection.
 
 **If the element doesn't appear:** the bug is in the AX walk or
-the filter chain. Re-run perch with `--debug` and watch
+the filter chain. Re-run perch with `PERCH_DEBUG=1` and watch
 `/tmp/perch.log` for the per-stage drop reasons (`ax: de-dup M → N`,
 the `bounds … → filter=(…)` rect, etc.).
 
@@ -86,9 +86,9 @@ Both the agent and the standalone diagnostic commands write to
   bound / unbound, daemon start / quit, overlay show / hide,
   every AX enumerate's `bounds` + `enumerated N` lines.
 - `Log.debug` — written **only** when the daemon is run with
-  `--debug` or when `debugMode = true` is set on a standalone
-  command. Per-walk decisions, scroll events, search-filter
-  steps, etc.
+  the `PERCH_DEBUG` env var set or when `debugMode = true` is set
+  on a standalone command. Per-walk decisions, scroll events,
+  search-filter steps, etc.
 
 The diagnostic line every AX enumeration emits is the most
 important one to know how to read:
@@ -131,7 +131,7 @@ each leaves a trace:
   AX returned no window, or every element was outside the
   `filter=` rect, or none supported `kAXPressAction`.
 
-For the in-window decisions, run with `--debug` and the per-walk
+For the in-window decisions, run with `PERCH_DEBUG=1` and the per-walk
 trace shows up via `Log.debug`.
 
 ## The dev script
@@ -141,13 +141,14 @@ tail log" cycle into one command:
 
 ```sh
 ./scripts/dev.sh           # release Perch.app + tail log
-./scripts/dev.sh --debug   # .build/debug/perch --debug + tail
+./scripts/dev.sh --debug   # PERCH_DEBUG=1 .build/debug/perch + tail
 ./scripts/dev.sh --no-tail # stop + rebuild + run, no tail
 ```
 
-`--debug` mode is the right pick when you're iterating on AX
-walk / filter chain code and want the per-stage drop reasons
-visible.
+dev.sh's `--debug` mode (a build-mode selector that runs the
+debug build in the foreground with `PERCH_DEBUG=1` set) is the
+right pick when you're iterating on AX walk / filter chain code
+and want the per-stage drop reasons visible.
 
 ## See also
 

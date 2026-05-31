@@ -8,12 +8,15 @@
 #   ./scripts/dev.sh           release → Perch.app, then tail log
 #                              (matches ./run.sh; same as the user
 #                              flow but with the log tail attached)
-#   ./scripts/dev.sh --debug   foreground .build/debug/perch --debug
+#   ./scripts/dev.sh --debug   foreground PERCH_DEBUG=1 .build/debug/perch
 #                              + tail log. Useful when you're
 #                              iterating on Swift code and want the
 #                              `[debug] ax: …` lines AND the daemon
 #                              exits with the script (Ctrl-C kills
-#                              both).
+#                              both). (--debug here selects the debug
+#                              build + foreground; it sets PERCH_DEBUG
+#                              in the binary's env, it is not a binary
+#                              flag.)
 #   ./scripts/dev.sh --no-tail just stop + rebuild + run (no tail).
 #                              Pair with `tail -f /tmp/perch.log` in
 #                              a separate pane.
@@ -45,10 +48,10 @@ if [[ "$MODE" == "debug" ]]; then
     echo "[dev] swift build (debug) …"
     swift build
     : > /tmp/perch.log   # truncate so the tail starts clean
-    echo "[dev] launching .build/debug/perch --debug …"
+    echo "[dev] launching PERCH_DEBUG=1 .build/debug/perch …"
     # Run in the background; Ctrl-C on `tail` won't kill it. The
-    # explicit `--debug` enables Log.debug.
-    .build/debug/perch --debug > /dev/null 2>&1 &
+    # PERCH_DEBUG=1 env var enables Log.debug.
+    PERCH_DEBUG=1 .build/debug/perch > /dev/null 2>&1 &
     sleep 0.5
 else
     echo "[dev] rebuilding Perch.app (release) …"

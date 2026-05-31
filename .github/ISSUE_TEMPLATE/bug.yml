@@ -8,7 +8,7 @@ body:
       value: |
         Thanks for the report. The most useful single thing you can attach is the
         output of `perch --doctor` plus the relevant tail of `/tmp/perch.log`
-        (run the daemon with `perch --debug` for a full trace).
+        (run the daemon with `PERCH_DEBUG=1 perch` for a full trace).
 
   - type: textarea
     id: doctor
