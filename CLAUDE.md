@@ -2,6 +2,16 @@
 
 Guidance for working in this repository.
 
+## Terminology
+
+All UI / config / code terminology follows
+[`docs/glossary.md`](docs/glossary.md) — use the canonical names
+(`PerchCore`, `UIElementSource`, `hint`, `label`, `AX target`,
+`action mode`, `HotkeyMonitor`, `KeyTap`, `OverlayWindow`, `pill`,
+`AX 5-stage filter chain`, `ScrollMode`, `SearchMode`, …), **not** the
+`Don't call it:` synonyms. Adding or renaming a term lands in the
+same PR as the code change.
+
 ## What this is
 
 `perch` — keyboard-driven UI navigator for macOS. Press a global
