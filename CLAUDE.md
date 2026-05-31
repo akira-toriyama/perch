@@ -270,7 +270,7 @@ frontmost app's focused window**. The seam is captured at
   without checking the corresponding bug. Diagnostic
   `ax: bounds … → filter=…` + `ax: de-dup M → N` lines are
   Log.line (always on) so users can attach `/tmp/perch.log` to
-  bug reports without re-running with `--debug`.
+  bug reports without re-running with `PERCH_DEBUG=1`.
 
 ### Scroll mode + search mode
 
@@ -299,8 +299,9 @@ frontmost app's focused window**. The seam is captured at
 - **`Log` lives in `PerchCore`** so both the Adapter and App
   modules can call it without crossing layer rules. Two
   functions: `Log.line` (always on) and `Log.debug` (gated by
-  `debugMode`, set from `perch --debug` at startup).
-- **Both write to `/tmp/perch.log`**; `--debug` also mirrors to
+  `debugMode`, set from the `PERCH_DEBUG` env var at startup —
+  the launcher sets it; a brew/raw launch stays quiet).
+- **Both write to `/tmp/perch.log`**; `PERCH_DEBUG` also mirrors to
   stderr so foreground users see events live.
 - **Use `Log.debug` liberally** in AX walk hot paths. It costs
   one bool check when disabled. Skip per-recursion logging on
@@ -323,7 +324,9 @@ wave produced.
 The five-second triage:
 
 1. **`./scripts/dev.sh --debug`** — stop any prior daemon,
-   rebuild, launch `.build/debug/perch --debug`, tail the log.
+   rebuild, launch `PERCH_DEBUG=1 .build/debug/perch`, tail the
+   log. (`--debug` here is dev.sh's own build-mode selector; it
+   sets `PERCH_DEBUG` in the binary's env, not a binary flag.)
    One command, no missed steps.
 2. **`perch --doctor`** — macOS / accessibility / config /
    daemon / screens / frontmost / log file. Every line is
@@ -372,11 +375,12 @@ stray instances before relaunching.
 
 ### CLI surface
 
-- **Flags**: `--debug` (server, verbose), `--validate` /
-  `--doctor` / `--help` (standalone), `--activate` / `--scroll`
-  / `--search` / `--cancel` / `--reload` / `--quit` / `--status`
-  (client). Any unrecognised flag exits `2` with a stderr
-  message (no silent fallback — facet's *Rule of Repair*
+- **Flags**: `--validate` / `--doctor` / `--help` (standalone),
+  `--activate` / `--scroll` / `--search` / `--cancel` /
+  `--reload` / `--quit` / `--status` (client). There is no
+  `--debug` flag — verbose logging is driven by the `PERCH_DEBUG`
+  env var (see Logging). Any unrecognised flag exits `2` with a
+  stderr message (no silent fallback — facet's *Rule of Repair*
   discipline).
 - **`--doctor`** reports Accessibility (`AXTrust.isTrusted()`),
   config, daemon liveness, configured hotkey, and alphabet length.

@@ -98,7 +98,6 @@ watches the file for changes when running as a daemon).
 | Flag | Mode | Purpose |
 |---|---|---|
 | *(none)* | server | run the daemon |
-| `--debug` | server | mirror logs to stderr too |
 | `--validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
 | `--doctor` | standalone | health check (AX, config, daemon, hotkey) |
 | `--activate` | client | show hint overlay now (CLI alternative to the hotkey) |
@@ -163,6 +162,20 @@ is treated as a query character so you can still search for
 Exit codes: 0 = ok · 1 = `--doctor` red · 2 = bad flag /
 invalid config · 3 = client cmd with no running daemon.
 
+### Verbose logging
+
+perch always writes to `/tmp/perch.log`. Start it with the
+`PERCH_DEBUG` environment variable set to also mirror every log
+line to stderr and enable the verbose per-walk trace:
+
+```sh
+PERCH_DEBUG=1 perch
+```
+
+The dev launcher (`./run.sh` / `./scripts/dev.sh --debug`) sets
+`PERCH_DEBUG` for you; a normal/brew launch sets nothing and
+stays quiet.
+
 ## Development
 
 ```sh
@@ -171,7 +184,7 @@ swift test                       # tests — needs Xcode
 ./run.sh                         # build release → launch Perch.app
 ./stop.sh                        # kill every running instance
 ./scripts/dev.sh                 # one-shot stop + build + run + tail log
-./scripts/dev.sh --debug         # same, with --debug + foreground debug build
+./scripts/dev.sh --debug         # same, foreground debug build w/ PERCH_DEBUG=1
 perch --doctor                   # health check (accessibility, screens, …)
 perch --dump-ax                  # list AX elements perch would label
 ```

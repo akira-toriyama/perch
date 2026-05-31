@@ -122,7 +122,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // Promoted to Log.line so the diagnostic shows up under
         // release runs too — invaluable when triaging "pills
         // outside the window" reports without asking the user to
-        // re-launch with --debug.
+        // re-launch with PERCH_DEBUG=1.
         Log.line("ax: bounds "
                  + "cg=\(cgFrame.map(OverlayCoords.rectString) ?? "nil") "
                  + "ax=\(axFrame.map(OverlayCoords.rectString) ?? "nil") "

@@ -26,8 +26,9 @@ enum PerchApp {
 
         SERVER MODE
           perch                       run as agent
-          perch --debug               verbose log to stderr +
-                                      /tmp/perch.log
+                                      (set PERCH_DEBUG=1 in the
+                                      environment for a verbose log to
+                                      stderr + /tmp/perch.log)
 
         CLIENT COMMANDS — need a running daemon (exit 3 if none)
           perch --activate            show hint overlay now (alt. to hotkey)
@@ -69,7 +70,9 @@ enum PerchApp {
         let argv = Array(CommandLine.arguments.dropFirst())
 
         if argv.contains("--help") { printHelp() }
-        if argv.contains("--debug") { debugMode = true }
+        if ProcessInfo.processInfo.environment["PERCH_DEBUG"] != nil {
+            debugMode = true
+        }
 
         // Two-pass: reject ANY unknown flag *before* dispatching a
         // recognised one, so `perch --reload --typo` fails loudly on
@@ -77,7 +80,7 @@ enum PerchApp {
         // looking at the rest (no silent fallback — facet/stroke
         // Rule of Repair discipline).
         let recognised: Set<String> = [
-            "--help", "--debug", "--validate", "--doctor", "--dump-ax",
+            "--help", "--validate", "--doctor", "--dump-ax",
             "--activate", "--cancel", "--scroll", "--search",
             "--reload", "--quit", "--status",
         ]
@@ -219,13 +222,13 @@ enum PerchApp {
 
     /// Dump every AX element perch's filter chain would label in
     /// the current frontmost app. One line per element; the format
-    /// matches what `--debug` would log per walk but the standalone
-    /// path doesn't need the daemon running.
+    /// matches what `PERCH_DEBUG=1` would log per walk but the
+    /// standalone path doesn't need the daemon running.
     ///
     /// Useful when answering "why isn't <button X> being labeled?"
     /// — if `--dump-ax` shows the element, the bug is in label
     /// assignment / overlay rendering; if it doesn't, the bug is
-    /// in the AX walk / filter chain (then re-run with `--debug`
+    /// in the AX walk / filter chain (then re-run with `PERCH_DEBUG=1`
     /// for per-stage drop reasons).
     @MainActor
     private static func runDumpAX() -> Never {
@@ -290,7 +293,7 @@ enum PerchApp {
         guard isServerRunning() else {
             FileHandle.standardError.write(Data((
                 "perch: no daemon running — start it with "
-                + "`perch` (or `perch --debug`) first\n"
+                + "`perch` (or `PERCH_DEBUG=1 perch`) first\n"
             ).utf8))
             exit(3)
         }

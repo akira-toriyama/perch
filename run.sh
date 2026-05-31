@@ -24,5 +24,9 @@ fi
 ./package.sh $MODE
 ./stop.sh
 sleep 0.5
-open "./$APP"
+# run.sh always sets PERCH_DEBUG so /tmp/perch.log is verbose during
+# the dev loop; a normal/brew launch sets nothing and stays quiet.
+# `open` needs --env because the launched app doesn't inherit the
+# shell environment.
+open "./$APP" --env PERCH_DEBUG=1
 echo "$APP launched. Grant Accessibility on first run."

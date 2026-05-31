@@ -101,7 +101,6 @@ exclude-apps = []
 | フラグ | モード | 用途 |
 |---|---|---|
 | *(なし)* | server | デーモンを実行 |
-| `--debug` | server | stderr にもログ |
 | `--validate` | standalone | config.toml を検証 |
 | `--doctor` | standalone | ヘルスチェック (AX / 設定 / デーモン / ホットキー) |
 | `--activate` | client | ヒント overlay を表示 (ホットキーの代替) |
@@ -160,6 +159,20 @@ Logic, システム設定のサイドバー…)向け。要素の表示タイト
 
 終了コード: 0 = 成功 · 1 = `--doctor` が赤 · 2 = 不正な
 フラグ / 設定 · 3 = デーモン未起動。
+
+### 詳細ログ
+
+perch は常に `/tmp/perch.log` に書き込む。環境変数
+`PERCH_DEBUG` をセットして起動すると、全ログ行を stderr にも
+ミラーし、walk 単位の詳細トレースを有効化する:
+
+```sh
+PERCH_DEBUG=1 perch
+```
+
+開発用ランチャ (`./run.sh` / `./scripts/dev.sh --debug`) が
+`PERCH_DEBUG` をセットする。通常 / brew 起動では何もセット
+されず静かなまま。
 
 ## 開発
 

@@ -3,14 +3,15 @@
 // (same policy as stroke / facet).
 //
 //   Log.line(...)   always on  — operational events.
-//   Log.debug(...)  gated      — enabled by `--debug` at startup.
+//   Log.debug(...)  gated      — enabled by the PERCH_DEBUG env var
+//                                at startup.
 //
-// Both write to /tmp/perch.log; `--debug` also mirrors to stderr so
+// Both write to /tmp/perch.log; PERCH_DEBUG also mirrors to stderr so
 // foreground users see events live.
 
 import Foundation
 
-/// Toggled by `perch --debug` in `Main.swift`. Read by `Log.debug`.
+/// Toggled by the `PERCH_DEBUG` env var in `Main.swift`. Read by `Log.debug`.
 public nonisolated(unsafe) var debugMode = false
 
 public enum Log {
