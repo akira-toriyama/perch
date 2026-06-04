@@ -347,6 +347,15 @@ The five-second triage:
    is in the dump, the bug is in label assignment / overlay
    rendering; if it isn't, the bug is in the AX walk / filter
    chain.
+4. **`perch --dump-ax-tree`** — print the **raw** AX tree
+   (depth-first, pre-filter) of the focused window. Reach for
+   this when `--dump-ax` shows nothing where you expected a
+   hint — most often a web shell (Chrome / Electron /
+   WKWebView) where the element isn't even reaching the filter
+   chain because the AX backend hasn't surfaced it yet. Look
+   for `*WEB*` markers and inspect what's below them; the
+   walker lifts its depth ceiling once it crosses one, so
+   leaves 40+ levels below the web area now reach the dump.
 
 A successful hint press leaves this trace in `/tmp/perch.log`:
 
@@ -385,13 +394,13 @@ stray instances before relaunching.
 
 ### CLI surface
 
-- **Flags**: `--validate` / `--doctor` / `--help` (standalone),
-  `--activate` / `--scroll` / `--search` / `--cancel` /
-  `--reload` / `--quit` / `--status` (client). There is no
-  `--debug` flag — verbose logging is driven by the `PERCH_DEBUG`
-  env var (see Logging). Any unrecognised flag exits `2` with a
-  stderr message (no silent fallback — facet's *Rule of Repair*
-  discipline).
+- **Flags**: `--validate` / `--doctor` / `--dump-ax` /
+  `--dump-ax-tree` / `--help` (standalone), `--activate` /
+  `--scroll` / `--search` / `--cancel` / `--reload` / `--quit` /
+  `--status` (client). There is no `--debug` flag — verbose
+  logging is driven by the `PERCH_DEBUG` env var (see Logging).
+  Any unrecognised flag exits `2` with a stderr message (no
+  silent fallback — facet's *Rule of Repair* discipline).
 - **`--doctor`** reports Accessibility (`AXTrust.isTrusted()`),
   config, daemon liveness, configured hotkey, and alphabet length.
   Exit 1 if AX fails.
@@ -546,3 +555,13 @@ re-confirmation.
   link" vim-style navigator (Chrome extension). The disjoint
   single-letter / two-letter prefix invariant in
   `Labeler.swift` is the same trick Vimium uses.
+- [Surfingkeys (brookhong)](https://github.com/brookhong/Surfingkeys)
+  *(reviewed 2026-06-04)* — vim-style hint mode in the browser,
+  DOM-based (not AX). UI conventions transfer; the seam doesn't.
+  Useful as reference for: regional hints (roadmap M3, "Regional
+  Hints" / `L`), continuous-follow mode (label → click → label
+  again, no re-hotkey, for list processing), overlapped-hint
+  disambiguation via modifier (Shift to flip stacked candidates).
+  vimac / Homerow are the closer references for the AX-based
+  Mac path — Surfingkeys' value here is on the keyboarding UX,
+  not the element-enumeration mechanism.

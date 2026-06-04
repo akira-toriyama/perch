@@ -8,9 +8,10 @@ diagnostic commands below.
 ## The five-second triage
 
 ```sh
-perch --doctor      # accessibility, screens, frontmost, log file
-perch --dump-ax     # exactly what perch would label right now
-tail -F /tmp/perch.log    # live event stream
+perch --doctor           # accessibility, screens, frontmost, log file
+perch --dump-ax          # exactly what perch would label right now
+perch --dump-ax-tree     # the raw AX tree (pre-filter) of the focused window
+tail -F /tmp/perch.log   # live event stream
 ```
 
 If a bug report has these three outputs attached, 90% of the time
@@ -62,7 +63,47 @@ log inspection.
 **If the element doesn't appear:** the bug is in the AX walk or
 the filter chain. Re-run perch with `PERCH_DEBUG=1` and watch
 `/tmp/perch.log` for the per-stage drop reasons (`ax: de-dup M → N`,
-the `bounds … → filter=(…)` rect, etc.).
+the `bounds … → filter=(…)` rect, etc.). When the missing element
+sits inside a web view (Chrome / Electron / a WKWebView host), the
+next command is the one to reach for — `--dump-ax` only shows
+nodes that made it through the role + press-support filters, and
+a web area might not be exposing any clickable leaves at all yet.
+
+### `perch --dump-ax-tree`
+
+Walks the focused window's **raw** AX tree depth-first and prints
+one line per node — pre-filter, regardless of role or press
+support. Shows what AX itself sees before perch decides what to
+label:
+
+```
+perch dump-ax-tree → com.google.Chrome (pid 38558)
+[d=0] Window (3080,  275 1708×1511)  kids=8 vis=8  actions=[Raise]
+  [d=1] Group  (3080,  275 1708× 100)  kids=12 vis=12  actions=[·]
+    [d=2] Button (3520,  290   40× 40)  kids=0 vis=0  actions=[Press]  "New tab"
+    …
+  [d=1] Group  (3080,  375 1708×1411)  kids=1 vis=1  actions=[·]
+    [d=2] WebArea  (3080, 375 1708×1411)  kids=42 vis=18  actions=[·]  *WEB*  "https://github.com/…"
+      [d=3] Group  …
+      …
+--
+nodes: 187  web-areas: 1  depth-clipped: 0
+```
+
+The `*WEB*` marker flags AX web-area roots; the walker lifts its
+depth ceiling from 32 → 64 once it crosses one (web DOM trees
+routinely bury clickable leaves 40+ levels below the root, well
+past the native cap).
+
+**If the element isn't anywhere in the raw tree** (no entry, no
+ancestor that mentions it): the AX backend is hiding it. Chrome's
+renderer accessibility is lazy — first activation of an AX client
+on a page can take a beat to populate; for Electron apps the
+content area may have to be focused at least once. The fix isn't
+in perch's walker. **If the element IS in the raw tree but doesn't
+appear in `--dump-ax`:** the filter chain dropped it — usually the
+role allow-list (the node's role isn't in `[behavior].roles`) or
+press support (the node didn't advertise `kAXPressAction`).
 
 ### `perch --validate`
 

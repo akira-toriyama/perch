@@ -48,10 +48,20 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     // Reset at the top of every `enumerate()` along with `liveById`.
     private var nextSeq: Int = 0
 
-    // Recursion guard. AX trees are typically a few hundred nodes
+    // Recursion guards. AX trees are typically a few hundred nodes
     // for a native window; we cap deep recursions so a buggy app
     // can't lock the daemon in an enumeration storm.
-    private let maxDepth = 32
+    //
+    // `nativeMaxDepth` is the everyday ceiling for AppKit / SwiftUI
+    // hierarchies. `webMaxDepth` raises the ceiling once the walker
+    // crosses into an `AXWebArea` subtree — web DOM trees are often
+    // 40-60 levels deep before a clickable leaf (per investigations
+    // surfaced by issue #26), and the native cap was eating the
+    // whole page when the user expected hint pills on links. Both
+    // are absolute depth ceilings; the higher value applies for the
+    // rest of the descent once a web area is entered.
+    private let nativeMaxDepth = 32
+    private let webMaxDepth = 64
 
     /// Two elements whose top-left corners are within this many
     /// points are considered "the same visible target" for the
@@ -69,6 +79,15 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// couldn't read the window's frame for some reason — falls
     /// open rather than hiding everything).
     private var windowFrame: CGRect = .zero
+
+    /// Pids on which we've already requested AX renderer wake-up
+    /// (`AXManualAccessibility = true`). Chrome / Electron expose
+    /// nothing under their `AXWebArea` until an AX client signals
+    /// interest via this attribute — without it, the page DOM is
+    /// invisible to perch (see issue #26 — empty raw dump for
+    /// Chrome). Set once per pid, log once, so log scans don't see
+    /// the wake line every activation.
+    private var wokenPids: Set<pid_t> = []
 
     public init(config: PerchConfig) {
         self.roles = Set(config.roles)
@@ -99,6 +118,58 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         Log.debug("ax: front=\(bundleID) pid=\(front.processIdentifier)")
 
         let appElt = AXUIElementCreateApplication(front.processIdentifier)
+
+        // Wake the renderer-accessibility tree on Chromium-based
+        // apps (Chrome / Edge / Brave / Arc / VS Code / Slack /
+        // Discord / Electron in general). They keep their page /
+        // content `AXWebArea` collapsed until an AX client signals
+        // interest. Without a wake the raw AX tree for a Chrome
+        // window has zero `*WEB*` markers — the page DOM is
+        // completely invisible to perch.
+        //
+        // Two attributes flip the switch:
+        //
+        //   1. `AXManualAccessibility` — the lighter knob,
+        //      preferred when the app supports it. Chrome currently
+        //      returns `kAXErrorAttributeUnsupported` (-25205) when
+        //      we try to set it on the app element, so this is
+        //      kept as best-effort.
+        //   2. `AXEnhancedUserInterface` — what VoiceOver flips.
+        //      Chromium / Electron honour it. Known to cause
+        //      sustained perf hits in Microsoft Office apps (Word
+        //      / Excel reroute event handling through assistive
+        //      tech APIs while it's on), so we **only** set this
+        //      on bundles we recognise as Chromium / Electron.
+        //
+        // First activation after wake may still see an empty
+        // subtree — Chrome populates the renderer AX
+        // asynchronously, typically within a few hundred ms. By
+        // the second activation the content is there.
+        //
+        // Logged once per pid so the line doesn't repeat every
+        // activation.
+        if !wokenPids.contains(front.processIdentifier) {
+            let errM = AXUIElementSetAttributeValue(
+                appElt,
+                "AXManualAccessibility" as CFString,
+                kCFBooleanTrue)
+            let isChromium = Self.isChromiumBundle(bundleID)
+            let errEStr: String
+            if isChromium {
+                let errE = AXUIElementSetAttributeValue(
+                    appElt,
+                    "AXEnhancedUserInterface" as CFString,
+                    kCFBooleanTrue)
+                errEStr = String(errE.rawValue)
+            } else {
+                errEStr = "skipped"
+            }
+            wokenPids.insert(front.processIdentifier)
+            Log.line("ax: wake → \(bundleID) "
+                     + "manual=\(errM.rawValue) "
+                     + "enhanced=\(errEStr)")
+        }
+
         guard let focused = copyAttribute(appElt, kAXFocusedWindowAttribute),
               CFGetTypeID(focused as CFTypeRef) == AXUIElementGetTypeID()
         else {
@@ -129,7 +200,9 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
                  + "→ filter=\(OverlayCoords.rectString(windowFrame))")
 
         var raw: [UIElement] = []
-        walk(window, depth: 0, pid: front.processIdentifier, into: &raw)
+        let ctx = WalkCtx(maxDepth: nativeMaxDepth, inWebArea: false)
+        walk(window, depth: 0, ctx: ctx,
+             pid: front.processIdentifier, into: &raw)
         let pruned = dedupNearOverlaps(raw)
         if pruned.count != raw.count {
             Log.debug("ax: de-dup \(raw.count) → \(pruned.count)")
@@ -205,13 +278,22 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     // MARK: - Internals
 
+    /// Recursion context. Carries the depth ceiling so we can swap
+    /// it (native → web) for the rest of a subtree without leaking
+    /// the change up to siblings.
+    private struct WalkCtx {
+        let maxDepth: Int
+        let inWebArea: Bool
+    }
+
     private func walk(
         _ node: AXUIElement,
         depth: Int,
+        ctx: WalkCtx,
         pid: pid_t,
         into out: inout [UIElement]
     ) {
-        if depth > maxDepth { return }
+        if depth > ctx.maxDepth { return }
 
         // Role check — keep it cheap, before reading frame / title.
         let rawRole = (copyAttribute(node, kAXRoleAttribute) as? String) ?? ""
@@ -232,6 +314,20 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
                 id: id, role: role, label: title, frame: frame))
         }
 
+        // Crossing into a web area lifts the depth ceiling for the
+        // rest of this subtree. Chromium / WKWebView trees routinely
+        // bury clickable leaves 40+ levels below the AXWebArea, well
+        // past the native cap — keep the cap for the rest of the
+        // native UI but relax it locally here. Log once per crossing
+        // so triage of "perch saw the web area but no links" is
+        // direct.
+        var nextCtx = ctx
+        if !ctx.inWebArea && role == "WebArea" {
+            Log.line("ax: web-area entered at depth=\(depth) "
+                     + "→ maxDepth \(ctx.maxDepth) → \(webMaxDepth)")
+            nextCtx = WalkCtx(maxDepth: webMaxDepth, inWebArea: true)
+        }
+
         // Recurse: prefer `kAXVisibleChildrenAttribute` when the
         // node exposes it — that's the AX subset that's actually
         // on screen right now, which dramatically cuts the noise
@@ -242,7 +338,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // `kAXChildren` is the universal fallback.
         let children = visibleChildrenIfAvailable(of: node)
         for child in children {
-            walk(child, depth: depth + 1, pid: pid, into: &out)
+            walk(child, depth: depth + 1, ctx: nextCtx,
+                 pid: pid, into: &out)
         }
     }
 
@@ -373,6 +470,35 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             width: vis.width,
             height: vis.height)
         return rect.intersection(cgVis)
+    }
+
+    /// Bundle IDs that warrant flipping `AXEnhancedUserInterface`
+    /// to wake the renderer-accessibility tree. Chromium browsers
+    /// + the Electron apps perch users routinely reach for. Not
+    /// exhaustive — extending the list is the cheapest way to add
+    /// web-content coverage to a newly-reported app, no other code
+    /// change needed.
+    private static let chromiumPrefixes: [String] = [
+        // Chromium browsers
+        "com.google.Chrome",
+        "com.microsoft.edgemac",
+        "org.chromium",
+        "com.brave.Browser",
+        "company.thebrowser.Browser",   // Arc
+        "com.vivaldi.Vivaldi",
+        "com.operasoftware.Opera",
+        // Electron apps
+        "com.microsoft.VSCode",
+        "com.todesktop.",                // Cursor, others
+        "com.tinyspeck.slackmacgap",
+        "com.hnc.Discord",
+        "com.figma.Desktop",
+        "com.spotify.client",
+        "com.notion.id",
+    ]
+
+    static func isChromiumBundle(_ bundleID: String) -> Bool {
+        chromiumPrefixes.contains { bundleID.hasPrefix($0) }
     }
 
     /// Drop elements whose top-left corner is within `proximityPx`
