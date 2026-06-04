@@ -62,6 +62,14 @@ final class Controller {
         monitor.install(combo: config.hotkey)
         self.hotkey = monitor
         installControlObserver()
+        installAppActivationObserver()
+        // Catch the case where perch starts WHILE a Chromium app is
+        // already frontmost — the activation notification only fires
+        // on subsequent switches, so we'd miss the very first one.
+        if let front = NSWorkspace.shared.frontmostApplication,
+           let bid = front.bundleIdentifier {
+            source.prewarm(pid: front.processIdentifier, bundleID: bid)
+        }
         writeStatus(reason: "start")
         Log.line("controller: started")
     }
@@ -183,6 +191,35 @@ final class Controller {
     }
 
     // MARK: - IPC
+
+    /// Subscribe to app-activation notifications so we can pre-warm
+    /// Chromium / Electron renderer-AX the moment the user switches
+    /// to such an app (#28). Without this, the first hotkey press
+    /// after focus-change sees an empty page subtree — Chrome's
+    /// renderer-AX wakes asynchronously and is only populated by
+    /// the time the user's second activation lands.
+    ///
+    /// `NSWorkspace.didActivateApplicationNotification` fires on
+    /// the main `OperationQueue` (not the main actor under Swift
+    /// 6's isolation model), hence the explicit hop. Bundle-id
+    /// filtering happens inside `AXUIElementSource.prewarm` so
+    /// non-Chromium activations are essentially free.
+    private func installAppActivationObserver() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey]
+                    as? NSRunningApplication,
+                  let bid = app.bundleIdentifier
+            else { return }
+            let pid = app.processIdentifier
+            Task { @MainActor [weak self] in
+                self?.source.prewarm(pid: pid, bundleID: bid)
+            }
+        }
+    }
 
     private func installControlObserver() {
         // The notification block runs on `.main` (an OperationQueue),
