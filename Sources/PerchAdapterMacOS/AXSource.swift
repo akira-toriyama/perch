@@ -102,14 +102,24 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// open rather than hiding everything).
     private var windowFrame: CGRect = .zero
 
-    /// Pids on which we've already requested AX renderer wake-up
-    /// (`AXManualAccessibility = true`). Chrome / Electron expose
-    /// nothing under their `AXWebArea` until an AX client signals
-    /// interest via this attribute — without it, the page DOM is
-    /// invisible to perch (see issue #26 — empty raw dump for
-    /// Chrome). Set once per pid, log once, so log scans don't see
-    /// the wake line every activation.
+    /// Pids we've already flipped `AXManualAccessibility = true` on.
+    /// Chrome / Electron expose nothing under their `AXWebArea`
+    /// until an AX client signals interest via this attribute —
+    /// without it, the page DOM is invisible to perch (see issue
+    /// #26 — empty raw dump for Chrome). Once per pid: the flip
+    /// is idempotent, but we also use this to suppress the
+    /// per-activation log line.
     private var wokenPids: Set<pid_t> = []
+
+    /// Pids we've flipped `AXEnhancedUserInterface = true` on
+    /// (the heavier wake signal — what VoiceOver flips). Tracked
+    /// separately from `wokenPids` so a bundle that promotes via
+    /// runtime WebArea discovery (issue #38) gets the Enhanced
+    /// flip on its NEXT enumerate, not "never, because Manual
+    /// already ran on the first sighting". Reverse-flipped on
+    /// `clearRendererWake()` so perch doesn't leak the Enhanced
+    /// bit past its own lifetime (issue #33).
+    private var enhancedPids: Set<pid_t> = []
 
     /// Pids we've explicitly prewarm-walked at app-activation time.
     /// Chrome's renderer-AX populates asynchronously after the
@@ -118,19 +128,44 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// #28). One-shot per pid; daemon restart resets.
     private var prewarmedPids: Set<pid_t> = []
 
+    /// Bundles outside `chromiumPrefixes` where the walker has
+    /// observed an `AXWebArea` during a real enumeration — Books,
+    /// Mac App Store, Slack notification flyouts, native apps with
+    /// an embedded WKWebView marketing pane, etc. (issue #38).
+    /// Treated as honorary Chromium bundles for the wake / prewarm
+    /// gates so subsequent activations get the renderer signal too.
+    ///
+    /// Discovery is **observation-based**, not bundle-id heuristic:
+    /// only apps that actually surface a WebArea ever land here, so
+    /// the Office-typing-latency caveat that gates the static
+    /// allow-list doesn't apply.
+    ///
+    /// Session-lifetime; cleared on daemon restart. Exposed read-only
+    /// to `Controller.writeStatus(...)` so `perch --status` can
+    /// surface the list for triage.
+    private var discoveredWebBundles: Set<String> = []
+
     /// Bundle id of the most recent `enumerate()` invocation
     /// (assigned at the top of `enumerate()` once the frontmost
-    /// app is resolved). Exposed read-only so `Controller` can pass
-    /// the SAME bundle id `enumerate()` made its per-app decisions
-    /// against down to `OverlayWindow.show(bundleID:)` — without
-    /// re-resolving `NSWorkspace.frontmostApplication`, which could
-    /// race with a focus switch and produce inconsistent overrides
-    /// across the enumerate / auto-click branches.
+    /// app is resolved). Three consumers:
+    ///
+    ///   1. **During the walk** — the recursive `walk()` reads this
+    ///      to attribute a `WebArea` crossing to the right bundle
+    ///      (#38) without threading the id through every `WalkCtx`.
+    ///   2. **After the walk** — `Controller` reads this to pass the
+    ///      identity `enumerate()` made its per-app decisions
+    ///      against (#37) down to `OverlayWindow.show`, avoiding a
+    ///      NSWorkspace re-resolve that could race with a focus
+    ///      switch and produce inconsistent overrides across the
+    ///      enumerate / auto-click branches.
+    ///   3. **Per-app override resolution itself** — `enumerate()`
+    ///      reads `config.effectiveX(for: lastEnumeratedBundleID)`
+    ///      against the freshly-set value (#37).
     ///
     /// `nil` until the first enumeration; never cleared between
-    /// enumerations (a stale value past a subsequent enumerate would
-    /// be overwritten by the new one anyway, and the Controller
-    /// only reads this immediately after `enumerate()`).
+    /// enumerations (a stale value past a subsequent enumerate is
+    /// overwritten by the new one, and all consumers above only
+    /// read it in a window where it's correctly set).
     public private(set) var lastEnumeratedBundleID: String?
 
     public init(config: PerchConfig) {
@@ -149,6 +184,15 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         self.minSize = CGFloat(cfg.minSize)
     }
 
+    /// Read-only snapshot of WKWebView-bearing bundles discovered
+    /// during this daemon's lifetime (issue #38). Used by
+    /// `Controller.writeStatus(...)` so `perch --status` can surface
+    /// the list as a triage aid ("which non-Chromium apps does perch
+    /// know to wake?"). Sorted for stable output.
+    public var discoveredWebBearingBundles: [String] {
+        Array(discoveredWebBundles).sorted()
+    }
+
     /// Reverse the renderer wake-up on every pid we've flipped
     /// `AXEnhancedUserInterface = true` on during the daemon's
     /// lifetime. Called at clean shutdown (`perch --quit`) so we
@@ -163,9 +207,20 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// rejected it on the way in (`kAXErrorAttributeUnsupported`) —
     /// there's nothing to clear.
     public func clearRendererWake() {
-        let pids = wokenPids
+        // Reverse only the Enhanced flip — Manual rejects on Chrome
+        // anyway, so there's nothing to clear on that latch. Iterate
+        // `enhancedPids` (the pids we actually flipped) rather than
+        // `wokenPids` (the broader Manual set), so a non-Web-bearing
+        // app whose Manual latch we touched doesn't get a spurious
+        // Enhanced=false write.
+        let pids = enhancedPids
         wokenPids.removeAll()
+        enhancedPids.removeAll()
         prewarmedPids.removeAll()
+        // Discovery set is in-memory only — clearing here keeps the
+        // `--status` line honest (no stale "discovered" entries
+        // after a `--quit` would never re-walk them).
+        discoveredWebBundles.removeAll()
         guard !pids.isEmpty else { return }
         for pid in pids {
             let app = AXUIElementCreateApplication(pid)
@@ -202,7 +257,12 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     ///   - leaves no UIElement state behind (does not touch
     ///     `liveById` / `nextSeq` — those are owned by `enumerate()`)
     public func prewarm(pid: pid_t, bundleID: String) {
-        guard Self.isChromiumBundle(bundleID) else { return }
+        // Static Chromium allow-list OR a runtime-discovered
+        // WebView-bearing bundle (issue #38). The discovered set
+        // can only grow once we've enumerated the app at least
+        // once, so the very first activation from cold start still
+        // misses — but the second one onward gets the prewarm too.
+        guard isWebBearing(bundleID) else { return }
         guard !prewarmedPids.contains(pid) else { return }
         prewarmedPids.insert(pid)
 
@@ -215,6 +275,11 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             appElt, "AXManualAccessibility" as CFString, kCFBooleanTrue)
         let errE = AXUIElementSetAttributeValue(
             appElt, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        // Latch both flips so a subsequent `enumerate()` skips the
+        // wake block instead of re-flipping (idempotent, but the
+        // duplicate `ax: wake → …` log line is misleading).
+        wokenPids.insert(pid)
+        enhancedPids.insert(pid)
 
         // Lightweight AX query: focused window + its direct
         // children. Chromium populates the renderer-AX from this
@@ -251,9 +316,10 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         }
         Log.debug("ax: front=\(bundleID) pid=\(front.processIdentifier)")
         // Capture the bundle id this enumeration is committed to so
-        // downstream consumers (Controller → OverlayWindow.show) can
-        // resolve per-app overrides against the SAME identity
-        // `enumerate()` used — see `lastEnumeratedBundleID` doc.
+        // the walker (WebArea attribution, #38), the Controller
+        // (OverlayWindow.show, #37), and the per-app override block
+        // below can all read the SAME identity without re-resolving
+        // NSWorkspace.
         self.lastEnumeratedBundleID = bundleID
 
         // Apply per-app overrides for the duration of this enumeration.
@@ -291,47 +357,45 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // window has zero `*WEB*` markers — the page DOM is
         // completely invisible to perch.
         //
-        // Two attributes flip the switch:
+        // Two attributes flip the switch, **each gated by its own
+        // per-pid latch** so runtime WebArea discovery (issue #38)
+        // can promote a bundle and have the Enhanced flip fire on
+        // the *next* enumerate even though Manual already ran:
         //
         //   1. `AXManualAccessibility` — the lighter knob,
         //      preferred when the app supports it. Chrome currently
         //      returns `kAXErrorAttributeUnsupported` (-25205) when
         //      we try to set it on the app element, so this is
-        //      kept as best-effort.
+        //      kept as best-effort. Latched via `wokenPids`.
         //   2. `AXEnhancedUserInterface` — what VoiceOver flips.
         //      Chromium / Electron honour it. Known to cause
         //      sustained perf hits in Microsoft Office apps (Word
         //      / Excel reroute event handling through assistive
         //      tech APIs while it's on), so we **only** set this
-        //      on bundles we recognise as Chromium / Electron.
+        //      on bundles `isWebBearing(_:)` recognises (static
+        //      Chromium allow-list ∪ runtime-discovered WebArea
+        //      hosts). Latched separately via `enhancedPids`.
         //
         // First activation after wake may still see an empty
         // subtree — Chrome populates the renderer AX
         // asynchronously, typically within a few hundred ms. By
         // the second activation the content is there.
-        //
-        // Logged once per pid so the line doesn't repeat every
-        // activation.
         if !wokenPids.contains(front.processIdentifier) {
             let errM = AXUIElementSetAttributeValue(
                 appElt,
                 "AXManualAccessibility" as CFString,
                 kCFBooleanTrue)
-            let isChromium = Self.isChromiumBundle(bundleID)
-            let errEStr: String
-            if isChromium {
-                let errE = AXUIElementSetAttributeValue(
-                    appElt,
-                    "AXEnhancedUserInterface" as CFString,
-                    kCFBooleanTrue)
-                errEStr = String(errE.rawValue)
-            } else {
-                errEStr = "skipped"
-            }
             wokenPids.insert(front.processIdentifier)
-            Log.line("ax: wake → \(bundleID) "
-                     + "manual=\(errM.rawValue) "
-                     + "enhanced=\(errEStr)")
+            Log.line("ax: wake → \(bundleID) manual=\(errM.rawValue)")
+        }
+        if isWebBearing(bundleID),
+           !enhancedPids.contains(front.processIdentifier) {
+            let errE = AXUIElementSetAttributeValue(
+                appElt,
+                "AXEnhancedUserInterface" as CFString,
+                kCFBooleanTrue)
+            enhancedPids.insert(front.processIdentifier)
+            Log.line("ax: enhanced → \(bundleID) result=\(errE.rawValue)")
         }
 
         guard let focused = copyAttribute(appElt, kAXFocusedWindowAttribute),
@@ -500,6 +564,22 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             Log.line("ax: web-area entered at depth=\(depth) "
                      + "→ maxDepth \(ctx.maxDepth) → \(webMaxDepth)")
             nextCtx = WalkCtx(maxDepth: webMaxDepth, inWebArea: true)
+
+            // Issue #38 — first WebArea sighting in a bundle that
+            // isn't in the static Chromium allow-list flags the
+            // bundle as web-bearing for the rest of this daemon's
+            // lifetime. Subsequent activations get the renderer
+            // wake / prewarm path that Chromium bundles already
+            // enjoy. Log once per bundle so the line is the obvious
+            // signal "perch just promoted this bundle".
+            if let bid = lastEnumeratedBundleID,
+               !Self.isChromiumBundle(bid),
+               !discoveredWebBundles.contains(bid) {
+                discoveredWebBundles.insert(bid)
+                Log.line(
+                    "ax: WebArea in non-listed bundle "
+                    + "\(bid) → promoted")
+            }
         }
 
         // Recurse: prefer `kAXVisibleChildrenAttribute` when the
@@ -677,6 +757,16 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     static func isChromiumBundle(_ bundleID: String) -> Bool {
         chromiumPrefixes.contains { bundleID.hasPrefix($0) }
+    }
+
+    /// `true` when `bundleID` is either in the static Chromium /
+    /// Electron allow-list OR a runtime-discovered WKWebView host
+    /// (issue #38). The two routes converge on a single wake gate
+    /// so the rest of the code path doesn't care how the bundle
+    /// got there.
+    private func isWebBearing(_ bundleID: String) -> Bool {
+        Self.isChromiumBundle(bundleID)
+            || discoveredWebBundles.contains(bundleID)
     }
 
     /// Drop elements whose top-left corner is within `proximityPx`

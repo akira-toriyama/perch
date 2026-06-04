@@ -299,13 +299,23 @@ final class Controller {
     }
 
     private func writeStatus(reason: String) {
+        // Discovered WKWebView-host bundles (issue #38) — empty for
+        // the common case so the file stays the same shape; only
+        // surfaces once perch has seen a WebArea outside the static
+        // Chromium allow-list. Sorted in the source so output is
+        // stable between calls.
+        let discovered = source.discoveredWebBearingBundles
+        let discoveredLine = discovered.isEmpty
+            ? ""
+            : "discovered-web-bundles: "
+                + discovered.joined(separator: ", ") + "\n"
         let text = """
         perch: running
         hotkey: \(human(config.hotkey))
         alphabet: \(config.alphabet)
         roles: \(config.roles.count)
         excludes: \(config.excludeApps.count)
-        last: \(reason) @ \(Date())
+        \(discoveredLine)last: \(reason) @ \(Date())
         """
         try? text.write(
             toFile: statusPath, atomically: true, encoding: .utf8)
