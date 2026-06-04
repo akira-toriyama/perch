@@ -113,6 +113,34 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         self.minSize = CGFloat(cfg.minSize)
     }
 
+    /// Reverse the renderer wake-up on every pid we've flipped
+    /// `AXEnhancedUserInterface = true` on during the daemon's
+    /// lifetime. Called at clean shutdown (`perch --quit`) so we
+    /// don't leak Chromium / Electron AX bookkeeping state past
+    /// perch's process boundary.
+    ///
+    /// Pids that have died since are silently skipped — the AX set
+    /// call on a stale `AXUIElementCreateApplication` handle just
+    /// returns an error, no crash.
+    ///
+    /// We don't try to clear `AXManualAccessibility` because Chrome
+    /// rejected it on the way in (`kAXErrorAttributeUnsupported`) —
+    /// there's nothing to clear.
+    public func clearRendererWake() {
+        let pids = wokenPids
+        wokenPids.removeAll()
+        prewarmedPids.removeAll()
+        guard !pids.isEmpty else { return }
+        for pid in pids {
+            let app = AXUIElementCreateApplication(pid)
+            _ = AXUIElementSetAttributeValue(
+                app,
+                "AXEnhancedUserInterface" as CFString,
+                kCFBooleanFalse)
+        }
+        Log.line("ax: cleared renderer-wake on \(pids.count) pid(s)")
+    }
+
     /// Wake the renderer-accessibility tree of a Chromium / Electron
     /// app proactively, so the *first* hotkey activation after the
     /// app gains focus sees the populated `AXWebArea` instead of
