@@ -88,6 +88,12 @@ anim-enabled = true              # 150ms scale-in + 200ms red miss-flash
 auto-click-on-unique = true      # fire as soon as one candidate remains
 roles = ["Button", "MenuItem", "Link", "Tab", ...]
 exclude-apps = []                # bundle IDs perch ignores
+
+# Per-app overrides — change `roles`, `min-size`, or
+# `auto-click-on-unique` per frontmost bundle id. Unset keys fall
+# through to the global `[behavior]` value.
+[behavior."com.google.Chrome"]
+min-size = 20                    # declutter 16×16 window-control glyphs
 ```
 
 Reload after edits: `perch --reload` (or just save — perch

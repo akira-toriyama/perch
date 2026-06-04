@@ -32,8 +32,17 @@ import PerchCore
 
 public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
-    // Roles to label outside `AXWebArea` subtrees, configured by
-    // `[behavior].roles`.
+    // Whole config snapshot, kept so we can resolve per-app overrides
+    // (`[behavior."<bundle-id>"]`) at enumerate-time against the
+    // currently-frontmost app. Per-app overrides change the role
+    // allow-list and the min-size floor per enumeration; without the
+    // full config we'd need to plumb the lookup map separately.
+    private var config: PerchConfig
+
+    // Roles to label outside `AXWebArea` subtrees. Snapshot of the
+    // *global* `[behavior].roles` plus the active per-app override
+    // (resolved at the top of each `enumerate()`). The walker reads
+    // this; the enumerate path mutates it briefly.
     private var roles: Set<String>
 
     // Roles to label inside `AXWebArea` subtrees, configured by
@@ -48,7 +57,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     // Floor for AX-element frame size (points, either axis).
     // Anything smaller falls out of `frameOf` and never reaches the
-    // role / press / window filters. Driven by `[behavior].min-size`.
+    // role / press / window filters. Like `roles`, this is mutated
+    // per `enumerate()` to apply per-app overrides.
     private var minSize: CGFloat
 
     // (id → live AXUIElement) — only valid for the most recent
@@ -108,7 +118,23 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// #28). One-shot per pid; daemon restart resets.
     private var prewarmedPids: Set<pid_t> = []
 
+    /// Bundle id of the most recent `enumerate()` invocation
+    /// (assigned at the top of `enumerate()` once the frontmost
+    /// app is resolved). Exposed read-only so `Controller` can pass
+    /// the SAME bundle id `enumerate()` made its per-app decisions
+    /// against down to `OverlayWindow.show(bundleID:)` — without
+    /// re-resolving `NSWorkspace.frontmostApplication`, which could
+    /// race with a focus switch and produce inconsistent overrides
+    /// across the enumerate / auto-click branches.
+    ///
+    /// `nil` until the first enumeration; never cleared between
+    /// enumerations (a stale value past a subsequent enumerate would
+    /// be overwritten by the new one anyway, and the Controller
+    /// only reads this immediately after `enumerate()`).
+    public private(set) var lastEnumeratedBundleID: String?
+
     public init(config: PerchConfig) {
+        self.config = config
         self.roles = Set(config.roles)
         self.webRoles = Set(config.webRoles)
         self.excludes = Set(config.excludeApps)
@@ -116,6 +142,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     }
 
     public func updateConfig(_ cfg: PerchConfig) {
+        self.config = cfg
         self.roles = Set(cfg.roles)
         self.webRoles = Set(cfg.webRoles)
         self.excludes = Set(cfg.excludeApps)
@@ -223,6 +250,36 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return []
         }
         Log.debug("ax: front=\(bundleID) pid=\(front.processIdentifier)")
+        // Capture the bundle id this enumeration is committed to so
+        // downstream consumers (Controller → OverlayWindow.show) can
+        // resolve per-app overrides against the SAME identity
+        // `enumerate()` used — see `lastEnumeratedBundleID` doc.
+        self.lastEnumeratedBundleID = bundleID
+
+        // Apply per-app overrides for the duration of this enumeration.
+        // Resolved from `config` against the now-known frontmost
+        // bundleID; missing keys fall through to the global value
+        // (preserves the typo-tolerance rule from issue #37). Restored
+        // on exit so a subsequent enumerate against a different app
+        // doesn't carry over the previous override.
+        let savedRoles = self.roles
+        let savedMinSize = self.minSize
+        let effRoles = config.effectiveRoles(for: bundleID)
+        let effMinSize = config.effectiveMinSize(for: bundleID)
+        let overridden = (config.perApp[bundleID] != nil)
+        if overridden {
+            self.roles = Set(effRoles)
+            self.minSize = CGFloat(effMinSize)
+            Log.debug("ax: per-app override \(bundleID) "
+                      + "roles=\(self.roles.count) "
+                      + "min-size=\(Int(self.minSize))")
+        }
+        defer {
+            if overridden {
+                self.roles = savedRoles
+                self.minSize = savedMinSize
+            }
+        }
 
         let appElt = AXUIElementCreateApplication(front.processIdentifier)
 

@@ -49,6 +49,12 @@ public final class OverlayWindow {
     private var onResolve: ((Hint, HintAction) -> Void)?
     private var onCancel: (() -> Void)?
     private var config: PerchConfig
+    /// Bundle id of the app the controller resolved as frontmost at
+    /// `show()` time. Used by the auto-click branch to honour per-app
+    /// overrides — passed in (rather than re-resolved here) so the
+    /// adapter doesn't grow an `NSWorkspace` dependency for every
+    /// hint dispatch.
+    private var activeBundleID: String?
 
     public init(config: PerchConfig) {
         self.config = config
@@ -106,6 +112,7 @@ public final class OverlayWindow {
     /// 200ms red-flash, when animations are enabled).
     public func show(
         hints: [Hint],
+        bundleID: String? = nil,
         onResolve: @escaping (Hint, HintAction) -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -114,6 +121,7 @@ public final class OverlayWindow {
         self.typed = ""
         self.onResolve = onResolve
         self.onCancel = onCancel
+        self.activeBundleID = bundleID
 
         // Re-evaluate the screen union every show() so a display
         // disconnect / reconnect between shows is reflected.
@@ -229,8 +237,10 @@ public final class OverlayWindow {
             flashThenCancel()
             return true
         }
-        // Auto-click on unique candidate (configurable).
-        if config.autoClickOnUnique, surviving.count == 1 {
+        // Auto-click on unique candidate (configurable, resolved
+        // per-app via `[behavior."<bundle-id>"]`).
+        if config.effectiveAutoClickOnUnique(for: activeBundleID),
+           surviving.count == 1 {
             let only = surviving[0]
             let cb = onResolve
             hide()

@@ -239,6 +239,15 @@ match list が非空のときだけ有効化（"v2" / "API 3" のクエリ文字
 typo で hint mode が壊れない設計。`perch --validate` が明示の検証パス。
 - **Don't call it:** silent fallback, lenient mode, 寛容モード
 
+### per-app override
+`[behavior."<bundle-id>"]` セクションで `[behavior]` の `roles` /
+`min-size` / `auto-click-on-unique` を **bundle id 単位で差し替え**。
+未設定キーは global にフォールバックし、セクション追加だけで他キーは
+消えない（typo-tolerance policy の延長）。`AXUIElementSource.enumerate`
+と `OverlayWindow` が frontmost bundle に対して `PerchConfig.effectiveX(for:)`
+で解決する。
+- **Don't call it:** per-bundle config, app-specific settings, アプリ別設定
+
 ---
 
 ## デバッグ / ログ

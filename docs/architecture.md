@@ -309,7 +309,11 @@ it.
   search mode, multi-screen support.
 - **M2** — additional AX role coverage (treat
   `kAXChildren`-less custom views as labelable when they
-  expose `kAXPressAction`); per-app role config.
+  expose `kAXPressAction`); per-app behavior config
+  (issue #37, shipped — `[behavior."<bundle-id>"]` overrides
+  `roles`, `min-size`, `auto-click-on-unique` per frontmost
+  bundle, falling through to the global `[behavior]` for
+  unset keys).
 - **M3** — visible region hints (label only inside a chosen
   region of the screen, à la Surfingkeys regional hints).
 - **M4+** — Chrome / Electron / WKWebView support via the
