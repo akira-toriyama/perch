@@ -48,6 +48,12 @@ enum PerchApp {
                                       (one line per element; useful for
                                       "why isn't this element labelled?"
                                       triage)
+          perch --dump-ax-tree        dump the raw AX tree (depth-first,
+                                      pre-filter) of the frontmost app's
+                                      focused window — useful when an
+                                      element doesn't even reach the
+                                      filter chain (web view content
+                                      hidden by lazy AX backends, etc.)
           perch --help                this help
 
         EXIT CODES
@@ -80,7 +86,8 @@ enum PerchApp {
         // looking at the rest (no silent fallback — facet/stroke
         // Rule of Repair discipline).
         let recognised: Set<String> = [
-            "--help", "--validate", "--doctor", "--dump-ax",
+            "--help", "--validate", "--doctor",
+            "--dump-ax", "--dump-ax-tree",
             "--activate", "--cancel", "--scroll", "--search",
             "--reload", "--quit", "--status",
         ]
@@ -93,6 +100,7 @@ enum PerchApp {
 
         // Standalone modes — no running daemon required.
         if argv.contains("--doctor") { runDoctor() }
+        if argv.contains("--dump-ax-tree") { runDumpAXTree() }
         if argv.contains("--dump-ax") { runDumpAX() }
         if argv.contains("--validate") {
             let cfg = PerchConfig.load()
@@ -266,6 +274,37 @@ enum PerchApp {
                          label))
         }
         exit(0)
+    }
+
+    /// Dump the raw AX tree of the frontmost app's focused window
+    /// (pre-filter — no role allow-list, no press-support check, no
+    /// window-bounds clamp). Sibling of `--dump-ax` for the case
+    /// where the element doesn't even reach the filter chain (most
+    /// often: a web view whose AX content the backend hasn't
+    /// awakened, or a node living below the native walker's depth
+    /// cap). The output is intentionally verbose so a maintainer
+    /// can compare a Chrome dump against a native one and spot
+    /// what's missing.
+    @MainActor
+    private static func runDumpAXTree() -> Never {
+        guard AXTrust.isTrusted() else {
+            FileHandle.standardError.write(Data((
+                "perch: Accessibility not granted — grant it to perch "
+                + "(or to the bundled Perch.app) in System Settings → "
+                + "Privacy & Security → Accessibility, then re-run.\n"
+            ).utf8))
+            exit(1)
+        }
+        var sink = StdoutSink()
+        AXDump.dumpRawTree(to: &sink)
+        exit(0)
+    }
+
+    /// `TextOutputStream` that forwards to stdout. We can't use
+    /// `FileHandle.standardOutput` directly as a stream because it
+    /// doesn't conform; this is the standard one-shot adapter.
+    private struct StdoutSink: TextOutputStream {
+        mutating func write(_ s: String) { print(s, terminator: "") }
     }
 
     /// Print the running daemon's status from the status file it

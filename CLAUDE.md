@@ -347,6 +347,15 @@ The five-second triage:
    is in the dump, the bug is in label assignment / overlay
    rendering; if it isn't, the bug is in the AX walk / filter
    chain.
+4. **`perch --dump-ax-tree`** — print the **raw** AX tree
+   (depth-first, pre-filter) of the focused window. Reach for
+   this when `--dump-ax` shows nothing where you expected a
+   hint — most often a web shell (Chrome / Electron /
+   WKWebView) where the element isn't even reaching the filter
+   chain because the AX backend hasn't surfaced it yet. Look
+   for `*WEB*` markers and inspect what's below them; the
+   walker lifts its depth ceiling once it crosses one, so
+   leaves 40+ levels below the web area now reach the dump.
 
 A successful hint press leaves this trace in `/tmp/perch.log`:
 
@@ -385,13 +394,13 @@ stray instances before relaunching.
 
 ### CLI surface
 
-- **Flags**: `--validate` / `--doctor` / `--help` (standalone),
-  `--activate` / `--scroll` / `--search` / `--cancel` /
-  `--reload` / `--quit` / `--status` (client). There is no
-  `--debug` flag — verbose logging is driven by the `PERCH_DEBUG`
-  env var (see Logging). Any unrecognised flag exits `2` with a
-  stderr message (no silent fallback — facet's *Rule of Repair*
-  discipline).
+- **Flags**: `--validate` / `--doctor` / `--dump-ax` /
+  `--dump-ax-tree` / `--help` (standalone), `--activate` /
+  `--scroll` / `--search` / `--cancel` / `--reload` / `--quit` /
+  `--status` (client). There is no `--debug` flag — verbose
+  logging is driven by the `PERCH_DEBUG` env var (see Logging).
+  Any unrecognised flag exits `2` with a stderr message (no
+  silent fallback — facet's *Rule of Repair* discipline).
 - **`--doctor`** reports Accessibility (`AXTrust.isTrusted()`),
   config, daemon liveness, configured hotkey, and alphabet length.
   Exit 1 if AX fails.

@@ -48,10 +48,20 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     // Reset at the top of every `enumerate()` along with `liveById`.
     private var nextSeq: Int = 0
 
-    // Recursion guard. AX trees are typically a few hundred nodes
+    // Recursion guards. AX trees are typically a few hundred nodes
     // for a native window; we cap deep recursions so a buggy app
     // can't lock the daemon in an enumeration storm.
-    private let maxDepth = 32
+    //
+    // `nativeMaxDepth` is the everyday ceiling for AppKit / SwiftUI
+    // hierarchies. `webMaxDepth` raises the ceiling once the walker
+    // crosses into an `AXWebArea` subtree — web DOM trees are often
+    // 40-60 levels deep before a clickable leaf (per investigations
+    // surfaced by issue #26), and the native cap was eating the
+    // whole page when the user expected hint pills on links. Both
+    // are absolute depth ceilings; the higher value applies for the
+    // rest of the descent once a web area is entered.
+    private let nativeMaxDepth = 32
+    private let webMaxDepth = 64
 
     /// Two elements whose top-left corners are within this many
     /// points are considered "the same visible target" for the
@@ -129,7 +139,9 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
                  + "→ filter=\(OverlayCoords.rectString(windowFrame))")
 
         var raw: [UIElement] = []
-        walk(window, depth: 0, pid: front.processIdentifier, into: &raw)
+        let ctx = WalkCtx(maxDepth: nativeMaxDepth, inWebArea: false)
+        walk(window, depth: 0, ctx: ctx,
+             pid: front.processIdentifier, into: &raw)
         let pruned = dedupNearOverlaps(raw)
         if pruned.count != raw.count {
             Log.debug("ax: de-dup \(raw.count) → \(pruned.count)")
@@ -205,13 +217,22 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     // MARK: - Internals
 
+    /// Recursion context. Carries the depth ceiling so we can swap
+    /// it (native → web) for the rest of a subtree without leaking
+    /// the change up to siblings.
+    private struct WalkCtx {
+        let maxDepth: Int
+        let inWebArea: Bool
+    }
+
     private func walk(
         _ node: AXUIElement,
         depth: Int,
+        ctx: WalkCtx,
         pid: pid_t,
         into out: inout [UIElement]
     ) {
-        if depth > maxDepth { return }
+        if depth > ctx.maxDepth { return }
 
         // Role check — keep it cheap, before reading frame / title.
         let rawRole = (copyAttribute(node, kAXRoleAttribute) as? String) ?? ""
@@ -232,6 +253,20 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
                 id: id, role: role, label: title, frame: frame))
         }
 
+        // Crossing into a web area lifts the depth ceiling for the
+        // rest of this subtree. Chromium / WKWebView trees routinely
+        // bury clickable leaves 40+ levels below the AXWebArea, well
+        // past the native cap — keep the cap for the rest of the
+        // native UI but relax it locally here. Log once per crossing
+        // so triage of "perch saw the web area but no links" is
+        // direct.
+        var nextCtx = ctx
+        if !ctx.inWebArea && role == "WebArea" {
+            Log.line("ax: web-area entered at depth=\(depth) "
+                     + "→ maxDepth \(ctx.maxDepth) → \(webMaxDepth)")
+            nextCtx = WalkCtx(maxDepth: webMaxDepth, inWebArea: true)
+        }
+
         // Recurse: prefer `kAXVisibleChildrenAttribute` when the
         // node exposes it — that's the AX subset that's actually
         // on screen right now, which dramatically cuts the noise
@@ -242,7 +277,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // `kAXChildren` is the universal fallback.
         let children = visibleChildrenIfAvailable(of: node)
         for child in children {
-            walk(child, depth: depth + 1, pid: pid, into: &out)
+            walk(child, depth: depth + 1, ctx: nextCtx,
+                 pid: pid, into: &out)
         }
     }
 

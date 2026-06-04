@@ -171,7 +171,14 @@ the raw AX tree down to "what's actually on screen and clickable":
    `kAXChildrenAttribute`. Scroll areas / web areas / outlines
    honour the attribute and only return their visible subset,
    so we stop walking through scrolled-out subtrees before per-
-   node attribute reads kick in.
+   node attribute reads kick in. The walker also tracks whether
+   it has crossed into an `AXWebArea`; once it has, the recursion
+   depth ceiling lifts from 32 → 64 for the rest of that subtree.
+   Chromium / WKWebView trees routinely bury clickable leaves
+   40+ levels below the web-area root, well past the native cap
+   — keep the cap for the rest of the native UI but relax it
+   locally inside web content. Surfaces in the log as
+   `ax: web-area entered at depth=N → maxDepth 32 → 64`.
 2. **Role allow-list** — only nodes whose `kAXRole` is in
    `[behavior].roles` (Button, MenuItem, Link, Tab, …) survive.
 3. **`supportsPress`** — the node must advertise
@@ -208,6 +215,8 @@ reports.
 | *(none)* | server | run the daemon (hotkey loop) |
 | `--validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
 | `--doctor` | standalone | health check; exit 0/1 |
+| `--dump-ax` | standalone | print every AX element perch's filter chain would label (one line each) |
+| `--dump-ax-tree` | standalone | print the raw AX tree depth-first, pre-filter (for "doesn't even reach the filter chain" triage — web view content, Electron content areas) |
 | `--activate` | client | show hint overlay now (CLI mirror of the hotkey) |
 | `--scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
 | `--search` | client | enter search mode (type, `1-9` to pick a match) |
@@ -302,10 +311,14 @@ it.
   expose `kAXPressAction`); per-app role config.
 - **M3** — visible region hints (label only inside a chosen
   region of the screen, à la Surfingkeys regional hints).
-- **M4+** — Chrome / Electron support via per-backend adapters
-  (a `PerchAdapterChrome` would converse with Chrome via its
-  WebDriver-style protocol; Electron via the Chromium AX
-  shim). Out of scope for MVP.
+- **M4+** — Chrome / Electron / WKWebView support via the
+  Chromium AX shim. First pass (issue #26): the AX walker
+  lifts its depth ceiling once it crosses into an `AXWebArea`,
+  and `--dump-ax-tree` exposes the raw tree for diagnosing
+  what AX actually reports for a given web shell. Later
+  iterations may add per-backend adapters (a
+  `PerchAdapterChrome` would converse with Chrome via its
+  WebDriver-style protocol) when AX coverage falls short.
 
 ## References
 
