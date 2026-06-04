@@ -32,34 +32,16 @@ import PerchCore
 
 public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
-    // Whole config snapshot, kept so we can resolve per-app overrides
-    // (`[behavior."<bundle-id>"]`) at enumerate-time against the
-    // currently-frontmost app. Per-app overrides change the role
-    // allow-list and the min-size floor per enumeration; without the
-    // full config we'd need to plumb the lookup map separately.
+    // Whole config snapshot. Used as the source-of-truth for both
+    // the global `[behavior]` knobs (via `config.roles` / `config.webRoles`
+    // / `config.minSize` / `config.excludeApps`) and per-app override
+    // resolution at enumerate-time (`config.effectiveX(for:)`).
+    //
+    // Held as a single value rather than destructured Sets so updateConfig
+    // is one assignment, and so consumers don't drift from the live config
+    // between reloads. The walker reads via `WalkPolicy` snapshots built
+    // fresh per enumeration — no instance state is mutated mid-walk.
     private var config: PerchConfig
-
-    // Roles to label outside `AXWebArea` subtrees. Snapshot of the
-    // *global* `[behavior].roles` plus the active per-app override
-    // (resolved at the top of each `enumerate()`). The walker reads
-    // this; the enumerate path mutates it briefly.
-    private var roles: Set<String>
-
-    // Roles to label inside `AXWebArea` subtrees, configured by
-    // `[behavior.web].roles`. Falls back to the native list when
-    // the user hasn't opted in — so untouched configs behave
-    // exactly like before. Swap point: `WalkCtx.inWebArea`.
-    private var webRoles: Set<String>
-
-    // Bundle IDs perch refuses to label (e.g. apps with their own
-    // keyboard nav). Empty in the default config.
-    private var excludes: Set<String>
-
-    // Floor for AX-element frame size (points, either axis).
-    // Anything smaller falls out of `frameOf` and never reaches the
-    // role / press / window filters. Like `roles`, this is mutated
-    // per `enumerate()` to apply per-app overrides.
-    private var minSize: CGFloat
 
     // (id → live AXUIElement) — only valid for the most recent
     // enumeration. Re-cleared at the top of every `enumerate()`.
@@ -170,18 +152,10 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     public init(config: PerchConfig) {
         self.config = config
-        self.roles = Set(config.roles)
-        self.webRoles = Set(config.webRoles)
-        self.excludes = Set(config.excludeApps)
-        self.minSize = CGFloat(config.minSize)
     }
 
     public func updateConfig(_ cfg: PerchConfig) {
         self.config = cfg
-        self.roles = Set(cfg.roles)
-        self.webRoles = Set(cfg.webRoles)
-        self.excludes = Set(cfg.excludeApps)
-        self.minSize = CGFloat(cfg.minSize)
     }
 
     /// Read-only snapshot of WKWebView-bearing bundles discovered
@@ -304,9 +278,9 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         guard let root = prepareWalkRoot() else { return [] }
         // Per-app overrides (#37) fold directly into the policy —
         // unset keys fall through to the global value via
-        // `effectiveX(for:)` (typo-tolerance preserved). No more
-        // save/restore of `self.roles` / `self.minSize` is needed:
-        // the policy IS the resolved state for this enumeration.
+        // `effectiveX(for:)` (typo-tolerance preserved). The policy
+        // IS the resolved state for this enumeration; no instance
+        // state is mutated mid-walk.
         let effRoles = config.effectiveRoles(for: root.bundleID)
         let effMinSize = CGFloat(
             config.effectiveMinSize(for: root.bundleID))
@@ -317,7 +291,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         }
         let policy = WalkPolicy(
             nativeRoles: Set(effRoles),
-            webRoles: webRoles,
+            webRoles: Set(config.webRoles),
             minWidth: effMinSize,
             minHeight: effMinSize,
             requirePress: true)
@@ -338,8 +312,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let policy = WalkPolicy(
             nativeRoles: Self.regionalRoles,
             webRoles: Self.regionalRoles,
-            minWidth: 200,
-            minHeight: 100,
+            minWidth: CGFloat(config.regionalMinWidth),
+            minHeight: CGFloat(config.regionalMinHeight),
             requirePress: false)
         return runWalk(window: root.window, policy: policy,
                        label: "region", bundleID: root.bundleID,
@@ -366,7 +340,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             Log.debug("ax: no frontmost app")
             return nil
         }
-        if excludes.contains(bundleID) {
+        if config.excludeApps.contains(bundleID) {
             Log.debug("ax: excluded app \(bundleID)")
             return nil
         }

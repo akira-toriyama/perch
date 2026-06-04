@@ -185,8 +185,10 @@ just with bigger pills on bigger targets:
 
 Element selection: `AXGroup` / `AXArticle` / `AXSection` /
 `AXSplitGroup` / `AXScrollArea` / `AXOutline` / `AXImage`,
-filtered to frame >= 200×100 points. `kAXPressAction` is **not**
-required (regional picks are typically copy/focus).
+filtered to frame >= `[regional].min-width` × `min-height` (default
+200×100 points; both knobs are individually configurable and clamp
+to >= 0). `kAXPressAction` is **not** required (regional picks are
+typically copy / focus).
 
 Exit codes: 0 = ok · 1 = `--doctor` red · 2 = bad flag /
 invalid config · 3 = client cmd with no running daemon.

@@ -152,3 +152,18 @@ min-size = 6
 #
 # [behavior."com.apple.dt.Xcode"]
 # min-size = 12                     # Xcode toolbar density
+
+
+# ---- Regional hint mode ------------------------------------------
+# Entered via `perch --regional`. Labels large containers (article
+# body, sidebar pane, embedded image, scroll area, outline view)
+# instead of every clickable leaf — for "select / copy / focus on
+# broader strokes" tasks. See README.md / docs/glossary.md.
+#
+# Frame floor: regional only labels containers whose frame is at
+# least min-width × min-height. Lowering either floor surfaces
+# smaller groups (closer to leaf-sized — i.e. closer to what hint
+# mode already labels). Both clamp to >= 0.
+[regional]
+min-width = 200                    # default
+min-height = 100                   # asymmetric: articles are wide
