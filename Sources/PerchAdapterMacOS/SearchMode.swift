@@ -194,11 +194,23 @@ public final class SearchMode {
 
     private func recompute() {
         let q = query.lowercased()
-        if q.isEmpty {
+        // Split on whitespace into AND'd substring tokens.
+        //   "f b"  matches "Foo Bar" and "Foo's Big Idea", not
+        //          "foobar" (no second token to find).
+        //   "foo"  is one token — equivalent to the previous
+        //          single-substring behaviour.
+        // `split(whereSeparator:)` drops empty tokens, so a
+        // trailing space doesn't introduce an unmatchable "".
+        let tokens = q.split(whereSeparator: { $0.isWhitespace })
+            .map(String.init)
+        if tokens.isEmpty {
             matches = Array(elements.prefix(Self.topN))
         } else {
             matches = elements
-                .filter { $0.label.lowercased().contains(q) }
+                .filter { e in
+                    let label = e.label.lowercased()
+                    return tokens.allSatisfy { label.contains($0) }
+                }
                 .prefix(Self.topN)
                 .map { $0 }
         }
