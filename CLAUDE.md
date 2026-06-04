@@ -425,6 +425,13 @@ The five-second triage:
    for `*WEB*` markers and inspect what's below them; the
    walker lifts its depth ceiling once it crosses one, so
    leaves 40+ levels below the web area now reach the dump.
+5. **`perch --dump-regions`** — same shape as `--dump-ax` but
+   for `perch --regional` (issue #34). Lists the large
+   containers regional mode would label, with the current
+   `[regional].min-width / min-height` floor applied. Useful
+   to tune the floor for a specific app ("Books labels nothing"
+   → lower the floor; "GitHub labels every list item" → raise
+   it).
 
 A successful hint press leaves this trace in `/tmp/perch.log`:
 
@@ -468,9 +475,9 @@ stray instances before relaunching.
 ### CLI surface
 
 - **Flags**: `--validate` / `--doctor` / `--dump-ax` /
-  `--dump-ax-tree` / `--help` (standalone), `--activate` /
-  `--scroll` / `--search` / `--cancel` / `--reload` / `--quit` /
-  `--status` (client). There is no `--debug` flag — verbose
+  `--dump-ax-tree` / `--dump-regions` / `--help` (standalone),
+  `--activate` / `--scroll` / `--search` / `--regional` /
+  `--cancel` / `--reload` / `--quit` / `--status` (client). There is no `--debug` flag — verbose
   logging is driven by the `PERCH_DEBUG` env var (see Logging).
   Any unrecognised flag exits `2` with a stderr message (no
   silent fallback — facet's *Rule of Repair* discipline).

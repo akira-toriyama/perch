@@ -218,6 +218,7 @@ swift test                       # tests — needs Xcode
 perch --doctor                   # health check (accessibility, screens, …)
 perch --dump-ax                  # list AX elements perch would label
 perch --dump-ax-tree             # raw AX tree, pre-filter (web triage)
+perch --dump-regions             # list containers `--regional` would label
 ```
 
 Architecture: hexagonal Core / Adapter / App split (see
