@@ -9,6 +9,28 @@
 import CoreGraphics
 import Foundation
 
+/// Per-bundle-id partial override of the `[behavior]` section. Every
+/// field is optional: only the keys the user explicitly set in
+/// `[behavior."com.foo.bar"]` are non-nil; missing keys fall through
+/// to the global `[behavior]` value at resolve time. This is the
+/// "typo-tolerance preserves global defaults" rule from issue #37 —
+/// adding a section header alone never erases unrelated knobs.
+public struct BehaviorOverrides: Sendable, Equatable {
+    public let roles: [String]?
+    public let minSize: Double?
+    public let autoClickOnUnique: Bool?
+
+    public init(
+        roles: [String]? = nil,
+        minSize: Double? = nil,
+        autoClickOnUnique: Bool? = nil
+    ) {
+        self.roles = roles
+        self.minSize = minSize
+        self.autoClickOnUnique = autoClickOnUnique
+    }
+}
+
 public struct PerchConfig: Sendable {
 
     // MARK: - [hotkey]
@@ -68,6 +90,15 @@ public struct PerchConfig: Sendable {
     /// nav targets without polluting native AppKit hint sets.
     public let webRoles: [String]
 
+    /// Per-bundle-id overrides for the `[behavior]` knobs that vary
+    /// usefully across apps: `roles`, `min-size`, `auto-click-on-unique`.
+    /// Keyed by exact bundle id (`"com.google.Chrome"`); resolved at
+    /// hint-mode entry against `NSWorkspace.frontmostApplication`.
+    /// Sections that omit a key fall through to the global value
+    /// (typo-tolerance — a per-app section with only `min-size` set
+    /// does NOT erase the global `roles`).
+    public let perApp: [String: BehaviorOverrides]
+
     // MARK: - Constants
 
     /// Resolved path of the user's config file.
@@ -102,8 +133,42 @@ public struct PerchConfig: Sendable {
         roles: defaultRoles,
         excludeApps: [],
         minSize: 6,
-        webRoles: defaultRoles
+        webRoles: defaultRoles,
+        perApp: [:]
     )
+
+    // MARK: - Per-app resolution
+
+    /// Effective `roles` allow-list for `bundleID`. Falls back to
+    /// the global `roles` when no override is configured or when
+    /// the override section omits this key.
+    public func effectiveRoles(for bundleID: String?) -> [String] {
+        guard let bid = bundleID,
+              let o = perApp[bid],
+              let r = o.roles else { return roles }
+        return r
+    }
+
+    /// Effective `min-size` floor for `bundleID`. Falls back to the
+    /// global value when no override is configured or the section
+    /// omits the key.
+    public func effectiveMinSize(for bundleID: String?) -> Double {
+        guard let bid = bundleID,
+              let o = perApp[bid],
+              let m = o.minSize else { return minSize }
+        return m
+    }
+
+    /// Effective `auto-click-on-unique` flag for `bundleID`. Same
+    /// per-app fallback rule as the other resolvers — overrides
+    /// don't erase the global default unless the user explicitly
+    /// sets the key.
+    public func effectiveAutoClickOnUnique(for bundleID: String?) -> Bool {
+        guard let bid = bundleID,
+              let o = perApp[bid],
+              let b = o.autoClickOnUnique else { return autoClickOnUnique }
+        return b
+    }
 
     // MARK: - Load / parse
 
@@ -164,6 +229,33 @@ public struct PerchConfig: Sendable {
         let webRoles = (doc["behavior.web"]?["roles"]?.asStringArray)
             .map { $0.filter { !$0.isEmpty } } ?? roles
 
+        // Per-app overrides — `[behavior."<bundle-id>"]` sections.
+        // Same flat-key shape as `[behavior.web]`: the parser
+        // preserves the quotes, so the key is literally
+        // `behavior."com.foo.bar"`. Strip the wrapper, treat the
+        // inner string as the bundle id. Empty bundle id or empty
+        // override section is dropped — typo-tolerance, never
+        // crash on a malformed user config.
+        var perApp: [String: BehaviorOverrides] = [:]
+        for (raw, section) in doc {
+            guard raw.hasPrefix("behavior.\""),
+                  raw.hasSuffix("\""),
+                  raw.count > "behavior.\"\"".count
+            else { continue }
+            let bid = String(raw.dropFirst("behavior.\"".count).dropLast())
+            guard !bid.isEmpty else { continue }
+            let r = section["roles"]?.asStringArray
+                .map { $0.filter { !$0.isEmpty } }
+            let m = section["min-size"]?.asDouble.map { max(0, $0) }
+            let a = section["auto-click-on-unique"]?.asBool
+            // Skip a section with the header present but no
+            // recognised key — adds nothing, would noise up the
+            // `--validate` count.
+            if r == nil, m == nil, a == nil { continue }
+            perApp[bid] = BehaviorOverrides(
+                roles: r, minSize: m, autoClickOnUnique: a)
+        }
+
         return PerchConfig(
             hotkey: hk,
             cancelKey: cancel,
@@ -177,7 +269,8 @@ public struct PerchConfig: Sendable {
             roles: roles,
             excludeApps: excludes,
             minSize: minSize,
-            webRoles: webRoles)
+            webRoles: webRoles,
+            perApp: perApp)
     }
 
     /// Drop duplicates and non-typeable characters, lowercase the

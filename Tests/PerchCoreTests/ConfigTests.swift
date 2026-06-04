@@ -160,6 +160,113 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.overlayAccent, "#ff0000")
     }
 
+    // MARK: - Per-app overrides (#37)
+
+    /// A `[behavior."<bundle-id>"]` section parses into a
+    /// `BehaviorOverrides` keyed by the bundle id, with only the
+    /// keys the user explicitly set carrying values. The global
+    /// `[behavior]` section is unaffected — overrides decorate, not
+    /// replace.
+    func testPerAppOverridesParse() {
+        let src = """
+        [behavior]
+        roles = ["Button", "Link"]
+        min-size = 6
+        auto-click-on-unique = true
+
+        [behavior."com.google.Chrome"]
+        min-size = 20
+
+        [behavior."com.microsoft.Word"]
+        roles = ["Button", "MenuItem"]
+        auto-click-on-unique = false
+        """
+        let cfg = PerchConfig.parse(src)
+        XCTAssertEqual(cfg.roles, ["Button", "Link"])
+        XCTAssertEqual(cfg.minSize, 6)
+        XCTAssertTrue(cfg.autoClickOnUnique)
+
+        XCTAssertEqual(cfg.perApp.count, 2)
+        let chrome = cfg.perApp["com.google.Chrome"]
+        XCTAssertNotNil(chrome)
+        XCTAssertNil(chrome?.roles)
+        XCTAssertEqual(chrome?.minSize, 20)
+        XCTAssertNil(chrome?.autoClickOnUnique)
+
+        let word = cfg.perApp["com.microsoft.Word"]
+        XCTAssertEqual(word?.roles, ["Button", "MenuItem"])
+        XCTAssertNil(word?.minSize)
+        XCTAssertEqual(word?.autoClickOnUnique, false)
+    }
+
+    /// `effectiveX(for:)` resolvers return the per-app value when
+    /// the section sets the key, and fall through to the global
+    /// value when the section omits it (or when the bundle id has
+    /// no override at all). This is the contract `AXUIElementSource`
+    /// and `OverlayWindow` rely on at hint-mode entry.
+    func testEffectiveResolversFallThroughToGlobal() {
+        let src = """
+        [behavior]
+        roles = ["Button", "Link"]
+        min-size = 6
+        auto-click-on-unique = true
+
+        [behavior."com.google.Chrome"]
+        min-size = 20
+
+        [behavior."com.microsoft.Word"]
+        auto-click-on-unique = false
+        """
+        let cfg = PerchConfig.parse(src)
+
+        // Chrome: min-size overridden, roles + auto-click inherited.
+        XCTAssertEqual(cfg.effectiveMinSize(for: "com.google.Chrome"), 20)
+        XCTAssertEqual(cfg.effectiveRoles(for: "com.google.Chrome"),
+                       ["Button", "Link"])
+        XCTAssertTrue(
+            cfg.effectiveAutoClickOnUnique(for: "com.google.Chrome"))
+
+        // Word: auto-click overridden, others inherited.
+        XCTAssertFalse(
+            cfg.effectiveAutoClickOnUnique(for: "com.microsoft.Word"))
+        XCTAssertEqual(cfg.effectiveMinSize(for: "com.microsoft.Word"), 6)
+
+        // Unknown bundle id → globals across the board.
+        XCTAssertEqual(cfg.effectiveMinSize(for: "com.unknown.App"), 6)
+        XCTAssertEqual(cfg.effectiveRoles(for: "com.unknown.App"),
+                       ["Button", "Link"])
+        XCTAssertTrue(cfg.effectiveAutoClickOnUnique(for: "com.unknown.App"))
+
+        // nil bundle id (no frontmost app) → globals.
+        XCTAssertEqual(cfg.effectiveMinSize(for: nil), 6)
+    }
+
+    /// Negative `min-size` in an override clamps to 0 (same policy
+    /// as the global key). Unknown keys inside the section are
+    /// silently ignored — a typo in a per-app key cannot break the
+    /// daemon.
+    func testPerAppOverridesClampAndIgnoreUnknown() {
+        let src = """
+        [behavior."com.foo.Bar"]
+        min-size = -50
+        not-a-real-key = true
+        """
+        let cfg = PerchConfig.parse(src)
+        let o = cfg.perApp["com.foo.Bar"]
+        XCTAssertEqual(o?.minSize, 0)
+    }
+
+    /// A section header with no recognised keys is dropped — adding
+    /// `[behavior."com.foo"]` alone shouldn't inflate the
+    /// per-app-override count surfaced by `perch --validate`.
+    func testEmptyPerAppSectionIsDropped() {
+        let src = """
+        [behavior."com.foo.Bar"]
+        """
+        let cfg = PerchConfig.parse(src)
+        XCTAssertTrue(cfg.perApp.isEmpty)
+    }
+
     /// Hotkey combos can include multiple modifiers, in any order,
     /// case-insensitively. The parser must canonicalise the key
     /// to lowercase and accept the modifiers as a set.

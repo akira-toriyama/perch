@@ -104,10 +104,17 @@ enum PerchApp {
         if argv.contains("--dump-ax") { runDumpAX() }
         if argv.contains("--validate") {
             let cfg = PerchConfig.load()
+            // Per-app override count is the at-a-glance signal that
+            // `[behavior."<bundle>"]` sections parsed — issue #37's
+            // acceptance criterion. Empty for the common case so we
+            // don't noise up the line; surfaces only when configured.
+            let perApp = cfg.perApp.isEmpty
+                ? ""
+                : ", \(cfg.perApp.count) per-app override(s)"
             FileHandle.standardError.write(Data((
                 "perch: loaded hotkey=\(human(cfg.hotkey)), "
                 + "alphabet=\"\(cfg.alphabet)\", "
-                + "\(cfg.roles.count) role(s)\n"
+                + "\(cfg.roles.count) role(s)\(perApp)\n"
             ).utf8))
             exit(0)
         }
@@ -188,6 +195,13 @@ enum PerchApp {
         if !cfg.excludeApps.isEmpty {
             print(info("Excludes:",
                        cfg.excludeApps.joined(separator: ", ")))
+        }
+        // List per-app overrides (#37) when configured — the
+        // single most actionable triage line for "why does perch
+        // behave differently in Chrome vs Slack?".
+        if !cfg.perApp.isEmpty {
+            print(info("Per-app:",
+                       cfg.perApp.keys.sorted().joined(separator: ", ")))
         }
 
         // Screen layout — a frequent cause of "why are the pills

@@ -186,8 +186,14 @@ final class Controller {
             screenSize: screen)
         active = true
         Log.line("activate: \(hints.count) hint(s)")
+        // Pass the frontmost bundleID so `auto-click-on-unique`
+        // resolves against the per-app override (#37). Re-resolving
+        // here is fine — `source.enumerate()` already did the heavy
+        // walk; this is just the lookup against the live workspace.
+        let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         overlay.show(
             hints: hints,
+            bundleID: bid,
             onResolve: { [weak self] hint, action in
                 guard let self else { return }
                 self.active = false

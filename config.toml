@@ -130,3 +130,25 @@ min-size = 6
 #     "Heading",       # h1..h6 — jump-to-section
 #     "ComboBox",      # HTML <select>
 # ]
+
+
+# ---- Behaviour, per-app overrides --------------------------------
+# Override `[behavior]` knobs on a per-bundle-id basis. The bundle
+# id is the exact string `mdls -name kMDItemCFBundleIdentifier
+# /Applications/<App>.app` returns — quote it because it contains
+# dots. Only the keys you set in the section apply; everything else
+# falls through to the global `[behavior]` value (a section with
+# just `min-size` does NOT erase the global `roles` list).
+#
+# Supported keys: `roles`, `min-size`, `auto-click-on-unique`.
+#
+# Examples (commented — uncomment + edit to opt in):
+# [behavior."com.google.Chrome"]
+# min-size = 20                     # drop 16×16 window-control glyphs
+#
+# [behavior."com.microsoft.Word"]
+# roles = ["Button", "MenuItem"]    # narrower for dense Office UI
+# auto-click-on-unique = false      # Word users want multi-letter labels
+#
+# [behavior."com.apple.dt.Xcode"]
+# min-size = 12                     # Xcode toolbar density

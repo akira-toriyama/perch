@@ -35,9 +35,12 @@ the diagnostic order:
 3. **Run `perch --dump-ax`.** If it lists elements whose frames
    are clearly outside the focused window, the AX tree itself
    is reporting bogus positions (Electron with stale layout
-   cache, fullscreen apps with embedded sub-windows). Adding
-   the app's bundle id to `[behavior].exclude-apps` is the
-   pragmatic workaround until per-app overrides ship in M2.
+   cache, fullscreen apps with embedded sub-windows). For
+   per-app tuning, add a `[behavior."<bundle-id>"]` section
+   (issue #37) — raise `min-size`, narrow `roles`, or set
+   `auto-click-on-unique = false` for that app alone. Adding
+   the bundle to `[behavior].exclude-apps` remains the
+   nuclear option (no hints at all in that app).
 
 ## Empty pill-shaped frosted rectangles at the bottom of the screen
 
