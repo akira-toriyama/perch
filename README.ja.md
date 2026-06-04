@@ -178,9 +178,9 @@ PERCH_DEBUG=1 perch
 ```sh
 swift build                      # コンパイル (CommandLineTools で可)
 swift test                       # テスト — Xcode 必須
-./run.sh                         # release を Perch.app として起動
-./run.sh --dev                   # debug を Perch-dev.app として起動 + ログ tail
-./run.sh --dev --no-tail         # 上と同じ、tail は省略
+./run.sh                         # debug を Perch-dev.app + ログ tail (dev loop)
+./run.sh --no-tail               # 上と同じ、tail は省略
+./run.sh --release               # release を Perch.app として起動 (公開前検証)
 ./stop.sh                        # 起動中のすべての instance を停止
 ```
 

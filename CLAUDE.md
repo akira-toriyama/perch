@@ -36,8 +36,8 @@ swift build                  # compile (CommandLineTools works)
 swift test                   # tests — needs Xcode (XCTest); fails on CLT
 .build/debug/perch --help    # smoke test
 .build/debug/perch --validate
-./run.sh                     # release → Perch.app, kill prior, launch
-./run.sh --dev               # debug → Perch-dev.app + log tail (dev loop)
+./run.sh                     # debug → Perch-dev.app + log tail (dev loop)
+./run.sh --release           # release → Perch.app (pre-publish verify)
 ./stop.sh                    # kill every running instance
 ```
 
@@ -358,14 +358,16 @@ wave produced.
 
 The five-second triage:
 
-1. **`./run.sh --dev`** — stop any prior daemon, rebuild as a
-   debug bundle, install + launch `Perch-dev.app`
+1. **`./run.sh`** — stop any prior daemon, rebuild as a debug
+   bundle, install + launch `Perch-dev.app`
    (`com.perch.perch.dev` bundle id so its TCC grant doesn't
    collide with a brew-installed Perch.app), tail the log.
    `PERCH_DEBUG=1` is set on the launched app so debug traces
-   show up. Single dev-loop entry point — same shape as
-   facet's `run.sh --dev`. `./run.sh --dev --no-tail` skips
-   the tail.
+   show up. Single dev-loop entry point — only repo contributors
+   run this; end users `brew install`. Default is dev because
+   that's the actual everyday call site. `./run.sh --no-tail`
+   skips the tail; `./run.sh --release` builds the production
+   bundle for pre-publish verification.
 2. **`perch --doctor`** — macOS / accessibility / config /
    daemon / screens / frontmost / log file. Every line is
    bug-report-grade information; copying the whole output is

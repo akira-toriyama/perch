@@ -180,9 +180,9 @@ normal/brew launch sets nothing and stays quiet.
 ```sh
 swift build                      # compile (CommandLineTools works)
 swift test                       # tests — needs Xcode
-./run.sh                         # release → Perch.app, kill prior, launch
-./run.sh --dev                   # debug → Perch-dev.app + log tail (dev loop)
-./run.sh --dev --no-tail         # same, skip the tail
+./run.sh                         # debug → Perch-dev.app + log tail (dev loop)
+./run.sh --no-tail               # same, skip the tail
+./run.sh --release               # release → Perch.app (pre-publish verify)
 ./stop.sh                        # kill every running instance
 perch --doctor                   # health check (accessibility, screens, …)
 perch --dump-ax                  # list AX elements perch would label
