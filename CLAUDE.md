@@ -555,3 +555,13 @@ re-confirmation.
   link" vim-style navigator (Chrome extension). The disjoint
   single-letter / two-letter prefix invariant in
   `Labeler.swift` is the same trick Vimium uses.
+- [Surfingkeys (brookhong)](https://github.com/brookhong/Surfingkeys)
+  *(reviewed 2026-06-04)* — vim-style hint mode in the browser,
+  DOM-based (not AX). UI conventions transfer; the seam doesn't.
+  Useful as reference for: regional hints (roadmap M3, "Regional
+  Hints" / `L`), continuous-follow mode (label → click → label
+  again, no re-hotkey, for list processing), overlapped-hint
+  disambiguation via modifier (Shift to flip stacked candidates).
+  vimac / Homerow are the closer references for the AX-based
+  Mac path — Surfingkeys' value here is on the keyboarding UX,
+  not the element-enumeration mechanism.
