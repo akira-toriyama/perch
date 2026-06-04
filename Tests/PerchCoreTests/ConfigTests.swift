@@ -267,6 +267,36 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(cfg.perApp.isEmpty)
     }
 
+    // MARK: - [regional] frame floor (#34 follow-up)
+
+    /// `[regional].min-width` / `min-height` populate the regional
+    /// frame floor that `AXUIElementSource.enumerateRegions()` reads
+    /// at walk time. Defaults to 200×100; explicit values override.
+    func testRegionalMinSizeKnobsParse() {
+        let cfg = PerchConfig.parse("")
+        XCTAssertEqual(cfg.regionalMinWidth, 200)
+        XCTAssertEqual(cfg.regionalMinHeight, 100)
+
+        let custom = PerchConfig.parse("""
+        [regional]
+        min-width = 320
+        min-height = 180
+        """)
+        XCTAssertEqual(custom.regionalMinWidth, 320)
+        XCTAssertEqual(custom.regionalMinHeight, 180)
+    }
+
+    /// Negative values clamp to 0 (typo-tolerance); the unset axis
+    /// stays at its default — keys are independent.
+    func testRegionalMinSizeClampsAndIndependent() {
+        let cfg = PerchConfig.parse("""
+        [regional]
+        min-width = -50
+        """)
+        XCTAssertEqual(cfg.regionalMinWidth, 0)
+        XCTAssertEqual(cfg.regionalMinHeight, 100)
+    }
+
     /// Hotkey combos can include multiple modifiers, in any order,
     /// case-insensitively. The parser must canonicalise the key
     /// to lowercase and accept the modifiers as a set.

@@ -27,6 +27,19 @@ import PerchAdapterMacOS
 @MainActor
 final class Controller {
 
+    /// Which overlay-based mode currently owns the `OverlayWindow`.
+    /// `hint` and `regional` share the same overlay + label /
+    /// resolution pipeline (`runHintFlow`), so a single enum is
+    /// enough to tell them apart for the toggle / switch logic in
+    /// `activate()` / `enterRegionalMode()`. `nil` when no
+    /// overlay-based mode is up; scroll / search modes have their
+    /// own typed nullables (`scroll` / `search`) and are NOT tracked
+    /// here.
+    enum ActiveMode {
+        case hint
+        case regional
+    }
+
     private(set) var config: PerchConfig
     private let source: AXUIElementSource
     private let overlay: OverlayWindow
@@ -36,13 +49,18 @@ final class Controller {
     // set). Holding it as Optional keeps the type checker happy and
     // matches its lifecycle (only set while the daemon is running).
     private var hotkey: HotkeyMonitor?
-    private var active = false
-    /// Set when scroll mode owns the KeyTap. Hint mode and scroll
-    /// mode are mutually exclusive — Controller tears the other
-    /// down before starting either.
+    /// Which (if any) overlay-based mode is currently up. `nil`
+    /// when the overlay is hidden. Replaces the old `active: Bool`
+    /// — distinguishing hint vs regional matters for the toggle
+    /// path (`--regional` while regional is up should cancel;
+    /// `--regional` while hint is up should switch).
+    private var activeMode: ActiveMode?
+    /// Set when scroll mode owns the KeyTap. Mutually exclusive
+    /// with the overlay-based modes — Controller tears down
+    /// whichever is active before starting another.
     private var scroll: ScrollMode?
     /// Set when search mode owns the KeyTap. Mutually exclusive
-    /// with hint mode and scroll mode.
+    /// with the overlay-based modes and scroll.
     private var search: SearchMode?
 
     init(config: PerchConfig) {
@@ -90,12 +108,12 @@ final class Controller {
     // MARK: - Hot flow
 
     /// Programmatic cancel — used by the `--cancel` IPC command.
-    /// Tears down whichever mode owns the KeyTap (hint / scroll /
-    /// search). Idempotent; no-op when nothing is active.
+    /// Tears down whichever mode owns the KeyTap (hint / regional
+    /// / scroll / search). Idempotent; no-op when nothing is active.
     func cancel() {
-        if active {
+        if activeMode != nil {
             overlay.hide()
-            active = false
+            activeMode = nil
         }
         if let s = scroll {
             s.stop()
@@ -107,13 +125,19 @@ final class Controller {
         }
     }
 
-    /// Enter scroll mode. Mutually exclusive with hint mode — if
-    /// hint mode is up, we tear it down first. `--scroll` invoked
-    /// while already in scroll mode exits (symmetric with
-    /// `--activate`).
+    /// Enter scroll mode. Mutually exclusive with every other mode.
+    /// **Toggle semantics**: invoking `--scroll` while scroll mode
+    /// is already up cancels (matches CLAUDE.md's "second invocation
+    /// while the mode is up cancels — same path as `--cancel`"
+    /// guarantee). The pre-cleanup is necessary so a transition
+    /// like `--scroll` while hint mode is up tears hint down and
+    /// then starts scroll — no toggle in that case.
     func enterScrollMode() {
+        if scroll != nil {
+            cancel()
+            return
+        }
         cancel()                            // tear down any other mode
-        if scroll != nil { return }
         let sm = ScrollMode(cancelKey: config.cancelKey) { [weak self] in
             Task { @MainActor [weak self] in self?.scroll = nil }
         }
@@ -123,12 +147,15 @@ final class Controller {
         }
     }
 
-    /// Enter search mode. Same mutual-exclusion rules as scroll
-    /// mode. Resolves to a `(UIElement, HintAction)` tuple just
-    /// like hint mode so the dispatch path is shared.
+    /// Enter search mode. Same mutual-exclusion + toggle rules as
+    /// scroll mode. Resolves to a `(UIElement, HintAction)` tuple
+    /// just like hint mode so the dispatch path is shared.
     func enterSearchMode() {
+        if search != nil {
+            cancel()
+            return
+        }
         cancel()
-        if search != nil { return }
         let sm = SearchMode(
             source: source,
             config: config,
@@ -162,43 +189,64 @@ final class Controller {
     }
 
     private func activate() {
-        // Hint, scroll, and search modes share the single
-        // session-level KeyTap, so activating hint mode while any
-        // other mode is up tears that mode down first.
+        // Scroll / search are mutually exclusive with the overlay-
+        // based modes — tear them down first.
         if let s = scroll { s.stop(); scroll = nil }
         if let s = search { s.stop(); search = nil }
-        if active {
-            // Second hotkey press while up: cancel.
+        // Toggle: a second hotkey press (or `--activate`) while
+        // hint mode is up cancels and returns.
+        if activeMode == .hint {
             overlay.hide()
-            active = false
+            activeMode = nil
             return
+        }
+        // Switching from regional (overlay also up) to hint: tear
+        // down the regional overlay first, then enter hint freshly.
+        if activeMode == .regional {
+            overlay.hide()
+            activeMode = nil
         }
         runHintFlow(
             elements: source.enumerate(),
             modeLabel: "activate",
+            mode: .hint,
             reenter: { [weak self] in self?.activate() })
     }
 
     /// Regional hint mode (#34) — Surfingkeys' `L` equivalent on
     /// macOS. Labels large `Group` / `Article` / `Section` /
     /// `SplitGroup` / `ScrollArea` / `Outline` / `Image` containers
-    /// (frame >= 200×100, `kAXPressAction` not required) instead of
-    /// every clickable leaf. Same overlay + dispatch path as hint
-    /// mode; only `source.enumerateRegions()` substitutes for
+    /// (frame >= the configured `[regional].min-width / min-height`
+    /// floor, `kAXPressAction` not required) instead of every
+    /// clickable leaf. Same overlay + dispatch path as hint mode;
+    /// only `source.enumerateRegions()` substitutes for
     /// `source.enumerate()`.
     ///
-    /// Mutual exclusion + restart semantics mirror `enterScrollMode`
-    /// / `enterSearchMode`: a second `--regional` while regional is
-    /// up tears down + restarts (Esc dismisses). The user resolves a
-    /// region with the same action-mode modifiers (Cmd → copyTitle,
-    /// Shift → rightClick, Alt → focus); `.pressContinuous` (Cmd+Shift)
-    /// re-enters regional mode so the user can copy several region
-    /// titles in a row.
+    /// **Toggle semantics**: a second `--regional` while regional
+    /// is already up cancels (matches the doc-stated invariant
+    /// "second invocation while the mode is up cancels"). Switching
+    /// from hint or scroll / search to regional tears the prior
+    /// mode down and enters regional. The user resolves a region
+    /// with the same action-mode modifiers (Cmd → copyTitle,
+    /// Shift → rightClick, Alt → focus); `.pressContinuous`
+    /// (Cmd+Shift) re-enters regional so the user can copy several
+    /// region titles in a row.
     func enterRegionalMode() {
-        cancel()
+        if let s = scroll { s.stop(); scroll = nil }
+        if let s = search { s.stop(); search = nil }
+        if activeMode == .regional {
+            overlay.hide()
+            activeMode = nil
+            return
+        }
+        if activeMode == .hint {
+            overlay.hide()
+            activeMode = nil
+        }
         runHintFlow(
             elements: source.enumerateRegions(),
             modeLabel: "regional",
+            mode: .regional,
             reenter: { [weak self] in self?.enterRegionalMode() })
     }
 
@@ -207,12 +255,15 @@ final class Controller {
     /// caller's enumerator produced; the rest of the pipeline
     /// (Labeler → OverlayWindow.show → onResolve dispatch) is
     /// identical. `modeLabel` distinguishes the log lines so log
-    /// triage can tell the modes apart. `reenter` runs on
+    /// triage can tell the modes apart. `mode` is the `ActiveMode`
+    /// to record while the overlay is up (so toggle / switch logic
+    /// in the entry points can read it back). `reenter` runs on
     /// `.pressContinuous` so each mode re-enters itself rather
     /// than always falling back to hint mode.
     private func runHintFlow(
         elements: [UIElement],
         modeLabel: String,
+        mode: ActiveMode,
         reenter: @escaping () -> Void
     ) {
         guard !elements.isEmpty else {
@@ -225,7 +276,7 @@ final class Controller {
             alphabet: config.alphabet,
             prioritiseCenter: config.prioritiseCenter,
             screenSize: screen)
-        active = true
+        activeMode = mode
         Log.line("\(modeLabel): \(hints.count) hint(s)")
         // Pass through the bundle id that `enumerate()` just resolved
         // (per `AXUIElementSource.lastEnumeratedBundleID`), NOT a
@@ -239,7 +290,7 @@ final class Controller {
             bundleID: source.lastEnumeratedBundleID,
             onResolve: { [weak self] hint, action in
                 guard let self else { return }
-                self.active = false
+                self.activeMode = nil
                 _ = self.source.act(id: hint.element.id, as: action)
                 self.writeStatus(
                     reason: "\(modeLabel) → "
@@ -255,7 +306,7 @@ final class Controller {
                 }
             },
             onCancel: { [weak self] in
-                self?.active = false
+                self?.activeMode = nil
                 Log.debug("overlay: cancelled")
             })
     }

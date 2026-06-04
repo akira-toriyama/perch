@@ -174,7 +174,8 @@ Logic, システム設定のサイドバー…)向け。要素の表示タイト
 - `Cmd+Shift+a` — コピー + リージョナルモードを継続 (連続コピー)
 
 対象 role: `AXGroup` / `AXArticle` / `AXSection` / `AXSplitGroup`
-/ `AXScrollArea` / `AXOutline` / `AXImage`、frame >= 200×100 pt。
+/ `AXScrollArea` / `AXOutline` / `AXImage`、frame >= `[regional].min-width`
+× `min-height` (デフォルト 200×100 pt、両軸別々に設定可、`>= 0` に clamp)。
 `kAXPressAction` は **不要** (regional pick は copy / focus が主)。
 
 `--activate` / `--cancel` があるので Karabiner / skhd / Raycast の

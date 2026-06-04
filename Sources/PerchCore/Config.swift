@@ -99,6 +99,20 @@ public struct PerchConfig: Sendable {
     /// does NOT erase the global `roles`).
     public let perApp: [String: BehaviorOverrides]
 
+    // MARK: - [regional]
+
+    /// Min frame width for regional-mode containers (issue #34
+    /// follow-up). Default 200 — articles / sidebars / panes are
+    /// usually wider than this; smaller bumps the regional set
+    /// toward leaf-sized containers, which is hint mode's domain.
+    /// Clamped to `>= 0`.
+    public let regionalMinWidth: Double
+
+    /// Min frame height for regional-mode containers. Default 100 —
+    /// articles are wide but not tall, so the floor is intentionally
+    /// asymmetric with `regionalMinWidth`. Clamped to `>= 0`.
+    public let regionalMinHeight: Double
+
     // MARK: - Constants
 
     /// Resolved path of the user's config file.
@@ -134,7 +148,9 @@ public struct PerchConfig: Sendable {
         excludeApps: [],
         minSize: 6,
         webRoles: defaultRoles,
-        perApp: [:]
+        perApp: [:],
+        regionalMinWidth: 200,
+        regionalMinHeight: 100
     )
 
     // MARK: - Per-app resolution
@@ -256,6 +272,14 @@ public struct PerchConfig: Sendable {
                 roles: r, minSize: m, autoClickOnUnique: a)
         }
 
+        // Regional mode frame floor (#34 follow-up). Both clamp to
+        // `>= 0` per typo-tolerance; defaults match the literals the
+        // first regional implementation used (200×100).
+        let regionalMinW = (doc["regional"]?["min-width"]?.asDouble)
+            .map { max(0, $0) } ?? 200
+        let regionalMinH = (doc["regional"]?["min-height"]?.asDouble)
+            .map { max(0, $0) } ?? 100
+
         return PerchConfig(
             hotkey: hk,
             cancelKey: cancel,
@@ -270,7 +294,9 @@ public struct PerchConfig: Sendable {
             excludeApps: excludes,
             minSize: minSize,
             webRoles: webRoles,
-            perApp: perApp)
+            perApp: perApp,
+            regionalMinWidth: regionalMinW,
+            regionalMinHeight: regionalMinH)
     }
 
     /// Drop duplicates and non-typeable characters, lowercase the
