@@ -155,27 +155,63 @@ final class Controller {
             cancel()
             return
         }
+        startSearchSession(
+            renderMode: .pillsOverElements,
+            enumerator: { $0.enumerate() },
+            statusReason: "search",
+            reenter: { [weak self] in self?.enterSearchMode() })
+    }
+
+    /// Menu-bar search (issue #52) — reuses `SearchMode`'s query
+    /// pipeline against `source.enumerateMenu()` and renders matches
+    /// as a centred vertical list (menu items have no on-screen
+    /// frame, so the per-pill placement of `--search` doesn't
+    /// apply). Same mutual-exclusion + toggle semantics as
+    /// `--search`. `.pressContinuous` re-enters menu mode so the
+    /// user can chain menu commands.
+    func enterMenuMode() {
+        if search != nil {
+            cancel()
+            return
+        }
+        startSearchSession(
+            renderMode: .verticalList,
+            enumerator: { $0.enumerateMenu() },
+            statusReason: "menu",
+            reenter: { [weak self] in self?.enterMenuMode() })
+    }
+
+    /// Shared builder for the two SearchMode-driven flows
+    /// (`--search` and `--menu`). They differ only in:
+    ///   - which `UIElementSource` method to enumerate from
+    ///     (`enumerate` vs `enumerateMenu`),
+    ///   - how matches are painted (pills over frames vs vertical
+    ///     list),
+    ///   - which mode to re-enter on `.pressContinuous`.
+    /// Everything else — KeyTap install, mutual-exclusion against
+    /// the other modes, status write, dispatch via `source.act` —
+    /// is identical.
+    private func startSearchSession(
+        renderMode: SearchRenderMode,
+        enumerator: @escaping (AXUIElementSource) -> [UIElement],
+        statusReason: String,
+        reenter: @escaping () -> Void
+    ) {
         cancel()
         let sm = SearchMode(
             source: source,
             config: config,
+            renderMode: renderMode,
+            enumerator: enumerator,
             onResolve: { [weak self] element, action in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     self.search = nil
                     _ = self.source.act(id: element.id, as: action)
                     self.writeStatus(
-                        reason: "search → \(action.rawValue)")
-                    // Continuous-follow: re-enter search mode so the
-                    // user can chain actions across the list (do
-                    // something to every "draft PR", every Slack
-                    // notification, …) without re-pressing the
-                    // hotkey between each. Re-entry starts with an
-                    // empty query — same as a fresh `--search`.
+                        reason: "\(statusReason) → \(action.rawValue)")
                     if action == .pressContinuous {
-                        DispatchQueue.main.async { [weak self] in
-                            self?.enterSearchMode()
-                        }
+                        DispatchQueue.main.async { reenter() }
                     }
                 }
             },
@@ -184,7 +220,7 @@ final class Controller {
             })
         if sm.start() {
             search = sm
-            writeStatus(reason: "search mode")
+            writeStatus(reason: "\(statusReason) mode")
         }
     }
 
@@ -376,6 +412,9 @@ final class Controller {
                 case "regional":
                     Log.line("controller: --regional received")
                     self.enterRegionalMode()
+                case "menu":
+                    Log.line("controller: --menu received")
+                    self.enterMenuMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every

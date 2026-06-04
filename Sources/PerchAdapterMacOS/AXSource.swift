@@ -320,6 +320,109 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
                        pid: root.pid)
     }
 
+    /// Issue #52 — menu-bar search. Walks the frontmost app's
+    /// `kAXMenuBarAttribute` recursively, collecting every pressable
+    /// leaf `AXMenuItem` with a non-empty title. Each emitted
+    /// `UIElement` carries:
+    ///
+    ///   - `label`: the menu path joined by `" > "`
+    ///     (e.g. `"File > Save As…"`). The visible bar item is the
+    ///     first segment; nested submenus add segments.
+    ///   - `frame`: `.zero` — closed menu items have no positioned
+    ///     frame. Consumers must render menu results as a list, NOT
+    ///     pinned to a frame.
+    ///   - `id`: the same `"<pid>:<seq>"` shape `enumerate()` uses,
+    ///     stored in the same `liveById` side-table so
+    ///     `act(id:as:)` resolves it identically (AXPress fires the
+    ///     menu item).
+    ///
+    /// Separators (`AXMenuItem` with empty title) are skipped.
+    /// Disabled items are kept — the user might still want to see
+    /// them under the search results.
+    public func enumerateMenu() -> [UIElement] {
+        liveById.removeAll(keepingCapacity: true)
+        nextSeq = 0
+
+        guard let front = NSWorkspace.shared.frontmostApplication,
+              let bundleID = front.bundleIdentifier
+        else {
+            Log.debug("ax: no frontmost app")
+            return []
+        }
+        if config.excludeApps.contains(bundleID) {
+            Log.debug("ax: excluded app \(bundleID)")
+            return []
+        }
+        self.lastEnumeratedBundleID = bundleID
+        Log.debug("ax: menu-walk front=\(bundleID) "
+                  + "pid=\(front.processIdentifier)")
+
+        let appElt = AXUIElementCreateApplication(front.processIdentifier)
+        guard let menuBarAny = copyAttribute(appElt, kAXMenuBarAttribute),
+              CFGetTypeID(menuBarAny as CFTypeRef) == AXUIElementGetTypeID()
+        else {
+            Log.debug("ax: no menu bar for \(bundleID)")
+            return []
+        }
+        let menuBar = menuBarAny as! AXUIElement
+
+        var out: [UIElement] = []
+        walkMenu(menuBar, pathPrefix: "", depth: 0,
+                 pid: front.processIdentifier, into: &out)
+        Log.line("ax: enumerated \(out.count) menu-item(s) "
+                 + "in \(bundleID)")
+        return out
+    }
+
+    /// Recursive descent into the menu tree. The walker concatenates
+    /// titles into a `>`-joined path so downstream search has the
+    /// full breadcrumb to match against (`File > Save As…` rather
+    /// than just `Save As…`, which would collide across apps).
+    ///
+    /// Depth ceiling 8 — even Photoshop's nested filter sub-menus
+    /// don't reach that.
+    private func walkMenu(
+        _ node: AXUIElement,
+        pathPrefix: String,
+        depth: Int,
+        pid: pid_t,
+        into out: inout [UIElement]
+    ) {
+        if depth > 8 { return }
+        let rawRole = (copyAttribute(node, kAXRoleAttribute) as? String) ?? ""
+        let role = rawRole.hasPrefix("AX")
+            ? String(rawRole.dropFirst(2)) : rawRole
+        let title = (copyAttribute(node, kAXTitleAttribute) as? String) ?? ""
+
+        let path: String
+        if !title.isEmpty {
+            path = pathPrefix.isEmpty
+                ? title
+                : "\(pathPrefix) > \(title)"
+        } else {
+            path = pathPrefix
+        }
+
+        // Emit pressable leaves with non-empty title. AXMenu wraps
+        // a submenu; AXMenuBar / AXMenuBarItem are containers; only
+        // AXMenuItem actually fires. Skipping titleless items rules
+        // out separators and the rare anonymous container.
+        if role == "MenuItem", !title.isEmpty, supportsPress(node) {
+            nextSeq += 1
+            let id = "\(pid):\(nextSeq)"
+            liveById[id] = node
+            out.append(UIElement(
+                id: id, role: role, label: path, frame: .zero))
+        }
+
+        let kids = (copyAttribute(node, kAXChildrenAttribute)
+                    as? [AXUIElement]) ?? []
+        for child in kids {
+            walkMenu(child, pathPrefix: path,
+                     depth: depth + 1, pid: pid, into: &out)
+        }
+    }
+
     // MARK: - Shared walk setup
 
     /// Reset per-enumeration state + resolve frontmost / wake gate

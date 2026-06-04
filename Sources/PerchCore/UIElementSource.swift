@@ -32,6 +32,18 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// with the real walk.
     func enumerateRegions() -> [UIElement]
 
+    /// Enumerate every menu-bar item in the frontmost app (issue
+    /// #52). Walks `kAXMenuBarAttribute` recursively → each
+    /// pressable leaf is emitted with the full menu path as its
+    /// `label` (`"File > Save As…"`). Frames come back as `.zero`
+    /// because AX doesn't position closed menu items — consumers
+    /// must render menu matches in a list (not pinned to a frame).
+    ///
+    /// Returns `[]` from the default implementation; adapters that
+    /// don't navigate menus (`SyntheticUIElementSource`) inherit
+    /// the no-op.
+    func enumerateMenu() -> [UIElement]
+
     /// Perform `action` against the element identified by `id`.
     /// The id was produced by the most recent `enumerate()` call;
     /// live AX handles are kept adapter-side. Returns `false`
@@ -54,4 +66,9 @@ public extension UIElementSource {
     /// silently dismisses the regional overlay — same fall-open
     /// behaviour as `enumerate()` returning `[]`.
     func enumerateRegions() -> [UIElement] { [] }
+
+    /// Default: menu mode opts in. A synthetic source without a
+    /// modelled menu bar returns `[]` — Controller dismisses the
+    /// menu overlay silently.
+    func enumerateMenu() -> [UIElement] { [] }
 }

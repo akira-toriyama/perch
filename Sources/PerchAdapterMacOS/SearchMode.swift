@@ -34,11 +34,30 @@ import CoreGraphics
 import Foundation
 import PerchCore
 
+/// How `SearchMode` paints its matches. The query strip + filter
+/// pipeline are identical; the only thing that varies is whether
+/// matches get positioned over an on-screen frame or stacked into
+/// a centred list. Picked per entry so the same code can drive
+/// `--search` (pills over visible elements) and `--menu` (list,
+/// because menu items have no visible frame until opened).
+public enum SearchRenderMode: Sendable {
+    /// One numbered pill placed over each match's AX frame
+    /// (current `--search` behaviour).
+    case pillsOverElements
+    /// A centred vertical list of matches under the query strip.
+    /// Used by `--menu` (issue #52) — menu items don't position
+    /// themselves until macOS opens the menu, so pinning a pill to
+    /// `.zero` would stack every result at the screen origin.
+    case verticalList
+}
+
 @MainActor
 public final class SearchMode {
 
     private let source: AXUIElementSource
     private let config: PerchConfig
+    private let enumerator: (AXUIElementSource) -> [UIElement]
+    private let renderMode: SearchRenderMode
     private let onResolve: (UIElement, HintAction) -> Void
     private let onExit: () -> Void
 
@@ -47,9 +66,9 @@ public final class SearchMode {
     private var keyTap: KeyTap?
     private var cancelKeyCode: CGKeyCode = 53        // Esc
 
-    /// Cached AX enumeration — captured once on entry so per-keystroke
-    /// filtering doesn't re-walk the AX tree (which is slow on big
-    /// apps and would re-shuffle ids).
+    /// Cached enumeration — captured once on entry so per-keystroke
+    /// filtering doesn't re-walk the AX tree (slow on big apps,
+    /// would also re-shuffle ids).
     private var elements: [UIElement] = []
     private var query: String = ""
     private var matches: [UIElement] = []
@@ -58,11 +77,16 @@ public final class SearchMode {
     public init(
         source: AXUIElementSource,
         config: PerchConfig,
+        renderMode: SearchRenderMode = .pillsOverElements,
+        enumerator: @escaping (AXUIElementSource) -> [UIElement]
+            = { $0.enumerate() },
         onResolve: @escaping (UIElement, HintAction) -> Void,
         onExit: @escaping () -> Void
     ) {
         self.source = source
         self.config = config
+        self.renderMode = renderMode
+        self.enumerator = enumerator
         self.onResolve = onResolve
         self.onExit = onExit
         self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
@@ -85,7 +109,8 @@ public final class SearchMode {
         ]
         let cv = SearchCanvas(
             frame: NSRect(origin: .zero, size: frame.size),
-            config: config)
+            config: config,
+            renderMode: renderMode)
         cv.unionFrame = frame
         cv.primaryHeight = OverlayCoords.primaryHeight()
         p.contentView = cv
@@ -95,7 +120,7 @@ public final class SearchMode {
 
     @discardableResult
     public func start() -> Bool {
-        elements = source.enumerate()
+        elements = enumerator(source)
         let union = OverlayCoords.unionFrame()
         panel.setFrame(union, display: false)
         canvas.frame = NSRect(origin: .zero, size: union.size)
@@ -248,11 +273,17 @@ private final class SearchCanvas: NSView {
     var unionFrame: CGRect = .zero
     var primaryHeight: CGFloat = 0
     private let config: PerchConfig
+    private let renderMode: SearchRenderMode
     private var query: String = ""
     private var matches: [UIElement] = []
 
-    init(frame frameRect: NSRect, config: PerchConfig) {
+    init(
+        frame frameRect: NSRect,
+        config: PerchConfig,
+        renderMode: SearchRenderMode
+    ) {
         self.config = config
+        self.renderMode = renderMode
         super.init(frame: frameRect)
         wantsLayer = true
     }
@@ -298,20 +329,27 @@ private final class SearchCanvas: NSView {
             x: stripX + 14,
             y: stripY + (stripH - textSize.height) / 2 - 1))
 
-        // 2) Numbered pills over each match.
+        // 2) Match pills — placement depends on `renderMode`.
+        switch renderMode {
+        case .pillsOverElements:
+            drawMatchPillsOverFrames(font: font, small: small,
+                                     accent: accent)
+        case .verticalList:
+            drawMatchListBelowStrip(
+                font: font, small: small, accent: accent,
+                listOriginY: stripY + stripH + 10)
+        }
+    }
+
+    /// Per-match pill positioned over the match's AX frame
+    /// (`--search` default). Each pill is clamped into the canvas
+    /// so a partially-off-screen match still renders inside.
+    private func drawMatchPillsOverFrames(
+        font: NSFont, small: NSFont, accent: NSColor
+    ) {
         for (i, e) in matches.enumerated() {
-            let digit = "\(i + 1)"
-            let digitAttr = NSAttributedString(string: digit, attributes: [
-                .font: font, .foregroundColor: NSColor.white])
-            let titleAttr = NSAttributedString(
-                string: " " + (e.label.isEmpty
-                                ? (e.role.lowercased())
-                                : e.label).prefix(32).description,
-                attributes: [.font: small,
-                             .foregroundColor: NSColor.white])
-            let combined = NSMutableAttributedString()
-            combined.append(digitAttr)
-            combined.append(titleAttr)
+            let combined = pillText(digit: i + 1, element: e,
+                                    font: font, small: small)
             let tSize = combined.size()
             let w = ceil(tSize.width) + 20
             let h = ceil(font.boundingRectForFont.height) + 14
@@ -325,16 +363,78 @@ private final class SearchCanvas: NSView {
             x = min(max(x, 6), bounds.width - w - 6)
             y = min(max(y, 6), bounds.height - h - 6)
             let r = CGRect(x: x, y: y, width: w, height: h)
-            let p = NSBezierPath(roundedRect: r, xRadius: 10, yRadius: 10)
-            accent.withAlphaComponent(0.85).setFill()
-            p.fill()
-            NSColor.white.withAlphaComponent(0.4).setStroke()
-            p.lineWidth = 1
-            p.stroke()
+            drawPill(rect: r, accent: accent)
             combined.draw(at: NSPoint(
                 x: r.origin.x + 10,
                 y: r.origin.y + (h - tSize.height) / 2 - 1))
         }
+    }
+
+    /// Vertical list of matches centred under the query strip
+    /// (`--menu`). All match pills share one width sized to the
+    /// widest label so the column reads as a single Spotlight-style
+    /// result list. Used when match frames are `.zero` (menu items
+    /// have no on-screen frame).
+    private func drawMatchListBelowStrip(
+        font: NSFont, small: NSFont, accent: NSColor,
+        listOriginY: CGFloat
+    ) {
+        guard !matches.isEmpty else { return }
+        let rendered = matches.enumerated().map { i, e in
+            pillText(digit: i + 1, element: e,
+                     font: font, small: small)
+        }
+        let h = ceil(font.boundingRectForFont.height) + 14
+        let gap: CGFloat = 6
+        let widest = rendered.map { $0.size().width }.max() ?? 0
+        let w = ceil(widest) + 20
+        let x = (bounds.width - w) / 2
+
+        for (i, txt) in rendered.enumerated() {
+            let y = listOriginY + CGFloat(i) * (h + gap)
+            let r = CGRect(x: x, y: y, width: w, height: h)
+            drawPill(rect: r, accent: accent)
+            let tSize = txt.size()
+            txt.draw(at: NSPoint(
+                x: r.origin.x + 10,
+                y: r.origin.y + (h - tSize.height) / 2 - 1))
+        }
+    }
+
+    /// Build the `<digit> <label>` attributed string for one match.
+    /// Truncated to 64 chars so deeply-nested menu paths
+    /// (`Develop > Web Inspector > Open Inspector`) stay readable
+    /// without overflowing the list column.
+    private func pillText(
+        digit: Int, element: UIElement,
+        font: NSFont, small: NSFont
+    ) -> NSAttributedString {
+        let digitAttr = NSAttributedString(
+            string: "\(digit)",
+            attributes: [.font: font,
+                         .foregroundColor: NSColor.white])
+        let titleAttr = NSAttributedString(
+            string: " " + (element.label.isEmpty
+                            ? element.role.lowercased()
+                            : element.label).prefix(64).description,
+            attributes: [.font: small,
+                         .foregroundColor: NSColor.white])
+        let combined = NSMutableAttributedString()
+        combined.append(digitAttr)
+        combined.append(titleAttr)
+        return combined
+    }
+
+    /// Common rounded-rect fill + hairline border used by both
+    /// match renderers.
+    private func drawPill(rect: CGRect, accent: NSColor) {
+        let p = NSBezierPath(
+            roundedRect: rect, xRadius: 10, yRadius: 10)
+        accent.withAlphaComponent(0.85).setFill()
+        p.fill()
+        NSColor.white.withAlphaComponent(0.4).setStroke()
+        p.lineWidth = 1
+        p.stroke()
     }
 
     private static func accent(_ s: String) -> NSColor {
