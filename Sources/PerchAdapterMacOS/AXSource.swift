@@ -322,7 +322,11 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return false
         }
         switch action {
-        case .press:
+        case .press, .pressContinuous:
+            // Same AX dispatch as a plain press — `.pressContinuous`
+            // diverges only in what the controller does AFTER (it
+            // re-shows hints). The adapter-side semantics are
+            // identical so the AXPress branch is shared.
             return perform(elt, action: kAXPressAction as CFString,
                            tag: "AXPress", id: id)
         case .rightClick:

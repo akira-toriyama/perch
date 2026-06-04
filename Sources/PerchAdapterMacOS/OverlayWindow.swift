@@ -271,10 +271,23 @@ public final class OverlayWindow {
     }
 
     /// Map the modifier flags held while the user typed the
-    /// resolving letter to a `HintAction`. Cmd wins over Alt wins
-    /// over Shift if multiple are held; Ctrl is filtered out at
+    /// resolving letter to a `HintAction`. Ctrl is filtered out at
     /// the call site (it cancels). Bare keypress → `.press`.
+    ///
+    /// Precedence (top wins when multiple modifiers are held):
+    ///   Cmd + Shift → .pressContinuous (continuous-follow / `cf`)
+    ///   Cmd alone   → .copyTitle
+    ///   Alt         → .focus
+    ///   Shift alone → .rightClick
+    ///   bare        → .press
+    ///
+    /// `.pressContinuous` must come BEFORE the plain Cmd check —
+    /// `flags.contains(.maskCommand)` is true under either, and we
+    /// want the more specific combo to win.
     private static func actionFor(flags: CGEventFlags) -> HintAction {
+        if flags.contains(.maskCommand) && flags.contains(.maskShift) {
+            return .pressContinuous
+        }
         if flags.contains(.maskCommand)   { return .copyTitle }
         if flags.contains(.maskAlternate) { return .focus }
         if flags.contains(.maskShift)     { return .rightClick }

@@ -67,6 +67,13 @@ public enum HintAction: String, Sendable, CaseIterable {
     /// keyboard focus to the element without firing its action.
     /// Right for text fields you intend to type into.
     case focus
+    /// Cmd+Shift-held — same AX dispatch as `.press`, but the
+    /// controller re-shows hints after firing so the user can
+    /// chain multiple actions (open 5 issues in a row, close 8
+    /// notifications, etc.) without re-pressing the hotkey
+    /// between each. Exit via Esc / cancel-key / hotkey-again.
+    /// Surfingkeys-style `cf` (continuous follow).
+    case pressContinuous
 }
 
 /// Parsed `[hotkey].combo` value.
