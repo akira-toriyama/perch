@@ -173,9 +173,50 @@ final class Controller {
             active = false
             return
         }
-        let elements = source.enumerate()
+        runHintFlow(
+            elements: source.enumerate(),
+            modeLabel: "activate",
+            reenter: { [weak self] in self?.activate() })
+    }
+
+    /// Regional hint mode (#34) — Surfingkeys' `L` equivalent on
+    /// macOS. Labels large `Group` / `Article` / `Section` /
+    /// `SplitGroup` / `ScrollArea` / `Outline` / `Image` containers
+    /// (frame >= 200×100, `kAXPressAction` not required) instead of
+    /// every clickable leaf. Same overlay + dispatch path as hint
+    /// mode; only `source.enumerateRegions()` substitutes for
+    /// `source.enumerate()`.
+    ///
+    /// Mutual exclusion + restart semantics mirror `enterScrollMode`
+    /// / `enterSearchMode`: a second `--regional` while regional is
+    /// up tears down + restarts (Esc dismisses). The user resolves a
+    /// region with the same action-mode modifiers (Cmd → copyTitle,
+    /// Shift → rightClick, Alt → focus); `.pressContinuous` (Cmd+Shift)
+    /// re-enters regional mode so the user can copy several region
+    /// titles in a row.
+    func enterRegionalMode() {
+        cancel()
+        runHintFlow(
+            elements: source.enumerateRegions(),
+            modeLabel: "regional",
+            reenter: { [weak self] in self?.enterRegionalMode() })
+    }
+
+    /// Shared between `activate()` (hint mode) and
+    /// `enterRegionalMode()` (#34). `elements` is whatever the
+    /// caller's enumerator produced; the rest of the pipeline
+    /// (Labeler → OverlayWindow.show → onResolve dispatch) is
+    /// identical. `modeLabel` distinguishes the log lines so log
+    /// triage can tell the modes apart. `reenter` runs on
+    /// `.pressContinuous` so each mode re-enters itself rather
+    /// than always falling back to hint mode.
+    private func runHintFlow(
+        elements: [UIElement],
+        modeLabel: String,
+        reenter: @escaping () -> Void
+    ) {
         guard !elements.isEmpty else {
-            Log.line("activate: no labelable elements — dismissing")
+            Log.line("\(modeLabel): no labelable elements — dismissing")
             return
         }
         let screen = NSScreen.main?.frame.size ?? .zero
@@ -185,7 +226,7 @@ final class Controller {
             prioritiseCenter: config.prioritiseCenter,
             screenSize: screen)
         active = true
-        Log.line("activate: \(hints.count) hint(s)")
+        Log.line("\(modeLabel): \(hints.count) hint(s)")
         // Pass through the bundle id that `enumerate()` just resolved
         // (per `AXUIElementSource.lastEnumeratedBundleID`), NOT a
         // freshly-re-resolved `NSWorkspace.frontmostApplication`. The
@@ -201,18 +242,16 @@ final class Controller {
                 self.active = false
                 _ = self.source.act(id: hint.element.id, as: action)
                 self.writeStatus(
-                    reason: "fired \(hint.keys) (\(action.rawValue))")
-                // Continuous-follow: after firing, re-enter hint
-                // mode immediately so the user can chain actions
-                // (open 5 links in a row, close 8 notifications,
-                // …) without re-pressing the hotkey between each.
-                // The re-entry is deferred to the next runloop tick
-                // so the dispatched AX action gets a moment to land
-                // before we walk the (possibly-changed) tree again.
+                    reason: "\(modeLabel) → "
+                        + "\(hint.keys) (\(action.rawValue))")
+                // Continuous-follow: after firing, re-enter the
+                // SAME mode immediately so the user can chain
+                // actions (open 5 links, copy 3 region titles, …)
+                // without re-pressing the trigger between each.
+                // Deferred to the next runloop tick so the
+                // dispatched AX action lands before we re-enumerate.
                 if action == .pressContinuous {
-                    DispatchQueue.main.async { [weak self] in
-                        self?.activate()
-                    }
+                    DispatchQueue.main.async { reenter() }
                 }
             },
             onCancel: { [weak self] in
@@ -283,6 +322,9 @@ final class Controller {
                 case "search":
                     Log.line("controller: --search received")
                     self.enterSearchMode()
+                case "regional":
+                    Log.line("controller: --regional received")
+                    self.enterRegionalMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every

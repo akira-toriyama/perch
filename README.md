@@ -109,7 +109,8 @@ watches the file for changes when running as a daemon).
 | `--activate` | client | show hint overlay now (CLI alternative to the hotkey) |
 | `--scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
 | `--search` | client | enter search mode (type text, `1-9` picks a match) |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search) |
+| `--regional` | client | enter regional mode — label large containers (article / pane / image) instead of every clickable leaf |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -164,6 +165,28 @@ it without firing.
 A digit typed when the match list is empty (no current matches)
 is treated as a query character so you can still search for
 "v2" / "API 3" / etc.
+
+### Regional mode
+
+`perch --regional` labels **large containers** (article / pane /
+image / sidebar) instead of every clickable leaf — for "select
+this article" / "copy this image" / "focus that pane" tasks.
+
+The same labels and modifier conventions from hint mode apply,
+just with bigger pills on bigger targets:
+
+- `a` (no modifier) — press the container (rarely useful for
+  non-pressable groups)
+- `Cmd+a` — **copy the container's title** to the pasteboard
+  (the headline use case)
+- `Shift+a` — open its context menu
+- `Alt+a` — focus it without firing
+- `Cmd+Shift+a` — copy + re-enter regional mode (chain copies)
+
+Element selection: `AXGroup` / `AXArticle` / `AXSection` /
+`AXSplitGroup` / `AXScrollArea` / `AXOutline` / `AXImage`,
+filtered to frame >= 200×100 points. `kAXPressAction` is **not**
+required (regional picks are typically copy/focus).
 
 Exit codes: 0 = ok · 1 = `--doctor` red · 2 = bad flag /
 invalid config · 3 = client cmd with no running daemon.

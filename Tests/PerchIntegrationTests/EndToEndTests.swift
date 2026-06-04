@@ -66,4 +66,19 @@ final class EndToEndTests: XCTestCase {
             source.actions.map(\.action),
             [.press, .rightClick, .copyTitle, .focus])
     }
+
+    /// Regional hint mode (#34) — the protocol's default
+    /// `enumerateRegions() = []` is what synthetic sources rely on
+    /// so `Controller.enterRegionalMode()` silently dismisses
+    /// against a test fixture (mirroring the "no labelable
+    /// elements" fallback for hint mode). A future synthetic
+    /// fixture that wants real regional coverage can override.
+    func testSyntheticEnumerateRegionsIsEmptyByDefault() {
+        let elements = [UIElement(
+            id: "ui-0", role: "Button", label: "btn",
+            frame: CGRect(x: 0, y: 0, width: 30, height: 30))]
+        let source = SyntheticUIElementSource(elements: elements)
+        XCTAssertEqual(source.enumerate().count, 1)
+        XCTAssertTrue(source.enumerateRegions().isEmpty)
+    }
 }

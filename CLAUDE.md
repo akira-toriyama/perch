@@ -333,7 +333,7 @@ frontmost app's focused window**. The seam is captured at
   Log.line (always on) so users can attach `/tmp/perch.log` to
   bug reports without re-running with `PERCH_DEBUG=1`.
 
-### Scroll mode + search mode
+### Scroll mode + search mode + regional mode
 
 - **`ScrollMode` and `SearchMode` are parallel to
   `OverlayWindow`** — each owns its own KeyTap + (for search)
@@ -354,6 +354,19 @@ frontmost app's focused window**. The seam is captured at
   resolution (`1-9` → match[N-1]) is **gated on a non-empty
   match list** so digits remain typable as query characters
   when there are no matches ("v2" / "API 3" etc.).
+- **Regional mode (issue #34)** is a hint-mode variant, not a
+  parallel mode object. `UIElementSource.enumerateRegions()`
+  walks the same AX tree with a different `WalkPolicy`
+  (`regionalRoles` allow-list, 200×100 frame floor,
+  `requirePress = false`) and `Controller.runHintFlow(…)`
+  feeds the result through the existing label / overlay /
+  dispatch pipeline. Action-mode modifiers apply unchanged —
+  Cmd → copyTitle is the headline use case ("copy this article
+  title to clipboard"). Entry is CLI-only via `perch --regional`;
+  there's no Carbon hotkey for it (users wire Karabiner / skhd
+  / Raycast). **The shared `runHintFlow` is the right seam for
+  any future "different enumerator, same pipeline" mode** —
+  don't fork the overlay path for each new flavor.
 
 ### Logging
 

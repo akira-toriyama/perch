@@ -301,6 +301,62 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     // MARK: - UIElementSource
 
     public func enumerate() -> [UIElement] {
+        guard let root = prepareWalkRoot() else { return [] }
+        // Per-app overrides (#37) fold directly into the policy —
+        // unset keys fall through to the global value via
+        // `effectiveX(for:)` (typo-tolerance preserved). No more
+        // save/restore of `self.roles` / `self.minSize` is needed:
+        // the policy IS the resolved state for this enumeration.
+        let effRoles = config.effectiveRoles(for: root.bundleID)
+        let effMinSize = CGFloat(
+            config.effectiveMinSize(for: root.bundleID))
+        if config.perApp[root.bundleID] != nil {
+            Log.debug("ax: per-app override \(root.bundleID) "
+                      + "roles=\(effRoles.count) "
+                      + "min-size=\(Int(effMinSize))")
+        }
+        let policy = WalkPolicy(
+            nativeRoles: Set(effRoles),
+            webRoles: webRoles,
+            minWidth: effMinSize,
+            minHeight: effMinSize,
+            requirePress: true)
+        return runWalk(window: root.window, policy: policy,
+                       label: "hint", bundleID: root.bundleID,
+                       pid: root.pid)
+    }
+
+    /// Issue #34 — regional hint mode. Same setup as `enumerate()`
+    /// but with the role allow-list swapped for large containers
+    /// (`Group` / `Article` / `Section` / `SplitGroup` / `ScrollArea`
+    /// / `Outline` / `Image`), a 200×100 frame floor, and
+    /// `kAXPressAction` no longer required — regional picks land on
+    /// `.copyTitle` / `.focus` / `.rightClick` against containers
+    /// that usually aren't pressable.
+    public func enumerateRegions() -> [UIElement] {
+        guard let root = prepareWalkRoot() else { return [] }
+        let policy = WalkPolicy(
+            nativeRoles: Self.regionalRoles,
+            webRoles: Self.regionalRoles,
+            minWidth: 200,
+            minHeight: 100,
+            requirePress: false)
+        return runWalk(window: root.window, policy: policy,
+                       label: "region", bundleID: root.bundleID,
+                       pid: root.pid)
+    }
+
+    // MARK: - Shared walk setup
+
+    /// Reset per-enumeration state + resolve frontmost / wake gate
+    /// / focused window / bounds. Returns the AX `window` to walk
+    /// plus the bundle id and pid for downstream logging. Returns
+    /// `nil` when there's no eligible window (no frontmost app,
+    /// excluded bundle, no focused window) — the caller treats
+    /// that as a no-op enumeration.
+    private func prepareWalkRoot() -> (
+        window: AXUIElement, bundleID: String, pid: pid_t
+    )? {
         liveById.removeAll(keepingCapacity: true)
         nextSeq = 0
 
@@ -308,44 +364,19 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
               let bundleID = front.bundleIdentifier
         else {
             Log.debug("ax: no frontmost app")
-            return []
+            return nil
         }
         if excludes.contains(bundleID) {
             Log.debug("ax: excluded app \(bundleID)")
-            return []
+            return nil
         }
         Log.debug("ax: front=\(bundleID) pid=\(front.processIdentifier)")
         // Capture the bundle id this enumeration is committed to so
         // the walker (WebArea attribution, #38), the Controller
-        // (OverlayWindow.show, #37), and the per-app override block
-        // below can all read the SAME identity without re-resolving
+        // (OverlayWindow.show, #37), and per-app override resolution
+        // can all read the SAME identity without re-resolving
         // NSWorkspace.
         self.lastEnumeratedBundleID = bundleID
-
-        // Apply per-app overrides for the duration of this enumeration.
-        // Resolved from `config` against the now-known frontmost
-        // bundleID; missing keys fall through to the global value
-        // (preserves the typo-tolerance rule from issue #37). Restored
-        // on exit so a subsequent enumerate against a different app
-        // doesn't carry over the previous override.
-        let savedRoles = self.roles
-        let savedMinSize = self.minSize
-        let effRoles = config.effectiveRoles(for: bundleID)
-        let effMinSize = config.effectiveMinSize(for: bundleID)
-        let overridden = (config.perApp[bundleID] != nil)
-        if overridden {
-            self.roles = Set(effRoles)
-            self.minSize = CGFloat(effMinSize)
-            Log.debug("ax: per-app override \(bundleID) "
-                      + "roles=\(self.roles.count) "
-                      + "min-size=\(Int(self.minSize))")
-        }
-        defer {
-            if overridden {
-                self.roles = savedRoles
-                self.minSize = savedMinSize
-            }
-        }
 
         let appElt = AXUIElementCreateApplication(front.processIdentifier)
 
@@ -402,7 +433,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
               CFGetTypeID(focused as CFTypeRef) == AXUIElementGetTypeID()
         else {
             Log.debug("ax: no focused window for \(bundleID)")
-            return []
+            return nil
         }
         let window = focused as! AXUIElement   // checked via AXUIElementGetTypeID
         // Belt + braces bounds for filtering:
@@ -415,7 +446,9 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // visible-screen intersection clips us back to what the
         // user can actually see.
         let cgFrame = onScreenBounds(forPid: front.processIdentifier)
-        let axFrame = frameOf(window)
+        // Window's own frame is read with min-size 0 — the bounds
+        // calc must not drop the root just because it's small.
+        let axFrame = rawFrameOf(window, minWidth: 0, minHeight: 0)
         let baseFrame = cgFrame ?? axFrame ?? .zero
         windowFrame = clampToVisibleScreen(baseFrame)
         // Promoted to Log.line so the diagnostic shows up under
@@ -427,10 +460,24 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
                  + "ax=\(axFrame.map(OverlayCoords.rectString) ?? "nil") "
                  + "→ filter=\(OverlayCoords.rectString(windowFrame))")
 
+        return (window, bundleID, front.processIdentifier)
+    }
+
+    /// Run the policy-driven walk + dedup, prune `liveById`, log
+    /// the result. Shared between `enumerate()` (hint mode) and
+    /// `enumerateRegions()` (#34) — the only thing that varies is
+    /// the `WalkPolicy`.
+    private func runWalk(
+        window: AXUIElement,
+        policy: WalkPolicy,
+        label: String,
+        bundleID: String,
+        pid: pid_t
+    ) -> [UIElement] {
         var raw: [UIElement] = []
         let ctx = WalkCtx(maxDepth: nativeMaxDepth, inWebArea: false)
-        walk(window, depth: 0, ctx: ctx,
-             pid: front.processIdentifier, into: &raw)
+        walk(window, depth: 0, ctx: ctx, policy: policy,
+             pid: pid, into: &raw)
         let pruned = dedupNearOverlaps(raw)
         if pruned.count != raw.count {
             Log.debug("ax: de-dup \(raw.count) → \(pruned.count)")
@@ -442,7 +489,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         for id in liveById.keys where !kept.contains(id) {
             liveById.removeValue(forKey: id)
         }
-        Log.line("ax: enumerated \(pruned.count) hint(s) in \(bundleID)")
+        Log.line("ax: enumerated \(pruned.count) \(label)(s) "
+                 + "in \(bundleID)")
         return pruned
     }
 
@@ -518,10 +566,39 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let inWebArea: Bool
     }
 
+    /// Per-enumeration filter knobs. Built fresh in `enumerate()` /
+    /// `enumerateRegions()` so each mode pins its own role list,
+    /// size floor, and press-support rule without touching the
+    /// instance state used by other call sites.
+    private struct WalkPolicy {
+        /// Roles to accept outside an `AXWebArea`. Hint mode uses
+        /// `[behavior].roles`; regional mode uses `regionalRoles`.
+        let nativeRoles: Set<String>
+        /// Roles to accept inside an `AXWebArea` subtree. Hint mode
+        /// uses `[behavior.web].roles`; regional mode uses the
+        /// same `regionalRoles` set (Group/Article/Section etc.
+        /// work identically in web context).
+        let webRoles: Set<String>
+        /// Reject elements whose frame is narrower than this on
+        /// the X axis.
+        let minWidth: CGFloat
+        /// Reject elements whose frame is shorter than this on
+        /// the Y axis. Separate from `minWidth` so regional mode
+        /// can demand a "200×100" landscape minimum (issue #34
+        /// — articles are wide but not very tall).
+        let minHeight: CGFloat
+        /// If `true`, the element must advertise `kAXPressAction`
+        /// (or `kAXShowMenuAction`). False for regional mode, where
+        /// the action is usually `.copyTitle` / `.focus` against a
+        /// container that doesn't press.
+        let requirePress: Bool
+    }
+
     private func walk(
         _ node: AXUIElement,
         depth: Int,
         ctx: WalkCtx,
+        policy: WalkPolicy,
         pid: pid_t,
         into out: inout [UIElement]
     ) {
@@ -532,15 +609,17 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let role = rawRole.hasPrefix("AX")
             ? String(rawRole.dropFirst(2)) : rawRole
 
-        // Inside a web area the role allow-list comes from
-        // `[behavior.web].roles`; outside, from `[behavior].roles`.
-        // Same set under default config (webRoles mirrors roles
-        // when the user hasn't opted in) — only diverges when the
-        // user explicitly tunes web context separately.
-        let activeRoles = ctx.inWebArea ? webRoles : roles
+        // Inside a web area the role allow-list switches to the
+        // policy's `webRoles`; outside, `nativeRoles`. Same set in
+        // regional mode (containers behave identically in web vs
+        // native context); hint mode diverges when the user tunes
+        // `[behavior.web].roles` separately.
+        let activeRoles = ctx.inWebArea ? policy.webRoles : policy.nativeRoles
         if activeRoles.contains(role),
-           let frame = frameOf(node),
-           supportsPress(node),
+           let frame = rawFrameOf(node,
+                                  minWidth: policy.minWidth,
+                                  minHeight: policy.minHeight),
+           !policy.requirePress || supportsPress(node),
            insideWindow(frame) {
             let title = (copyAttribute(node, kAXTitleAttribute) as? String)
                 ?? (copyAttribute(node, kAXValueAttribute) as? String)
@@ -593,7 +672,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let children = visibleChildrenIfAvailable(of: node)
         for child in children {
             walk(child, depth: depth + 1, ctx: nextCtx,
-                 pid: pid, into: &out)
+                 policy: policy, pid: pid, into: &out)
         }
     }
 
@@ -613,8 +692,17 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     /// Position + size of an AX node, in screen coordinates (top-left
     /// origin to match Cocoa's screen rect convention used by the
-    /// overlay panel).
-    private func frameOf(_ node: AXUIElement) -> CGRect? {
+    /// overlay panel). `minWidth` / `minHeight` come from the active
+    /// `WalkPolicy`; nodes failing either threshold return `nil`.
+    ///
+    /// Pass `0` for both when reading the frame of the focused
+    /// window itself (the bounds-calc helper) — the window must not
+    /// be dropped just because it's small on some axis.
+    private func rawFrameOf(
+        _ node: AXUIElement,
+        minWidth: CGFloat,
+        minHeight: CGFloat
+    ) -> CGRect? {
         guard let posAny = copyAttribute(node, kAXPositionAttribute),
               let sizeAny = copyAttribute(node, kAXSizeAttribute),
               CFGetTypeID(posAny as CFTypeRef) == AXValueGetTypeID(),
@@ -627,11 +715,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         guard AXValueGetValue(pos, .cgPoint, &p),
               AXValueGetValue(size, .cgSize, &s)
         else { return nil }
-        // Skip elements smaller than the configured floor on either
-        // axis. Default 6 matches the historical "skip 1×1 hidden
-        // anchors" floor; raise it (e.g. 20) to declutter icon-only
-        // toolbars on dense web pages.
-        if s.width < minSize || s.height < minSize { return nil }
+        if s.width < minWidth || s.height < minHeight { return nil }
         return CGRect(origin: p, size: s)
     }
 
@@ -768,6 +852,23 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         Self.isChromiumBundle(bundleID)
             || discoveredWebBundles.contains(bundleID)
     }
+
+    /// Role allow-list for regional hint mode (issue #34). Large
+    /// containers users typically want to *select* rather than
+    /// *click* — article bodies, sidebars, split panes, scrollable
+    /// outlines, embedded images. Single set, applied identically
+    /// inside and outside `AXWebArea` (the same role tokens land in
+    /// both: macOS AX surfaces HTML `<article>` / `<section>` /
+    /// `<aside>` as the same `AXGroup`-family roles).
+    static let regionalRoles: Set<String> = [
+        "Group",
+        "Article",
+        "Section",
+        "SplitGroup",
+        "ScrollArea",
+        "Outline",
+        "Image",
+    ]
 
     /// Drop elements whose top-left corner is within `proximityPx`
     /// of another already-kept element's top-left. Keeps the

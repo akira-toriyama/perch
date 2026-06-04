@@ -34,6 +34,9 @@ enum PerchApp {
           perch --activate            show hint overlay now (alt. to hotkey)
           perch --scroll              enter scroll mode (j/k/d/u/gg/G, esc)
           perch --search              enter search mode (type, then 1-9 to pick)
+          perch --regional            enter regional mode — label large
+                                      containers (article / pane / image)
+                                      instead of every clickable leaf
           perch --cancel              dismiss the overlay if showing
           perch --reload              re-read ~/.config/perch/config.toml
           perch --status              print active hotkey, alphabet, last event
@@ -89,6 +92,7 @@ enum PerchApp {
             "--help", "--validate", "--doctor",
             "--dump-ax", "--dump-ax-tree",
             "--activate", "--cancel", "--scroll", "--search",
+            "--regional",
             "--reload", "--quit", "--status",
         ]
         for a in argv where !recognised.contains(a) {
@@ -124,6 +128,7 @@ enum PerchApp {
         if argv.contains("--activate") { runClient(cmd: "activate") }
         if argv.contains("--scroll")   { runClient(cmd: "scroll") }
         if argv.contains("--search")   { runClient(cmd: "search") }
+        if argv.contains("--regional") { runClient(cmd: "regional") }
         if argv.contains("--cancel")   { runClient(cmd: "cancel") }
         if argv.contains("--reload")   { runClient(cmd: "reload") }
         if argv.contains("--quit")     { runClient(cmd: "quit") }
