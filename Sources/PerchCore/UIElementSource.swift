@@ -17,6 +17,21 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// overlay.
     func enumerate() -> [UIElement]
 
+    /// Enumerate large containers — Group / Article / Section /
+    /// SplitGroup / ScrollArea / Image / Landmark — for regional
+    /// hint mode (issue #34). Unlike `enumerate()` this does NOT
+    /// require `kAXPressAction` support, since regional picks are
+    /// typically for `.copyTitle` / `.focus` / `.rightClick`
+    /// against non-clickable containers (an article body, a
+    /// sidebar pane, an embedded image). Min frame size is the
+    /// gate that keeps "large containers only" honest.
+    ///
+    /// Returns `[]` from the default implementation so adapters
+    /// that don't need regional support (`SyntheticUIElementSource`)
+    /// don't have to implement it. `AXUIElementSource` overrides
+    /// with the real walk.
+    func enumerateRegions() -> [UIElement]
+
     /// Perform `action` against the element identified by `id`.
     /// The id was produced by the most recent `enumerate()` call;
     /// live AX handles are kept adapter-side. Returns `false`
@@ -32,4 +47,11 @@ public extension UIElementSource {
     func press(id: String) -> Bool {
         act(id: id, as: .press)
     }
+
+    /// Default: regional mode opts in. Sources without a meaningful
+    /// region notion (synthetic tests, future backends that don't
+    /// expose containers) get an empty list, and the Controller
+    /// silently dismisses the regional overlay — same fall-open
+    /// behaviour as `enumerate()` returning `[]`.
+    func enumerateRegions() -> [UIElement] { [] }
 }

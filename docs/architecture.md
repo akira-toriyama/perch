@@ -314,8 +314,15 @@ it.
   `roles`, `min-size`, `auto-click-on-unique` per frontmost
   bundle, falling through to the global `[behavior]` for
   unset keys).
-- **M3** — visible region hints (label only inside a chosen
-  region of the screen, à la Surfingkeys regional hints).
+- **M3** — regional hints (issue #34, shipped) — `perch --regional`
+  enters a hint-mode variant whose `UIElementSource.enumerateRegions()`
+  walks the AX tree with `regionalRoles` (Group / Article / Section
+  / SplitGroup / ScrollArea / Outline / Image), a 200×100 frame
+  floor, and no `kAXPressAction` requirement. Same overlay +
+  label-resolution pipeline as hint mode; action-mode modifiers
+  apply (Cmd → copyTitle is the headline use). `AXUIElementSource`
+  shares the AX walk between hint and regional via a `WalkPolicy`
+  struct.
 - **M4+** — Chrome / Electron / WKWebView support via the
   Chromium AX shim. First pass (issue #26): the AX walker
   lifts its depth ceiling once it crosses into an `AXWebArea`;
