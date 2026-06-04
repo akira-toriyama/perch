@@ -109,3 +109,24 @@ exclude-apps = []
 # anchors. Raise to 20 or so to declutter icon-only toolbars (e.g.
 # Chrome's 16×16 window-control glyphs fall out). 0 disables.
 min-size = 6
+
+
+# ---- Behaviour, web-context overrides ----------------------------
+# Role allow-list used by the AX walker INSIDE an AXWebArea
+# subtree (Chrome page bodies, Electron app content, WKWebView
+# hosts inside native apps). Outside web areas the global
+# [behavior].roles list applies. Defaults to mirroring the global
+# list — uncomment and edit to tune web context separately. Useful
+# for adding web-only roles (Heading, Combobox) without polluting
+# the hint set on native AppKit panels.
+# [behavior.web]
+# roles = [
+#     "Button",
+#     "Link",
+#     "TextField",
+#     "SearchField",
+#     "CheckBox",
+#     "RadioButton",
+#     "Heading",       # h1..h6 — jump-to-section
+#     "ComboBox",      # HTML <select>
+# ]

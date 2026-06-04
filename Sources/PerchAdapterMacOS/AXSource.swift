@@ -32,8 +32,15 @@ import PerchCore
 
 public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
-    // Roles to label, configured by `PerchConfig.roles`.
+    // Roles to label outside `AXWebArea` subtrees, configured by
+    // `[behavior].roles`.
     private var roles: Set<String>
+
+    // Roles to label inside `AXWebArea` subtrees, configured by
+    // `[behavior.web].roles`. Falls back to the native list when
+    // the user hasn't opted in — so untouched configs behave
+    // exactly like before. Swap point: `WalkCtx.inWebArea`.
+    private var webRoles: Set<String>
 
     // Bundle IDs perch refuses to label (e.g. apps with their own
     // keyboard nav). Empty in the default config.
@@ -103,12 +110,14 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     public init(config: PerchConfig) {
         self.roles = Set(config.roles)
+        self.webRoles = Set(config.webRoles)
         self.excludes = Set(config.excludeApps)
         self.minSize = CGFloat(config.minSize)
     }
 
     public func updateConfig(_ cfg: PerchConfig) {
         self.roles = Set(cfg.roles)
+        self.webRoles = Set(cfg.webRoles)
         self.excludes = Set(cfg.excludeApps)
         self.minSize = CGFloat(cfg.minSize)
     }
@@ -402,7 +411,13 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let role = rawRole.hasPrefix("AX")
             ? String(rawRole.dropFirst(2)) : rawRole
 
-        if roles.contains(role),
+        // Inside a web area the role allow-list comes from
+        // `[behavior.web].roles`; outside, from `[behavior].roles`.
+        // Same set under default config (webRoles mirrors roles
+        // when the user hasn't opted in) — only diverges when the
+        // user explicitly tunes web context separately.
+        let activeRoles = ctx.inWebArea ? webRoles : roles
+        if activeRoles.contains(role),
            let frame = frameOf(node),
            supportsPress(node),
            insideWindow(frame) {

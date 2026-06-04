@@ -61,6 +61,13 @@ public struct PerchConfig: Sendable {
     /// `>= 0`; 0 disables the check entirely.
     public let minSize: Double
 
+    /// Role allow-list used by `AXUIElementSource` while walking
+    /// inside an `AXWebArea` subtree. When `[behavior.web].roles`
+    /// is unset, this mirrors `roles` (the native default) — opt-in
+    /// only. Add `Heading`, `Combobox` here to surface web-specific
+    /// nav targets without polluting native AppKit hint sets.
+    public let webRoles: [String]
+
     // MARK: - Constants
 
     /// Resolved path of the user's config file.
@@ -94,7 +101,8 @@ public struct PerchConfig: Sendable {
         autoClickOnUnique: true,
         roles: defaultRoles,
         excludeApps: [],
-        minSize: 6
+        minSize: 6,
+        webRoles: defaultRoles
     )
 
     // MARK: - Load / parse
@@ -147,6 +155,15 @@ public struct PerchConfig: Sendable {
             max(0, $0)
         } ?? 6
 
+        // Web-context role list — `[behavior.web].roles`. TOML
+        // dotted-table headers land as flat keys in our parser, so
+        // it's `doc["behavior.web"]?[...]` (NOT
+        // `doc["behavior"]?["web"]?[...]`). Falls back to the
+        // native `roles` list so users who don't opt in see no
+        // behaviour change.
+        let webRoles = (doc["behavior.web"]?["roles"]?.asStringArray)
+            .map { $0.filter { !$0.isEmpty } } ?? roles
+
         return PerchConfig(
             hotkey: hk,
             cancelKey: cancel,
@@ -159,7 +176,8 @@ public struct PerchConfig: Sendable {
             autoClickOnUnique: autoClick,
             roles: roles,
             excludeApps: excludes,
-            minSize: minSize)
+            minSize: minSize,
+            webRoles: webRoles)
     }
 
     /// Drop duplicates and non-typeable characters, lowercase the
