@@ -57,6 +57,10 @@ enum PerchApp {
                                       element doesn't even reach the
                                       filter chain (web view content
                                       hidden by lazy AX backends, etc.)
+          perch --dump-regions        same shape as --dump-ax but lists
+                                      what `perch --regional` would label
+                                      (large containers; useful to tune
+                                      `[regional].min-width / min-height`)
           perch --help                this help
 
         EXIT CODES
@@ -90,7 +94,7 @@ enum PerchApp {
         // Rule of Repair discipline).
         let recognised: Set<String> = [
             "--help", "--validate", "--doctor",
-            "--dump-ax", "--dump-ax-tree",
+            "--dump-ax", "--dump-ax-tree", "--dump-regions",
             "--activate", "--cancel", "--scroll", "--search",
             "--regional",
             "--reload", "--quit", "--status",
@@ -105,6 +109,7 @@ enum PerchApp {
         // Standalone modes — no running daemon required.
         if argv.contains("--doctor") { runDoctor() }
         if argv.contains("--dump-ax-tree") { runDumpAXTree() }
+        if argv.contains("--dump-regions") { runDumpRegions() }
         if argv.contains("--dump-ax") { runDumpAX() }
         if argv.contains("--validate") {
             let cfg = PerchConfig.load()
@@ -259,6 +264,28 @@ enum PerchApp {
     /// for per-stage drop reasons).
     @MainActor
     private static func runDumpAX() -> Never {
+        runDump(label: "dump-ax") { $0.enumerate() }
+    }
+
+    /// Mirror of `--dump-ax` for regional hint mode (#34). Prints
+    /// every container `perch --regional` WOULD label in the
+    /// current frontmost app. Useful for triaging the
+    /// "is my `[regional].min-width` floor right for this app?"
+    /// question without entering the actual overlay.
+    @MainActor
+    private static func runDumpRegions() -> Never {
+        runDump(label: "dump-regions") { $0.enumerateRegions() }
+    }
+
+    /// Shared body of `--dump-ax` / `--dump-regions`. `enumerator`
+    /// picks which `UIElementSource` method to call; the rest of
+    /// the formatting is identical so the two outputs stay grep-able
+    /// in the same way.
+    @MainActor
+    private static func runDump(
+        label: String,
+        enumerator: (AXUIElementSource) -> [UIElement]
+    ) -> Never {
         guard AXTrust.isTrusted() else {
             FileHandle.standardError.write(Data((
                 "perch: Accessibility not granted — grant it to perch "
@@ -275,11 +302,11 @@ enum PerchApp {
             exit(1)
         }
         let bid = front.bundleIdentifier ?? "<no bundle id>"
-        print("perch dump-ax → \(bid) (pid \(front.processIdentifier))")
+        print("perch \(label) → \(bid) (pid \(front.processIdentifier))")
 
         let cfg = PerchConfig.load()
         let source = AXUIElementSource(config: cfg)
-        let elements = source.enumerate()
+        let elements = enumerator(source)
         print("found \(elements.count) labelable element(s):")
         for (i, e) in elements.enumerated() {
             let label = e.label.isEmpty

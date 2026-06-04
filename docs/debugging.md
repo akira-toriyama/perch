@@ -11,6 +11,7 @@ diagnostic commands below.
 perch --doctor           # accessibility, screens, frontmost, log file
 perch --dump-ax          # exactly what perch would label right now
 perch --dump-ax-tree     # the raw AX tree (pre-filter) of the focused window
+perch --dump-regions     # what `perch --regional` would label (issue #34)
 tail -F /tmp/perch.log   # live event stream
 ```
 
@@ -104,6 +105,26 @@ in perch's walker. **If the element IS in the raw tree but doesn't
 appear in `--dump-ax`:** the filter chain dropped it — usually the
 role allow-list (the node's role isn't in `[behavior].roles`) or
 press support (the node didn't advertise `kAXPressAction`).
+
+### `perch --dump-regions`
+
+Sibling of `--dump-ax` for regional hint mode (issue #34). Lists
+every large container `perch --regional` would label, with the
+current `[regional].min-width` / `min-height` floor applied. Same
+output shape as `--dump-ax`:
+
+```
+perch dump-regions → com.apple.News (pid 1234)
+found 7 labelable element(s):
+    1  Group           ( 0,  84  890× 615)  "Top Stories"
+    2  Article         ( 0, 700  890× 480)  "Lead article"
+    3  Group           (890,  84  390× 615)  "Sidebar"
+    …
+```
+
+Use it to tune the regional floor for a specific app: if Books
+labels nothing, lower the floor; if a GitHub timeline labels every
+post, raise it.
 
 ### `perch --validate`
 
