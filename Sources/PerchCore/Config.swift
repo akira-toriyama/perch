@@ -54,6 +54,13 @@ public struct PerchConfig: Sendable {
     public let roles: [String]
     public let excludeApps: [String]
 
+    /// Skip AX elements whose frame is smaller than this on either
+    /// axis (points). Defaults to 6 — the historical "skip a 1×1
+    /// hidden anchor" floor. Raise to declutter icon-only toolbars
+    /// (Chrome's 16×16 window controls fall out at 20). Clamped to
+    /// `>= 0`; 0 disables the check entirely.
+    public let minSize: Double
+
     // MARK: - Constants
 
     /// Resolved path of the user's config file.
@@ -86,7 +93,8 @@ public struct PerchConfig: Sendable {
         overlayAnimEnabled: true,
         autoClickOnUnique: true,
         roles: defaultRoles,
-        excludeApps: []
+        excludeApps: [],
+        minSize: 6
     )
 
     // MARK: - Load / parse
@@ -133,6 +141,11 @@ public struct PerchConfig: Sendable {
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
             .map { $0.filter { !$0.isEmpty } } ?? defaultRoles
         let excludes = doc["behavior"]?["exclude-apps"]?.asStringArray ?? []
+        // Clamp negatives to 0 (per typo-tolerance policy);
+        // 0 disables the size floor entirely.
+        let minSize = (doc["behavior"]?["min-size"]?.asDouble).map {
+            max(0, $0)
+        } ?? 6
 
         return PerchConfig(
             hotkey: hk,
@@ -145,7 +158,8 @@ public struct PerchConfig: Sendable {
             overlayAnimEnabled: anim,
             autoClickOnUnique: autoClick,
             roles: roles,
-            excludeApps: excludes)
+            excludeApps: excludes,
+            minSize: minSize)
     }
 
     /// Drop duplicates and non-typeable characters, lowercase the
