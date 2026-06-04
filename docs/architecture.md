@@ -313,10 +313,13 @@ it.
   region of the screen, à la Surfingkeys regional hints).
 - **M4+** — Chrome / Electron / WKWebView support via the
   Chromium AX shim. First pass (issue #26): the AX walker
-  lifts its depth ceiling once it crosses into an `AXWebArea`,
-  and `--dump-ax-tree` exposes the raw tree for diagnosing
-  what AX actually reports for a given web shell. Later
-  iterations may add per-backend adapters (a
+  lifts its depth ceiling once it crosses into an `AXWebArea`;
+  the Controller pre-warms the renderer-AX on Chromium app
+  activation (issue #28) so the first hotkey after focus-
+  change sees the populated page tree rather than just the
+  browser chrome; `--dump-ax-tree` exposes the raw tree for
+  diagnosing what AX actually reports for a given web shell.
+  Later iterations may add per-backend adapters (a
   `PerchAdapterChrome` would converse with Chrome via its
   WebDriver-style protocol) when AX coverage falls short.
 

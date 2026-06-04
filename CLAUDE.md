@@ -271,6 +271,21 @@ frontmost app's focused window**. The seam is captured at
   `NSVisualEffectView.isFlipped` becomes overridable (today it
   isn't). Same constraint applies to anything else we ever put
   in the mask layer (scroll-area boxes, search header strip, …).
+- **Chromium / Electron renderer-AX is pre-warmed on app
+  activation** (`AXUIElementSource.prewarm`). Chrome's renderer
+  populates its AX tree asynchronously the first time an AX
+  client queries it — without the prewarm the user's *first*
+  hotkey after switching to Chrome enumerates only the browser
+  shell (no page links / buttons). Controller hooks
+  `NSWorkspace.didActivateApplicationNotification` and calls
+  `prewarm(pid:bundleID:)` for any Chromium-detected bundle;
+  the call is gated by an allow-list (`isChromiumBundle`),
+  idempotent per pid (one-shot per daemon lifetime), and
+  performs the minimum AX query needed to register interest
+  (focused window + its direct children). Logged as
+  `ax: prewarm → <bundle>`. Don't bypass this for native AppKit
+  apps — Office apps reroute event handling under
+  `AXEnhancedUserInterface` and would slow.
 - **AX enumeration runs through a 5-stage filter chain** (see
   `docs/architecture.md` → "AX filter chain"):
   visible-children walk → role allow-list → `supportsPress` →

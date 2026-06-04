@@ -89,6 +89,13 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// the wake line every activation.
     private var wokenPids: Set<pid_t> = []
 
+    /// Pids we've explicitly prewarm-walked at app-activation time.
+    /// Chrome's renderer-AX populates asynchronously after the
+    /// first query — without prewarm the first hotkey on a freshly-
+    /// focused window enumerates only the browser chrome (issue
+    /// #28). One-shot per pid; daemon restart resets.
+    private var prewarmedPids: Set<pid_t> = []
+
     public init(config: PerchConfig) {
         self.roles = Set(config.roles)
         self.excludes = Set(config.excludeApps)
@@ -97,6 +104,62 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     public func updateConfig(_ cfg: PerchConfig) {
         self.roles = Set(cfg.roles)
         self.excludes = Set(cfg.excludeApps)
+    }
+
+    /// Wake the renderer-accessibility tree of a Chromium / Electron
+    /// app proactively, so the *first* hotkey activation after the
+    /// app gains focus sees the populated `AXWebArea` instead of
+    /// just the browser chrome.
+    ///
+    /// Chrome's renderer-AX populates **asynchronously** after the
+    /// first AX query lands. Without prewarm the user pattern is
+    /// "switch to Chrome → press hotkey → see ~20 hints (browser
+    /// shell only) → dismiss → press hotkey → see 180+ hints
+    /// (page included)". This call removes the first miss.
+    ///
+    /// Gated to the same bundle-id allow-list as the Enhanced wake
+    /// in `enumerate()` — Office apps would slow under the wake
+    /// signal, and the prewarm is only useful for apps that *have*
+    /// a renderer to wake. No-op for everything else, no-op for
+    /// already-prewarmed pids (one-shot per daemon lifetime).
+    ///
+    /// Side effects:
+    ///   - flips `AXManualAccessibility` + (Chromium-gated)
+    ///     `AXEnhancedUserInterface` on the app element
+    ///   - reads `kAXFocusedWindow` and its `kAXChildren` — the
+    ///     minimal query the renderer needs to register interest
+    ///   - leaves no UIElement state behind (does not touch
+    ///     `liveById` / `nextSeq` — those are owned by `enumerate()`)
+    public func prewarm(pid: pid_t, bundleID: String) {
+        guard Self.isChromiumBundle(bundleID) else { return }
+        guard !prewarmedPids.contains(pid) else { return }
+        prewarmedPids.insert(pid)
+
+        let appElt = AXUIElementCreateApplication(pid)
+        // Mirror the wake calls in `enumerate()` — same rationale
+        // (Chrome rejects but the act of accessing the element is
+        // itself the wake trigger; future Chromium builds might
+        // honour the attribute).
+        let errM = AXUIElementSetAttributeValue(
+            appElt, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        let errE = AXUIElementSetAttributeValue(
+            appElt, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+
+        // Lightweight AX query: focused window + its direct
+        // children. Chromium populates the renderer-AX from this
+        // hop; deeper walking happens later under enumerate().
+        var focusedRef: CFTypeRef?
+        _ = AXUIElementCopyAttributeValue(
+            appElt, kAXFocusedWindowAttribute as CFString, &focusedRef)
+        if let f = focusedRef,
+           CFGetTypeID(f) == AXUIElementGetTypeID() {
+            let window = f as! AXUIElement
+            var kidsRef: CFTypeRef?
+            _ = AXUIElementCopyAttributeValue(
+                window, kAXChildrenAttribute as CFString, &kidsRef)
+        }
+        Log.line("ax: prewarm → \(bundleID) "
+                 + "manual=\(errM.rawValue) enhanced=\(errE.rawValue)")
     }
 
     // MARK: - UIElementSource
