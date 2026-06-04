@@ -248,6 +248,17 @@ typo で hint mode が壊れない設計。`perch --validate` が明示の検証
 で解決する。
 - **Don't call it:** per-bundle config, app-specific settings, アプリ別設定
 
+### WebArea discovery
+**walker が `AXWebArea` を観測した bundle を runtime allow-list に昇格**
+（`AXUIElementSource.discoveredWebBundles`）。静的 `chromiumPrefixes` に
+無い WKWebView 内包アプリ（Books, Mac App Store, Slack の通知フライアウト,
+ネイティブ + 埋め込み Web view）が対象。session-lifetime（daemon 再起動で
+リセット）。promote 後は `prewarm` / `enumerate` の wake gate を
+Chromium bundle と同じ扱いで通過。`/tmp/perch.log` の
+`ax: WebArea in non-listed bundle <bid> → promoted` と
+`/tmp/perch.status` の `discovered-web-bundles:` 行が triage 用の surface。
+- **Don't call it:** runtime allow-list (general), 動的検出, dynamic detection
+
 ---
 
 ## デバッグ / ログ

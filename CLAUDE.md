@@ -289,13 +289,39 @@ frontmost app's focused window**. The seam is captured at
   shell (no page links / buttons). Controller hooks
   `NSWorkspace.didActivateApplicationNotification` and calls
   `prewarm(pid:bundleID:)` for any Chromium-detected bundle;
-  the call is gated by an allow-list (`isChromiumBundle`),
+  the call is gated by `isWebBearing(_)` (static
+  `isChromiumBundle` allow-list ∪ `discoveredWebBundles`),
   idempotent per pid (one-shot per daemon lifetime), and
   performs the minimum AX query needed to register interest
   (focused window + its direct children). Logged as
   `ax: prewarm → <bundle>`. Don't bypass this for native AppKit
   apps — Office apps reroute event handling under
   `AXEnhancedUserInterface` and would slow.
+- **WebArea discovery promotes WKWebView hosts** (issue #38).
+  Native AppKit apps that embed a WKWebView (Books, Mac App
+  Store, Slack notification flyouts, login web views) aren't
+  in `chromiumPrefixes`, but they do surface an `AXWebArea`
+  the moment the walker descends through them. On the first
+  such sighting the bundle is added to
+  `discoveredWebBundles` (session-lifetime) so subsequent
+  activations get the wake / prewarm path too. Logged as
+  `ax: WebArea in non-listed bundle <bid> → promoted` once
+  per bundle; the live list is also rewritten into
+  `/tmp/perch.status` (`discovered-web-bundles:` line) so
+  `perch --status` can show what perch has learned. **Safe to
+  extend the Enhanced wake gate this way** — observation-based,
+  so Office (no WebArea) never lands there.
+- **Manual and Enhanced wake have independent per-pid latches**
+  (`wokenPids` / `enhancedPids`). Splitting them is what lets
+  WebArea discovery promote a bundle and have the Enhanced
+  flip *fire on the next enumerate* — if both shared one latch
+  (the original design), the Manual flip on the first
+  activation would mark the pid "woken" before discovery
+  happened, and the Enhanced branch would then never see the
+  promoted state. `clearRendererWake()` reverses Enhanced
+  using `enhancedPids` (the pids we actually flipped), not
+  `wokenPids`. `prewarm()` updates both latches so a
+  subsequent `enumerate()` doesn't double-flip.
 - **AX enumeration runs through a 5-stage filter chain** (see
   `docs/architecture.md` → "AX filter chain"):
   visible-children walk → role allow-list → `supportsPress` →

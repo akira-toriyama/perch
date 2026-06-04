@@ -324,6 +324,13 @@ it.
   change sees the populated page tree rather than just the
   browser chrome; `--dump-ax-tree` exposes the raw tree for
   diagnosing what AX actually reports for a given web shell.
+  Issue #38 generalises the bundle-id allow-list with
+  *observation-based discovery*: when the walker encounters
+  an `AXWebArea` in a bundle outside `chromiumPrefixes`
+  (Books, Mac App Store, Slack notification flyouts, native
+  apps with embedded WKWebView marketing panes), the bundle
+  is promoted in-memory for the rest of the daemon lifetime
+  so subsequent activations get the wake / prewarm path too.
   Later iterations may add per-backend adapters (a
   `PerchAdapterChrome` would converse with Chrome via its
   WebDriver-style protocol) when AX coverage falls short.
