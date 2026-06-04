@@ -17,6 +17,15 @@
 #                              build + foreground; it sets PERCH_DEBUG
 #                              in the binary's env, it is not a binary
 #                              flag.)
+#                              If a persistent signing identity exists
+#                              (`./setup-signing-cert.sh` was run
+#                              earlier → .signing-id file present), the
+#                              debug binary is re-signed with it after
+#                              the build so the Accessibility (TCC)
+#                              grant survives. Without that the
+#                              symptom is `kAXErrorAPIDisabled` /
+#                              "hints stopped appearing" after every
+#                              rebuild.
 #   ./scripts/dev.sh --no-tail just stop + rebuild + run (no tail).
 #                              Pair with `tail -f /tmp/perch.log` in
 #                              a separate pane.
@@ -47,6 +56,18 @@ echo "[dev] stopping any running perch …"
 if [[ "$MODE" == "debug" ]]; then
     echo "[dev] swift build (debug) …"
     swift build
+    # Sign the debug binary with the persistent identity if one is
+    # available. Without this `swift build` ad-hoc re-signs every
+    # invocation → TCC sees each build as a new app → Accessibility
+    # grant is dropped → hints silently stop working (every AX call
+    # returns kAXErrorAPIDisabled = -25211). Falling back to the
+    # ad-hoc default preserves the historical behaviour for users
+    # who haven't run ./setup-signing-cert.sh yet.
+    if [[ -f .signing-id ]]; then
+        ID="$(cat .signing-id)"
+        codesign --force --sign "$ID" .build/debug/perch > /dev/null 2>&1
+        echo "[dev] signed .build/debug/perch with: $ID"
+    fi
     : > /tmp/perch.log   # truncate so the tail starts clean
     echo "[dev] launching PERCH_DEBUG=1 .build/debug/perch …"
     # Run in the background; Ctrl-C on `tail` won't kill it. The

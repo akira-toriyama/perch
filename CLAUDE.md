@@ -396,9 +396,14 @@ filter / AX enumeration → labeling → dispatch).
 
 **AX grant after rebuild:** `swift build` ad-hoc re-signs the
 binary, which can drop the Accessibility grant — the symptom is
-`AXIsProcessTrusted() = false` in `perch --doctor`. Re-grant in
-System Settings, or use the persistent cert
-(`setup-signing-cert.sh`) so the grant survives. Use
+`AXIsProcessTrusted() = false` in `perch --doctor`, or
+`kAXErrorAPIDisabled` (-25211) on every AX call in
+`/tmp/perch.log` while the user reports "hints stopped appearing".
+Persistent fix: run `./setup-signing-cert.sh` once;
+`scripts/dev.sh --debug` then re-signs the debug binary with that
+identity after each build so the grant carries over.
+`package.sh` (used by `./run.sh`) already does the same for
+Perch.app. Use
 `pgrep -lf perch` to see what's running and `./stop.sh` to clear
 stray instances before relaunching.
 
