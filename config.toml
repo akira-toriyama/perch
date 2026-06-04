@@ -103,3 +103,9 @@ roles = [
 # Bundle IDs to ignore (perch won't activate over these apps).
 # Useful for things that handle their own keyboard nav.
 exclude-apps = []
+
+# Skip AX elements whose frame is smaller than this on either axis
+# (points). Default 6 — historical floor that drops 1×1 hidden
+# anchors. Raise to 20 or so to declutter icon-only toolbars (e.g.
+# Chrome's 16×16 window-control glyphs fall out). 0 disables.
+min-size = 6

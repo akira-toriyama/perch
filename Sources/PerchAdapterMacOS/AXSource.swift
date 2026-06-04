@@ -39,6 +39,11 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     // keyboard nav). Empty in the default config.
     private var excludes: Set<String>
 
+    // Floor for AX-element frame size (points, either axis).
+    // Anything smaller falls out of `frameOf` and never reaches the
+    // role / press / window filters. Driven by `[behavior].min-size`.
+    private var minSize: CGFloat
+
     // (id → live AXUIElement) — only valid for the most recent
     // enumeration. Re-cleared at the top of every `enumerate()`.
     private var liveById: [String: AXUIElement] = [:]
@@ -99,11 +104,13 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     public init(config: PerchConfig) {
         self.roles = Set(config.roles)
         self.excludes = Set(config.excludeApps)
+        self.minSize = CGFloat(config.minSize)
     }
 
     public func updateConfig(_ cfg: PerchConfig) {
         self.roles = Set(cfg.roles)
         self.excludes = Set(cfg.excludeApps)
+        self.minSize = CGFloat(cfg.minSize)
     }
 
     /// Wake the renderer-accessibility tree of a Chromium / Electron
@@ -436,7 +443,11 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         guard AXValueGetValue(pos, .cgPoint, &p),
               AXValueGetValue(size, .cgSize, &s)
         else { return nil }
-        if s.width < 6 || s.height < 6 { return nil }   // skip dots
+        // Skip elements smaller than the configured floor on either
+        // axis. Default 6 matches the historical "skip 1×1 hidden
+        // anchors" floor; raise it (e.g. 20) to declutter icon-only
+        // toolbars on dense web pages.
+        if s.width < minSize || s.height < minSize { return nil }
         return CGRect(origin: p, size: s)
     }
 
