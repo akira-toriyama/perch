@@ -118,6 +118,21 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// #28). One-shot per pid; daemon restart resets.
     private var prewarmedPids: Set<pid_t> = []
 
+    /// Bundle id of the most recent `enumerate()` invocation
+    /// (assigned at the top of `enumerate()` once the frontmost
+    /// app is resolved). Exposed read-only so `Controller` can pass
+    /// the SAME bundle id `enumerate()` made its per-app decisions
+    /// against down to `OverlayWindow.show(bundleID:)` — without
+    /// re-resolving `NSWorkspace.frontmostApplication`, which could
+    /// race with a focus switch and produce inconsistent overrides
+    /// across the enumerate / auto-click branches.
+    ///
+    /// `nil` until the first enumeration; never cleared between
+    /// enumerations (a stale value past a subsequent enumerate would
+    /// be overwritten by the new one anyway, and the Controller
+    /// only reads this immediately after `enumerate()`).
+    public private(set) var lastEnumeratedBundleID: String?
+
     public init(config: PerchConfig) {
         self.config = config
         self.roles = Set(config.roles)
@@ -235,6 +250,11 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return []
         }
         Log.debug("ax: front=\(bundleID) pid=\(front.processIdentifier)")
+        // Capture the bundle id this enumeration is committed to so
+        // downstream consumers (Controller → OverlayWindow.show) can
+        // resolve per-app overrides against the SAME identity
+        // `enumerate()` used — see `lastEnumeratedBundleID` doc.
+        self.lastEnumeratedBundleID = bundleID
 
         // Apply per-app overrides for the duration of this enumeration.
         // Resolved from `config` against the now-known frontmost

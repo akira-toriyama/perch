@@ -186,14 +186,16 @@ final class Controller {
             screenSize: screen)
         active = true
         Log.line("activate: \(hints.count) hint(s)")
-        // Pass the frontmost bundleID so `auto-click-on-unique`
-        // resolves against the per-app override (#37). Re-resolving
-        // here is fine — `source.enumerate()` already did the heavy
-        // walk; this is just the lookup against the live workspace.
-        let bid = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        // Pass through the bundle id that `enumerate()` just resolved
+        // (per `AXUIElementSource.lastEnumeratedBundleID`), NOT a
+        // freshly-re-resolved `NSWorkspace.frontmostApplication`. The
+        // two would normally agree, but a focus switch between
+        // `enumerate()` and this line would otherwise let per-app
+        // `roles` / `min-size` apply to (say) Chrome while
+        // `auto-click-on-unique` resolved against Word's override.
         overlay.show(
             hints: hints,
-            bundleID: bid,
+            bundleID: source.lastEnumeratedBundleID,
             onResolve: { [weak self] hint, action in
                 guard let self else { return }
                 self.active = false
