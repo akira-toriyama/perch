@@ -254,6 +254,11 @@ final class Controller {
                     self.enterSearchMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
+                    // Reverse the renderer-AX wake on every
+                    // Chromium / Electron app we touched, so
+                    // perch doesn't leak `AXEnhancedUserInterface
+                    // = true` past its own lifetime (#33).
+                    self.source.clearRendererWake()
                     exit(0)
                 default:
                     Log.line("controller: unknown ipc command \"\(cmd)\"")
