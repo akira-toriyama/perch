@@ -323,6 +323,14 @@ it.
   apply (Cmd → copyTitle is the headline use). `AXUIElementSource`
   shares the AX walk between hint and regional via a `WalkPolicy`
   struct.
+- **M4** — menu-bar search (issue #52, shipped) — `perch --menu`
+  reuses `SearchMode` against `UIElementSource.enumerateMenu()`,
+  which walks `kAXMenuBarAttribute` recursively and emits each
+  pressable menu item with its full `"File > Save As…"` path as
+  the label. Renders matches as a centred vertical list (menu
+  items have no on-screen frame until opened — the `.zero` frame
+  rules out pill-over-element placement). The `SearchRenderMode`
+  enum gates between pills and list at draw time.
 - **M4+** — Chrome / Electron / WKWebView support via the
   Chromium AX shim. First pass (issue #26): the AX walker
   lifts its depth ceiling once it crosses into an `AXWebArea`;

@@ -110,7 +110,8 @@ watches the file for changes when running as a daemon).
 | `--scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
 | `--search` | client | enter search mode (type text, `1-9` picks a match) |
 | `--regional` | client | enter regional mode — label large containers (article / pane / image) instead of every clickable leaf |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional) |
+| `--menu` | client | enter menu-search mode — fuzzy-match every menu bar item (deep / hidden commands incl.); pick with `1-9` |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -165,6 +166,26 @@ it without firing.
 A digit typed when the match list is empty (no current matches)
 is treated as a query character so you can still search for
 "v2" / "API 3" / etc.
+
+### Menu-search mode
+
+`perch --menu` enters a `--search` variant whose target set is
+**every menu bar item** in the frontmost app, recursively. Matches
+are rendered as a Spotlight-style vertical list (menu items have
+no on-screen position until macOS opens the menu, so per-item pill
+placement doesn't apply).
+
+Use it to reach deep / hidden commands by name without mousing
+through the menu:
+
+- Safari `Develop > Empty Caches` → type `"empt"` → press `1`
+- Xcode `Editor > Refactor > Rename` → type `"rename"`
+- System Settings sidebar items, app menus that need 3 levels of
+  hover to reach — all surface in one keystroke + 1-9 pick.
+
+Action-mode modifiers behave as in `--search`: Cmd-1 copies the
+menu path, Shift-1 opens its context menu, Alt-1 focuses without
+firing, Cmd+Shift-1 fires + re-enters menu mode for chaining.
 
 ### Regional mode
 

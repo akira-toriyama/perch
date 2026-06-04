@@ -333,7 +333,7 @@ frontmost app's focused window**. The seam is captured at
   Log.line (always on) so users can attach `/tmp/perch.log` to
   bug reports without re-running with `PERCH_DEBUG=1`.
 
-### Scroll mode + search mode + regional mode
+### Scroll mode + search mode + regional mode + menu mode
 
 - **`ScrollMode` and `SearchMode` are parallel to
   `OverlayWindow`** — each owns its own KeyTap + (for search)
@@ -367,6 +367,17 @@ frontmost app's focused window**. The seam is captured at
   / Raycast). **The shared `runHintFlow` is the right seam for
   any future "different enumerator, same pipeline" mode** —
   don't fork the overlay path for each new flavor.
+- **Menu mode (issue #52)** is a `SearchMode` variant — same
+  filter + KeyTap, different enumerator (`enumerateMenu()`
+  walks `kAXMenuBarAttribute` recursively) and a different
+  `SearchRenderMode` (`.verticalList` instead of pills over
+  frames, because menu items have no on-screen frame until
+  opened). `Controller.startSearchSession(…)` is the shared
+  seam between `--search` and `--menu`; future search-flavour
+  modes (window switcher, emoji picker) should slot in there
+  rather than forking SearchMode. Menu items dispatch via the
+  same `AXUIElementPerformAction(kAXPressAction)` as everything
+  else — no special menu IPC.
 
 ### Logging
 
@@ -477,7 +488,8 @@ stray instances before relaunching.
 - **Flags**: `--validate` / `--doctor` / `--dump-ax` /
   `--dump-ax-tree` / `--dump-regions` / `--help` (standalone),
   `--activate` / `--scroll` / `--search` / `--regional` /
-  `--cancel` / `--reload` / `--quit` / `--status` (client). There is no `--debug` flag — verbose
+  `--menu` / `--cancel` / `--reload` / `--quit` / `--status`
+  (client). There is no `--debug` flag — verbose
   logging is driven by the `PERCH_DEBUG` env var (see Logging).
   Any unrecognised flag exits `2` with a stderr message (no
   silent fallback — facet's *Rule of Repair* discipline).
