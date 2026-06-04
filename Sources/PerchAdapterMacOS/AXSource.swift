@@ -80,6 +80,15 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// open rather than hiding everything).
     private var windowFrame: CGRect = .zero
 
+    /// Pids on which we've already requested AX renderer wake-up
+    /// (`AXManualAccessibility = true`). Chrome / Electron expose
+    /// nothing under their `AXWebArea` until an AX client signals
+    /// interest via this attribute — without it, the page DOM is
+    /// invisible to perch (see issue #26 — empty raw dump for
+    /// Chrome). Set once per pid, log once, so log scans don't see
+    /// the wake line every activation.
+    private var wokenPids: Set<pid_t> = []
+
     public init(config: PerchConfig) {
         self.roles = Set(config.roles)
         self.excludes = Set(config.excludeApps)
@@ -109,6 +118,37 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         Log.debug("ax: front=\(bundleID) pid=\(front.processIdentifier)")
 
         let appElt = AXUIElementCreateApplication(front.processIdentifier)
+
+        // Wake the renderer-accessibility tree on Chromium-based
+        // apps (Chrome / Edge / Brave / Arc / VS Code / Slack /
+        // Discord / Electron in general). They keep their page /
+        // content AXWebArea collapsed until an AX client signals
+        // interest by setting `AXManualAccessibility = true` on
+        // the application element. Without this, the raw AX tree
+        // for the Chrome window has zero `*WEB*` markers — the
+        // page DOM is completely invisible. Setting it is the
+        // documented, low-impact knob (lighter than
+        // `AXEnhancedUserInterface`, which is what VoiceOver flips
+        // and which is known to cause perf issues in some apps).
+        //
+        // First activation after wake may still see an empty
+        // subtree — Chrome populates the renderer AX
+        // asynchronously, typically within a few hundred ms. By
+        // the second activation the content is there.
+        //
+        // Set unconditionally (not just Chromium pids) — apps that
+        // don't recognise the attribute ignore it. Logged once per
+        // pid so the line doesn't repeat every activation.
+        if !wokenPids.contains(front.processIdentifier) {
+            let err = AXUIElementSetAttributeValue(
+                appElt,
+                "AXManualAccessibility" as CFString,
+                kCFBooleanTrue)
+            wokenPids.insert(front.processIdentifier)
+            Log.line("ax: AXManualAccessibility=true → "
+                     + "\(bundleID) (err=\(err.rawValue))")
+        }
+
         guard let focused = copyAttribute(appElt, kAXFocusedWindowAttribute),
               CFGetTypeID(focused as CFTypeRef) == AXUIElementGetTypeID()
         else {

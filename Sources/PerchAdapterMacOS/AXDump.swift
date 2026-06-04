@@ -46,6 +46,22 @@ public enum AXDump {
               to: &out)
 
         let app = AXUIElementCreateApplication(front.processIdentifier)
+
+        // Mirror AXSource: wake renderer-accessibility on Chromium /
+        // Electron apps before the walk, so the standalone dump
+        // surfaces the same `*WEB*` subtree the daemon would see.
+        // First-run latency caveat applies — Chrome populates the
+        // renderer AX asynchronously. If the first dump shows no
+        // `*WEB*` marker on a Chromium app, wait a second and
+        // re-run.
+        let wakeErr = AXUIElementSetAttributeValue(
+            app,
+            "AXManualAccessibility" as CFString,
+            kCFBooleanTrue)
+        print("ax: AXManualAccessibility=true → \(bid) "
+              + "(err=\(wakeErr.rawValue))",
+              to: &out)
+
         guard let focused = copy(app, kAXFocusedWindowAttribute),
               CFGetTypeID(focused as CFTypeRef) == AXUIElementGetTypeID()
         else {
@@ -85,8 +101,16 @@ public enum AXDump {
             ? String(rawRole.dropFirst(2)) : rawRole
         let frame = frame(node)
         let actions = actionNames(node)
-        let kids = (copy(node, kAXChildrenAttribute) as? [AXUIElement])?.count ?? 0
-        let vKids = (copy(node, kAXVisibleChildrenAttribute) as? [AXUIElement])?.count ?? 0
+
+        // "-" means the attribute is absent on this node; "0" means
+        // present but empty. Distinguishing matters for triage:
+        // Chrome's pre-wake nodes report `kAXVisibleChildren` as
+        // absent (-), not empty (0).
+        let kidsAttr = copy(node, kAXChildrenAttribute) as? [AXUIElement]
+        let vKidsAttr = copy(node, kAXVisibleChildrenAttribute) as? [AXUIElement]
+        let kidsStr = kidsAttr.map { "\($0.count)" } ?? "-"
+        let vKidsStr = vKidsAttr.map { "\($0.count)" } ?? "-"
+
         let title = (copy(node, kAXTitleAttribute) as? String)
             ?? (copy(node, kAXValueAttribute) as? String)
             ?? ""
@@ -106,18 +130,23 @@ public enum AXDump {
         let actionsStr = actions.isEmpty ? "·" : actions.joined(separator: ",")
         let marker = isWeb ? "  *WEB*" : ""
         print("\(indent)[d=\(depth)] \(role) \(frameStr)  "
-              + "kids=\(kids) vis=\(vKids)  actions=[\(actionsStr)]"
+              + "kids=\(kidsStr) vis=\(vKidsStr)  actions=[\(actionsStr)]"
               + "\(marker)\(titleSnippet)",
               to: &out)
 
         stats.nodes += 1
 
-        // Prefer kAXVisibleChildren — same policy as AXSource. Fall
-        // back to kAXChildren so the dump still surfaces nodes that
-        // don't implement the visible-children attribute.
-        let children = (copy(node, kAXVisibleChildrenAttribute) as? [AXUIElement])
-            ?? (copy(node, kAXChildrenAttribute) as? [AXUIElement])
-            ?? []
+        // Same fallback rule as AXSource: use kAXVisibleChildren
+        // only when it's present AND non-empty. An empty visible
+        // list usually means "AX-aware container, but we choose
+        // to expose nothing" — fall through to plain kAXChildren
+        // rather than declare the subtree empty.
+        let children: [AXUIElement]
+        if let v = vKidsAttr, !v.isEmpty {
+            children = v
+        } else {
+            children = kidsAttr ?? []
+        }
         for child in children {
             walk(child, depth: depth + 1, stats: &stats, to: &out)
         }
