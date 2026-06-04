@@ -139,6 +139,17 @@ final class Controller {
                     _ = self.source.act(id: element.id, as: action)
                     self.writeStatus(
                         reason: "search → \(action.rawValue)")
+                    // Continuous-follow: re-enter search mode so the
+                    // user can chain actions across the list (do
+                    // something to every "draft PR", every Slack
+                    // notification, …) without re-pressing the
+                    // hotkey between each. Re-entry starts with an
+                    // empty query — same as a fresh `--search`.
+                    if action == .pressContinuous {
+                        DispatchQueue.main.async { [weak self] in
+                            self?.enterSearchMode()
+                        }
+                    }
                 }
             },
             onExit: { [weak self] in
@@ -183,6 +194,18 @@ final class Controller {
                 _ = self.source.act(id: hint.element.id, as: action)
                 self.writeStatus(
                     reason: "fired \(hint.keys) (\(action.rawValue))")
+                // Continuous-follow: after firing, re-enter hint
+                // mode immediately so the user can chain actions
+                // (open 5 links in a row, close 8 notifications,
+                // …) without re-pressing the hotkey between each.
+                // The re-entry is deferred to the next runloop tick
+                // so the dispatched AX action gets a moment to land
+                // before we walk the (possibly-changed) tree again.
+                if action == .pressContinuous {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.activate()
+                    }
+                }
             },
             onCancel: { [weak self] in
                 self?.active = false

@@ -131,6 +131,7 @@ only the dispatch verb at the end differs:
 | `Shift` | `.rightClick` | `kAXShowMenuAction` (context menu) |
 | `Cmd` | `.copyTitle` | `kAXTitle` (or `kAXValue`) → `NSPasteboard.general` |
 | `Alt` | `.focus` | `kAXFocusedAttribute = true` (focus only, no fire) |
+| `Cmd+Shift` | `.pressContinuous` | `kAXPressAction` + Controller re-enters hint mode (continuous-follow) |
 
 `Ctrl` is reserved for the user's own shortcuts (Ctrl-C / system
 bindings) and exits hint mode without swallowing the keystroke.

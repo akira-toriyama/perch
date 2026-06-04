@@ -241,11 +241,20 @@ frontmost app's focused window**. The seam is captured at
   Cmd / Alt / Shift held during the resolving keystroke route
   the resolution through `HintAction` (`.copyTitle` / `.focus` /
   `.rightClick` respectively) instead of the default `.press`.
+  **Cmd + Shift = `.pressContinuous`** — same AX dispatch as
+  `.press`, but the Controller re-enters hint mode immediately
+  after firing so the user can chain actions (open 5 PRs in a
+  row, close 8 notifications, …) without re-pressing the
+  hotkey between each. Search mode follows the same mapping —
+  Cmd+Shift in `--search` picks the match AND re-enters search
+  mode with an empty query for the next round.
   `actionFor(flags:)` in
   [Sources/PerchAdapterMacOS/OverlayWindow.swift](Sources/PerchAdapterMacOS/OverlayWindow.swift)
-  is the single source of truth for the mapping. Ctrl is the
-  only modifier that still cancels — reserved for the user's
-  own shortcuts (Ctrl-C etc.) so system bindings keep working.
+  is the single source of truth for the hint-mode mapping;
+  `SearchMode.fire(_:flags:)` mirrors it — keep them in sync.
+  Ctrl is the only modifier that still cancels — reserved for
+  the user's own shortcuts (Ctrl-C etc.) so system bindings
+  keep working.
 - **Panel covers the UNION of every connected NSScreen**, not
   `NSScreen.main.frame`. AX positions arrive in CG global coords
   anchored to the primary display's top-left, so a pill for a

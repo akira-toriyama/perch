@@ -184,9 +184,14 @@ public final class SearchMode {
 
     private func fire(_ element: UIElement, flags: CGEventFlags) {
         let action: HintAction
-        if flags.contains(.maskCommand)   { action = .copyTitle }
-        else if flags.contains(.maskAlternate) { action = .focus }
-        else if flags.contains(.maskShift)     { action = .rightClick }
+        // Modifier precedence mirrors OverlayWindow.actionFor — keep
+        // them in sync. Cmd+Shift wins over plain Cmd so the more
+        // specific combo (.pressContinuous) doesn't get masked.
+        if flags.contains(.maskCommand) && flags.contains(.maskShift) {
+            action = .pressContinuous
+        } else if flags.contains(.maskCommand)   { action = .copyTitle }
+        else if flags.contains(.maskAlternate)   { action = .focus }
+        else if flags.contains(.maskShift)       { action = .rightClick }
         else { action = .press }
         stop()
         onResolve(element, action)
