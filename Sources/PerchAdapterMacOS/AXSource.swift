@@ -122,31 +122,52 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // Wake the renderer-accessibility tree on Chromium-based
         // apps (Chrome / Edge / Brave / Arc / VS Code / Slack /
         // Discord / Electron in general). They keep their page /
-        // content AXWebArea collapsed until an AX client signals
-        // interest by setting `AXManualAccessibility = true` on
-        // the application element. Without this, the raw AX tree
-        // for the Chrome window has zero `*WEB*` markers — the
-        // page DOM is completely invisible. Setting it is the
-        // documented, low-impact knob (lighter than
-        // `AXEnhancedUserInterface`, which is what VoiceOver flips
-        // and which is known to cause perf issues in some apps).
+        // content `AXWebArea` collapsed until an AX client signals
+        // interest. Without a wake the raw AX tree for a Chrome
+        // window has zero `*WEB*` markers — the page DOM is
+        // completely invisible to perch.
+        //
+        // Two attributes flip the switch:
+        //
+        //   1. `AXManualAccessibility` — the lighter knob,
+        //      preferred when the app supports it. Chrome currently
+        //      returns `kAXErrorAttributeUnsupported` (-25205) when
+        //      we try to set it on the app element, so this is
+        //      kept as best-effort.
+        //   2. `AXEnhancedUserInterface` — what VoiceOver flips.
+        //      Chromium / Electron honour it. Known to cause
+        //      sustained perf hits in Microsoft Office apps (Word
+        //      / Excel reroute event handling through assistive
+        //      tech APIs while it's on), so we **only** set this
+        //      on bundles we recognise as Chromium / Electron.
         //
         // First activation after wake may still see an empty
         // subtree — Chrome populates the renderer AX
         // asynchronously, typically within a few hundred ms. By
         // the second activation the content is there.
         //
-        // Set unconditionally (not just Chromium pids) — apps that
-        // don't recognise the attribute ignore it. Logged once per
-        // pid so the line doesn't repeat every activation.
+        // Logged once per pid so the line doesn't repeat every
+        // activation.
         if !wokenPids.contains(front.processIdentifier) {
-            let err = AXUIElementSetAttributeValue(
+            let errM = AXUIElementSetAttributeValue(
                 appElt,
                 "AXManualAccessibility" as CFString,
                 kCFBooleanTrue)
+            let isChromium = Self.isChromiumBundle(bundleID)
+            let errEStr: String
+            if isChromium {
+                let errE = AXUIElementSetAttributeValue(
+                    appElt,
+                    "AXEnhancedUserInterface" as CFString,
+                    kCFBooleanTrue)
+                errEStr = String(errE.rawValue)
+            } else {
+                errEStr = "skipped"
+            }
             wokenPids.insert(front.processIdentifier)
-            Log.line("ax: AXManualAccessibility=true → "
-                     + "\(bundleID) (err=\(err.rawValue))")
+            Log.line("ax: wake → \(bundleID) "
+                     + "manual=\(errM.rawValue) "
+                     + "enhanced=\(errEStr)")
         }
 
         guard let focused = copyAttribute(appElt, kAXFocusedWindowAttribute),
@@ -449,6 +470,35 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             width: vis.width,
             height: vis.height)
         return rect.intersection(cgVis)
+    }
+
+    /// Bundle IDs that warrant flipping `AXEnhancedUserInterface`
+    /// to wake the renderer-accessibility tree. Chromium browsers
+    /// + the Electron apps perch users routinely reach for. Not
+    /// exhaustive — extending the list is the cheapest way to add
+    /// web-content coverage to a newly-reported app, no other code
+    /// change needed.
+    private static let chromiumPrefixes: [String] = [
+        // Chromium browsers
+        "com.google.Chrome",
+        "com.microsoft.edgemac",
+        "org.chromium",
+        "com.brave.Browser",
+        "company.thebrowser.Browser",   // Arc
+        "com.vivaldi.Vivaldi",
+        "com.operasoftware.Opera",
+        // Electron apps
+        "com.microsoft.VSCode",
+        "com.todesktop.",                // Cursor, others
+        "com.tinyspeck.slackmacgap",
+        "com.hnc.Discord",
+        "com.figma.Desktop",
+        "com.spotify.client",
+        "com.notion.id",
+    ]
+
+    static func isChromiumBundle(_ bundleID: String) -> Bool {
+        chromiumPrefixes.contains { bundleID.hasPrefix($0) }
     }
 
     /// Drop elements whose top-left corner is within `proximityPx`

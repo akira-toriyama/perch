@@ -50,16 +50,29 @@ public enum AXDump {
         // Mirror AXSource: wake renderer-accessibility on Chromium /
         // Electron apps before the walk, so the standalone dump
         // surfaces the same `*WEB*` subtree the daemon would see.
+        // See AXSource.enumerate() for the rationale on the two
+        // attributes and why Enhanced is bundle-id-gated.
+        //
         // First-run latency caveat applies — Chrome populates the
         // renderer AX asynchronously. If the first dump shows no
         // `*WEB*` marker on a Chromium app, wait a second and
         // re-run.
-        let wakeErr = AXUIElementSetAttributeValue(
+        let wakeM = AXUIElementSetAttributeValue(
             app,
             "AXManualAccessibility" as CFString,
             kCFBooleanTrue)
-        print("ax: AXManualAccessibility=true → \(bid) "
-              + "(err=\(wakeErr.rawValue))",
+        let wakeEStr: String
+        if AXUIElementSource.isChromiumBundle(bid) {
+            let e = AXUIElementSetAttributeValue(
+                app,
+                "AXEnhancedUserInterface" as CFString,
+                kCFBooleanTrue)
+            wakeEStr = String(e.rawValue)
+        } else {
+            wakeEStr = "skipped"
+        }
+        print("ax: wake → \(bid) "
+              + "manual=\(wakeM.rawValue) enhanced=\(wakeEStr)",
               to: &out)
 
         guard let focused = copy(app, kAXFocusedWindowAttribute),
