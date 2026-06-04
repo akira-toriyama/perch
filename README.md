@@ -172,21 +172,21 @@ line to stderr and enable the verbose per-walk trace:
 PERCH_DEBUG=1 perch
 ```
 
-The dev launcher (`./run.sh` / `./scripts/dev.sh --debug`) sets
-`PERCH_DEBUG` for you; a normal/brew launch sets nothing and
-stays quiet.
+The dev launcher (`./run.sh`) sets `PERCH_DEBUG` for you; a
+normal/brew launch sets nothing and stays quiet.
 
 ## Development
 
 ```sh
 swift build                      # compile (CommandLineTools works)
 swift test                       # tests — needs Xcode
-./run.sh                         # build release → launch Perch.app
+./run.sh                         # debug → Perch-dev.app + log tail (dev loop)
+./run.sh --no-tail               # same, skip the tail
+./run.sh --release               # release → Perch.app (pre-publish verify)
 ./stop.sh                        # kill every running instance
-./scripts/dev.sh                 # one-shot stop + build + run + tail log
-./scripts/dev.sh --debug         # same, foreground debug build w/ PERCH_DEBUG=1
 perch --doctor                   # health check (accessibility, screens, …)
 perch --dump-ax                  # list AX elements perch would label
+perch --dump-ax-tree             # raw AX tree, pre-filter (web triage)
 ```
 
 Architecture: hexagonal Core / Adapter / App split (see

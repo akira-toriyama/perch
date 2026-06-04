@@ -177,19 +177,22 @@ trace shows up via `Log.debug`.
 
 ## The dev script
 
-`scripts/dev.sh` collapses the "edit Swift → rebuild → relaunch →
-tail log" cycle into one command:
+`./run.sh` collapses the "edit Swift → rebuild → relaunch → tail
+log" cycle into one command. The default is the dev loop because
+end users `brew install` instead of running this script —
+optimising the bare invocation for the daily contributor flow:
 
 ```sh
-./scripts/dev.sh           # release Perch.app + tail log
-./scripts/dev.sh --debug   # PERCH_DEBUG=1 .build/debug/perch + tail
-./scripts/dev.sh --no-tail # stop + rebuild + run, no tail
+./run.sh                   # DEBUG Perch-dev.app + tail log (default)
+./run.sh --no-tail         # same, skip the tail
+./run.sh --release         # release Perch.app, single launch, no tail
+                           #   (pre-publish verification)
 ```
 
-dev.sh's `--debug` mode (a build-mode selector that runs the
-debug build in the foreground with `PERCH_DEBUG=1` set) is the
-right pick when you're iterating on AX walk / filter chain code
-and want the per-stage drop reasons visible.
+The dev bundle (`Perch-dev.app` / `com.perch.perch.dev`) keeps
+its own TCC grant alongside any brew-installed `Perch.app` —
+both can coexist. The launched app inherits `PERCH_DEBUG=1` so
+the per-walk filter-chain drop reasons land in the log.
 
 ## See also
 
