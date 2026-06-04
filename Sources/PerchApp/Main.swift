@@ -267,11 +267,18 @@ enum PerchApp {
                 ? "<no title>"
                 : "\"\(e.label.prefix(60))\""
             let f = e.frame
-            print(String(format: "  %3d  %-15s  (%5d,%5d %4d×%4d)  %@",
-                         i + 1, e.role,
-                         Int(f.minX), Int(f.minY),
-                         Int(f.width), Int(f.height),
-                         label))
+            // Use Swift interpolation, not `String(format: "%-15s %@", …)`
+            // — passing Swift String to NSString's `%s` / `%@` via
+            // CVarArg is undefined and segfaults at runtime on a
+            // non-empty result list (caught on a 184-element Chrome
+            // dump after the renderer-AX wake landed).
+            let num = String(format: "%3d", i + 1)
+            let role = e.role.padding(
+                toLength: 15, withPad: " ", startingAt: 0)
+            let pos = String(format: "(%5d,%5d %4d×%4d)",
+                             Int(f.minX), Int(f.minY),
+                             Int(f.width), Int(f.height))
+            print("  \(num)  \(role)  \(pos)  \(label)")
         }
         exit(0)
     }
