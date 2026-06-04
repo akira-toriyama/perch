@@ -170,9 +170,8 @@ perch は常に `/tmp/perch.log` に書き込む。環境変数
 PERCH_DEBUG=1 perch
 ```
 
-開発用ランチャ (`./run.sh` / `./scripts/dev.sh --debug`) が
-`PERCH_DEBUG` をセットする。通常 / brew 起動では何もセット
-されず静かなまま。
+開発用ランチャ (`./run.sh`) が `PERCH_DEBUG` をセットする。
+通常 / brew 起動では何もセットされず静かなまま。
 
 ## 開発
 
@@ -180,6 +179,8 @@ PERCH_DEBUG=1 perch
 swift build                      # コンパイル (CommandLineTools で可)
 swift test                       # テスト — Xcode 必須
 ./run.sh                         # release を Perch.app として起動
+./run.sh --dev                   # debug を Perch-dev.app として起動 + ログ tail
+./run.sh --dev --no-tail         # 上と同じ、tail は省略
 ./stop.sh                        # 起動中のすべての instance を停止
 ```
 

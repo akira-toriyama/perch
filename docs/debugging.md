@@ -177,19 +177,21 @@ trace shows up via `Log.debug`.
 
 ## The dev script
 
-`scripts/dev.sh` collapses the "edit Swift → rebuild → relaunch →
-tail log" cycle into one command:
+`./run.sh --dev` collapses the "edit Swift → rebuild → relaunch
+→ tail log" cycle into one command. Same shape as facet's
+`run.sh --dev`:
 
 ```sh
-./scripts/dev.sh           # release Perch.app + tail log
-./scripts/dev.sh --debug   # PERCH_DEBUG=1 .build/debug/perch + tail
-./scripts/dev.sh --no-tail # stop + rebuild + run, no tail
+./run.sh                   # release Perch.app, single launch (no tail)
+./run.sh --dev             # DEBUG Perch-dev.app + tail log (dev loop)
+./run.sh --dev --no-tail   # same, skip the tail
 ```
 
-dev.sh's `--debug` mode (a build-mode selector that runs the
-debug build in the foreground with `PERCH_DEBUG=1` set) is the
-right pick when you're iterating on AX walk / filter chain code
-and want the per-stage drop reasons visible.
+`--dev` builds a parallel `Perch-dev.app`
+(`com.perch.perch.dev`) so its TCC grant doesn't collide with a
+brew-installed Perch.app — both can coexist with their own
+Accessibility grants. The launched app inherits `PERCH_DEBUG=1`
+so the per-walk filter-chain drop reasons land in the log.
 
 ## See also
 

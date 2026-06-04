@@ -22,7 +22,7 @@ them is the current filter chain. If you see it AGAIN, this is
 the diagnostic order:
 
 1. **Re-run with the latest build.** PRs #10-#16 each fixed a
-   slice — `git pull && ./scripts/dev.sh` to make sure you're not
+   slice — `git pull && ./run.sh --dev` to make sure you're not
    testing a cached old binary.
 2. **Read the `bounds` line.** `grep "ax: bounds" /tmp/perch.log
    | tail -1`. If `filter=(0,0 N×M)` covers the whole screen
@@ -97,8 +97,8 @@ Run `perch --doctor` first.
   in the log when you press the hotkey → another app is binding
   the same combo. Rebind via `[hotkey].active` to something else
   (`ctrl+alt+space`, `cmd+f1`) and run `perch --reload`.
-- `✗ Daemon: not running` → `./scripts/dev.sh` (or
-  `open Perch.app`) to launch.
+- `✗ Daemon: not running` → `./run.sh` (or `./run.sh --dev` for
+  the dev loop, or `open Perch.app`) to launch.
 
 ## Pills draw, but pressing the label fires the wrong action
 

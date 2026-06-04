@@ -245,8 +245,8 @@ typo で hint mode が壊れない設計。`perch --validate` が明示の検証
 
 ### `PERCH_DEBUG`
 **verbose ログの唯一のトリガ**（環境変数）。`--debug` フラグは無い
-（facet / chord / wand / eventfx / glance 家系と統一）。`scripts/dev.sh`
-が立てる。
+（facet / chord / wand / eventfx / glance 家系と統一）。`./run.sh`
+（と `./run.sh --dev`）が立てる。
 - **Don't call it:** --debug, --verbose, ログモード
 
 ### `/tmp/perch.log`

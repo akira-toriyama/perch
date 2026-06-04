@@ -37,6 +37,7 @@ swift test                   # tests — needs Xcode (XCTest); fails on CLT
 .build/debug/perch --help    # smoke test
 .build/debug/perch --validate
 ./run.sh                     # release → Perch.app, kill prior, launch
+./run.sh --dev               # debug → Perch-dev.app + log tail (dev loop)
 ./stop.sh                    # kill every running instance
 ```
 
@@ -357,11 +358,14 @@ wave produced.
 
 The five-second triage:
 
-1. **`./scripts/dev.sh --debug`** — stop any prior daemon,
-   rebuild, launch `PERCH_DEBUG=1 .build/debug/perch`, tail the
-   log. (`--debug` here is dev.sh's own build-mode selector; it
-   sets `PERCH_DEBUG` in the binary's env, not a binary flag.)
-   One command, no missed steps.
+1. **`./run.sh --dev`** — stop any prior daemon, rebuild as a
+   debug bundle, install + launch `Perch-dev.app`
+   (`com.perch.perch.dev` bundle id so its TCC grant doesn't
+   collide with a brew-installed Perch.app), tail the log.
+   `PERCH_DEBUG=1` is set on the launched app so debug traces
+   show up. Single dev-loop entry point — same shape as
+   facet's `run.sh --dev`. `./run.sh --dev --no-tail` skips
+   the tail.
 2. **`perch --doctor`** — macOS / accessibility / config /
    daemon / screens / frontmost / log file. Every line is
    bug-report-grade information; copying the whole output is
@@ -400,10 +404,9 @@ binary, which can drop the Accessibility grant — the symptom is
 `kAXErrorAPIDisabled` (-25211) on every AX call in
 `/tmp/perch.log` while the user reports "hints stopped appearing".
 Persistent fix: run `./setup-signing-cert.sh` once;
-`scripts/dev.sh --debug` then re-signs the debug binary with that
-identity after each build so the grant carries over.
-`package.sh` (used by `./run.sh`) already does the same for
-Perch.app. Use
+`./package.sh` (called by `./run.sh` and `./run.sh --dev`) signs
+Perch.app / Perch-dev.app with that identity, so TCC keys the
+grant to the stable cert and survives subsequent rebuilds. Use
 `pgrep -lf perch` to see what's running and `./stop.sh` to clear
 stray instances before relaunching.
 
