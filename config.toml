@@ -161,6 +161,14 @@ show-shortcuts = true
 # `--regional`); search / menu / grid modes are unaffected.
 peek-key = "space"
 
+# When true, hint pills display a small ⌃⌥⇧⌘ glyph in their
+# top-right corner reflecting whatever modifiers the user is
+# CURRENTLY holding. Confirms the action mode that will fire on
+# resolve (Cmd → copyTitle, Shift → rightClick, Alt → focus,
+# Cmd+Shift → pressContinuous) without having to remember the
+# mapping. False (default) keeps pills clean.
+show-modifier-badge = false
+
 
 # ---- Overlay effects ---------------------------------------------
 # Animations layered on top of the hint flow. Mirrors wand's
@@ -172,6 +180,22 @@ peek-key = "space"
 # kill-switch). With anim off, both knobs collapse to the
 # historical immediate-hide / 200ms-red-flash baseline.
 [overlay.effect]
+
+# What pills do as the overlay APPEARS. Symmetric with `match` /
+# `unmatch` / `narrow` below — same kind vocabulary, fires on
+# entrance. Default `"pop"` keeps the historical 150ms scale-in
+# 0.85 → 1.0; pick another kind to pair an entrance with a
+# matching exit (e.g. `appear = "drop-in"` + `match = "rise"`).
+#
+#   "none"      — pills paint at full size, no delay.
+#   "pop"       — historical 150ms scale-in (default).
+#   "cascade"   — pills appear one after another (30ms × index)
+#                 with a bloom + alpha chain. Reads as a wave.
+#   "fade-in"   — alpha 0 → 1, no scale.
+#   "drop-in"   — pills fall from 40pt above into their slot.
+#   "bloom"     — 0.4 → 1.0 scale + alpha (explode in reverse).
+#   "random"    — pick a non-none non-random kind each activation.
+appear = "pop"
 
 # What happens to the WINNING pill at hint-resolve time. AXPress
 # fires in parallel with the animation so the click isn't delayed
@@ -261,6 +285,81 @@ intensity = "normal"
 # for screencasts (set to ~2.0 so viewers can see the effect kind)
 # or for users who think the default is too quick to notice.
 duration-scale = 1.0
+
+
+# ---- Overlay border (neon) ---------------------------------------
+# Glowing colored border on each pill — ports facet's `[border]`
+# vocabulary onto perch's per-pill border. Off by default; every
+# pill keeps its 1pt accent-tinted hairline. When enabled, the
+# border replaces the default hairline on non-matched idle pills.
+# Matched pills keep the accent glow border so the typed-prefix
+# highlight stays visually distinct.
+[overlay.border]
+
+# Effect preset. Layered on top of the theme palette.
+#
+#   "off"     — no effect (default — keeps the 1pt accent hairline).
+#   "neon"    — electric cyan; Tokyo-Night flair.
+#   "cyber"   — teal / aqua matrix.
+#   "vapor"   — synthwave pink → purple.
+#   "kawaii"  — soft pastels.
+#   "rainbow" — full-spectrum hue rotation (white base → cycles).
+#   "random"  — pick a non-off non-random kind at activation.
+effect = "off"
+
+# NSShadow bloom under the border — gives the "neon tube" feel.
+# false renders a flat colored stroke.
+glow = true
+
+# Border line width in points. Clamped 0.5..30. Default 1.5
+# pairs cleanly with the pill 10pt corner radius.
+width = 1.5
+
+# Hue rotation period in seconds — the border's hue rotates
+# around the color wheel over this many seconds, returning to its
+# base color every cycle. Set to 0 to lock the color (rainbow
+# then collapses to a static white border). Clamped 0..120.
+cycle-seconds = 3.0
+
+
+# ---- Overlay sound -----------------------------------------------
+# Audio feedback for activate / match / unmatch. Each knob accepts
+# either:
+#
+#   - a macOS system-sound NAME (NSSound resolves these from
+#     /System/Library/Sounds/<Name>.aiff — same list shown in
+#     System Settings → Sound → Sound Effects). Examples:
+#       "Tink" / "Pop" / "Glass" / "Hero" / "Sosumi" / "Bottle" /
+#       "Blow" / "Funk" / "Frog" / "Submarine" / "Morse" / "Ping" /
+#       "Purr" / "Basso"
+#
+#   - a FILE PATH (tilde-expanded). Drop any audio file
+#     `AVFoundation` can decode (mp3 / m4a / wav / aiff):
+#       match = "~/Library/Sounds/click.mp3"
+#       match = "/Users/me/sounds/typewriter.wav"
+#
+#   - "none" / "off" / empty — silenced for that direction.
+#
+# Path interpretation wins over system-name when both could match
+# (so `~/Pop.mp3` beats the system `Pop`). Unresolved specs log
+# and silence rather than crashing the daemon.
+[overlay.sound]
+
+# Plays on hint resolve (any modifier).
+match = "none"
+
+# Plays on a missed keypress (non-matching letter or non-letter
+# key). Layered with the existing 200ms red flash + unmatch motion.
+unmatch = "none"
+
+# Plays when hint mode activates (hotkey fires, AX walk completes,
+# panel paints). Helpful as an "ah, perch heard me" cue when
+# Reduce Motion is on and the visual entrance is muted.
+activate = "none"
+
+# Master volume for all sounds, 0.0..1.0. Default 0.5 keeps system
+# sounds at half their natural volume.
+volume = 0.5
 
 
 # ---- Behaviour ---------------------------------------------------
