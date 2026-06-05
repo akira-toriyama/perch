@@ -128,6 +128,15 @@ public enum HintAction: String, Sendable, CaseIterable {
     /// Three mouseDown+mouseUp pairs with `clickState` 1/2/3.
     /// Used for line / paragraph selection in text views.
     case tripleClick
+    /// Chord `,g` (issue #74 / M5+) — **enter grid mode scoped
+    /// to this element**. Bridges hint precision (find the
+    /// container) with grid precision (locate within). For
+    /// elements smaller than `[grid].nest-min-size`, the
+    /// Controller falls back to AXPress automatically. The
+    /// Controller is the dispatch site (not `AXUIElementSource`)
+    /// because grid entry requires runtime resources (panels,
+    /// KeyTap) that the adapter doesn't own.
+    case nestedGrid
 }
 
 /// Parsed `[hotkey].combo` value.

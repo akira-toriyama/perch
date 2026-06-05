@@ -359,6 +359,7 @@ the press briefly and route through a chord suffix instead:
 | `,h` | synthetic **Shift-click** (extend selection in multi-select lists / text ranges) |
 | `,d` | synthetic **double-click** at the element center (word-select in text, "open" in Finder) |
 | `,t` | synthetic **triple-click** (line / paragraph select) |
+| `,g` | **nested grid** — instead of clicking, subdivide the picked element with a grid (M5+); small elements fall back to AXPress |
 
 Default is **off** — set `[chord].leader = ","` in
 `config.toml` to opt in. With chord mode on:

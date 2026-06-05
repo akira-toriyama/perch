@@ -88,6 +88,11 @@ public final class OverlayWindow {
         // `t` = triple — mnemonic from "double" / "triple".
         "d": .doubleClick,
         "t": .tripleClick,
+        // M5+ (#74): nested grid. `g` = "grid" mnemonic. The
+        // Controller routes this case (it owns GridMode); the
+        // adapter's `act(...)` returns true as a no-op so the
+        // dispatch log stays clean.
+        "g": .nestedGrid,
     ]
 
     public init(config: PerchConfig) {

@@ -246,6 +246,44 @@ final class Controller {
                          reenter: { [weak self] in self?.enterGridMode() })
     }
 
+    /// Bridge from hint-mode `.nestedGrid` chord to GridMode
+    /// scoped to the picked element's frame. Small elements
+    /// (`frame.size < [grid].nest-min-size` on either axis) fall
+    /// back to AXPress — subdividing a button-sized element with
+    /// another grid is meaningless.
+    private func enterNestedGridFor(hint: Hint) {
+        let f = hint.element.frame
+        let threshold = CGFloat(config.gridNestMinSize)
+        if f.width < threshold || f.height < threshold {
+            Log.line("controller: nestedGrid → too small "
+                     + "(\(Int(f.width))×\(Int(f.height))) "
+                     + "→ AXPress fallback")
+            _ = source.act(id: hint.element.id, as: .press)
+            return
+        }
+        cancel()
+        let gm = GridMode(
+            config: config,
+            maxDepth: config.gridMaxDepth,
+            initialFrame: f,
+            onExit: { [weak self] in
+                Task { @MainActor [weak self] in self?.grid = nil }
+            },
+            onReenter: { [weak self] in
+                // Re-entry on .pressContinuous would re-open the
+                // nested grid with the SAME picked frame. Plausible
+                // workflow ("click 5 spots inside this textarea")
+                // but adds the requirement to carry `f` across the
+                // re-entry callback. Deferred — re-entry just falls
+                // through to the standard rgrid scope.
+                self?.enterRecursiveGridMode()
+            })
+        if gm.start() {
+            grid = gm
+            writeStatus(reason: "nested-grid mode")
+        }
+    }
+
     /// Vision-OCR hint mode (issue #73 / M5) — captures the main
     /// display, runs `VNRecognizeTextRequest`, surfaces each
     /// recognised text region as a hint. The fallback layer when
@@ -525,6 +563,17 @@ final class Controller {
             onResolve: { [weak self] hint, action in
                 guard let self else { return }
                 self.activeMode = nil
+                // M5+ (#74): nested-grid chord intercepts BEFORE
+                // dispatch. Only fires when the picked element is
+                // large enough to subdivide meaningfully; for
+                // smaller picks fall through to AXPress.
+                if action == .nestedGrid {
+                    self.enterNestedGridFor(hint: hint)
+                    self.writeStatus(
+                        reason: "\(modeLabel) → "
+                            + "\(hint.keys) (nestedGrid)")
+                    return
+                }
                 _ = self.source.act(id: hint.element.id, as: action)
                 self.writeStatus(
                     reason: "\(modeLabel) → "

@@ -246,6 +246,7 @@ action-char マッピング:
 - `c` copyTitle / `o` revealInFinder / `u` copyURL / `s` speakTitle (#57)
 - `m` synthCmdClick / `h` synthShiftClick (#70 / M4-ε)
 - `d` doubleClick / `t` tripleClick (#72 / M4-η)
+- `g` nestedGrid (#74 / M5+): 選んだ要素を GridMode で再分割 — 小要素は AXPress fallback
 
 各 phase は `[chord].timeout-ms`（既定 600ms）で fallback to
 `.press`。`Esc` で press 自体を中止。修飾キー系（Cmd / Shift /
