@@ -260,6 +260,16 @@ shortcut のある行に合わせて統一されるので Spotlight 風の
 （function キー / Tab / 矢印キー等）は follow-up 扱い。
 - **Don't call it:** menu hint, shortcut hint, ショートカット表示（一般名は可）
 
+### NudgeMode (arrow-nudge cursor)
+issue #68 (M4-γ)。`--grid` / `--rgrid` 後の **ラストマイル
+ピクセル調整**。OverlayWindow なし（カーソルが視覚フィードバック）、
+KeyTap のみで矢印 + modifier の step（bare 1 / Shift 10 /
+Alt 100 / Cmd 画面端）を解釈し `CGWarpMouseCursorPosition` +
+`mouseMoved` `CGEvent`（hover 反映用）。`space` / `Enter` で click
+→ exit（modifier で button 切替: bare 左 / Shift 右 / Cmd 中）。
+Ctrl は macOS の Mission Control 予約のため step に未割当。
+- **Don't call it:** mouse keys, arrow cursor, ナッジ（一般名は可）
+
 ### GridMode (coordinate grid)
 issue #66 (M4-α) + issue #67 (M4-β)。hint mode の **AX-bypass
 フォールバック**。Figma canvas / Photoshop / 任意の custom-drawn

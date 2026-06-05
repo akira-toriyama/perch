@@ -65,6 +65,11 @@ enum PerchApp {
                                       level clicks the current cell
                                       center; Backspace pops one level.
                                       Pixel-precision drill-down.
+          perch --nudge               enter arrow-nudge cursor — arrows
+                                      move cursor by 1px (bare), 10px
+                                      (Shift), 100px (Alt), screen-edge
+                                      (Cmd). Space/Enter clicks + exits.
+                                      Last-mile precision after --grid.
           perch --cancel              dismiss the overlay if showing
           perch --reload              re-read ~/.config/perch/config.toml
           perch --status              print active hotkey, alphabet, last event
@@ -125,7 +130,7 @@ enum PerchApp {
             "--dump-ax", "--dump-ax-tree", "--dump-regions",
             "--activate", "--cancel", "--scroll", "--search",
             "--regional", "--menu", "--windows", "--emoji",
-            "--grid", "--rgrid",
+            "--grid", "--rgrid", "--nudge",
             "--reload", "--quit", "--status",
         ]
         for a in argv where !recognised.contains(a) {
@@ -171,6 +176,7 @@ enum PerchApp {
         if argv.contains("--emoji")    { runClient(cmd: "emoji") }
         if argv.contains("--grid")     { runClient(cmd: "grid") }
         if argv.contains("--rgrid")    { runClient(cmd: "rgrid") }
+        if argv.contains("--nudge")    { runClient(cmd: "nudge") }
         if argv.contains("--cancel")   { runClient(cmd: "cancel") }
         if argv.contains("--reload")   { runClient(cmd: "reload") }
         if argv.contains("--quit")     { runClient(cmd: "quit") }

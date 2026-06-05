@@ -115,7 +115,8 @@ watches the file for changes when running as a daemon).
 | `--emoji` | client | enter emoji picker — fuzzy-match a curated emoji table by name; `1-9` types the glyph at the caret (Unicode injection — no pasteboard write) |
 | `--grid` | client | enter coordinate grid — divide the screen into labeled cells, type a label to warp the cursor + left-click via synthetic `CGEvent` (AX-bypass fallback for Figma canvas / Photoshop / custom-drawn UI) |
 | `--rgrid` | client | enter recursive grid — each label drills into the chosen cell up to `[grid].max-depth` levels (default 3, ≈ pixel precision on 4K). `space` clicks at current cell center; `Backspace` pops one level |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid) |
+| `--nudge` | client | enter arrow-nudge cursor mode — arrows move cursor 1/10/100/edge px (modifier-stepped), `space` clicks + exits. The last-mile precision after `--grid` or `--rgrid` |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -243,6 +244,30 @@ drills lands the cursor inside a ~5px region.
 | `Backspace` | pop one level (return to parent grid) |
 | `Shift` / `Cmd` / `Cmd+Shift` modifiers | same action mapping as `--grid` — applied at click time |
 | `esc` | exit silently |
+
+### Arrow-nudge cursor (last-mile precision)
+
+`perch --nudge` is the cursor-movement complement to `--grid` /
+`--rgrid`. After grid mode lands the cursor close to the target,
+nudge mode walks it the rest of the way with arrow keys.
+
+| Key | Effect |
+|---|---|
+| `←` `↑` `↓` `→` | move cursor 1 px (precision tweak) |
+| `Shift+arrow` | 10 px (small step) |
+| `Alt+arrow` | 100 px (medium step) |
+| `Cmd+arrow` | jump to the edge of the screen union |
+| `space` / `Enter` | left click at cursor + exit |
+| `Shift+(space\|Enter)` | right click + exit |
+| `Cmd+(space\|Enter)` | middle click + exit |
+| `esc` | exit without clicking |
+| any other key | exit + let through |
+
+There's **no overlay** — the cursor is the visual feedback. If
+you're not sure you're in nudge mode, `perch --status` confirms.
+
+Ctrl is intentionally NOT bound to a step size; Ctrl+arrow is
+reserved for macOS Mission Control / Spaces shortcuts.
 
 ### Window switcher
 
