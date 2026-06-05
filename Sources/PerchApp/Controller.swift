@@ -69,6 +69,10 @@ final class Controller {
     /// vs AX action) diverge enough that conflating them would
     /// mean special-case logic in every teardown path.
     private var grid: GridMode?
+    /// Set when nudge mode (issue #68 / M4-γ) owns the KeyTap.
+    /// No overlay panel — the cursor is the only visual feedback.
+    /// Mutually exclusive with every other mode.
+    private var nudge: NudgeMode?
 
     init(config: PerchConfig) {
         self.config = config
@@ -133,6 +137,10 @@ final class Controller {
         if let g = grid {
             g.stop()
             grid = nil
+        }
+        if let n = nudge {
+            n.stop()
+            nudge = nil
         }
     }
 
@@ -226,6 +234,27 @@ final class Controller {
     func enterGridMode() {
         startGridSession(maxDepth: 1, statusReason: "grid",
                          reenter: { [weak self] in self?.enterGridMode() })
+    }
+
+    /// Arrow-nudge mode (issue #68 / M4-γ) — last-mile pixel
+    /// adjustment after `--grid` / `--rgrid` lands the cursor
+    /// close. No overlay (cursor is the feedback); KeyTap-only
+    /// like `ScrollMode`. Toggle on second invocation.
+    func enterNudgeMode() {
+        if nudge != nil {
+            cancel()
+            return
+        }
+        cancel()
+        let nm = NudgeMode(
+            cancelKey: config.cancelKey,
+            onExit: { [weak self] in
+                Task { @MainActor [weak self] in self?.nudge = nil }
+            })
+        if nm.start() {
+            nudge = nm
+            writeStatus(reason: "nudge mode")
+        }
     }
 
     /// Recursive grid (issue #67 / M4-β) — `--grid` with a
@@ -331,11 +360,12 @@ final class Controller {
     }
 
     private func activate() {
-        // Scroll / search / grid are mutually exclusive with the
-        // overlay-based modes — tear them down first.
+        // Scroll / search / grid / nudge are mutually exclusive
+        // with the overlay-based modes — tear them down first.
         if let s = scroll { s.stop(); scroll = nil }
         if let s = search { s.stop(); search = nil }
         if let g = grid { g.stop(); grid = nil }
+        if let n = nudge { n.stop(); nudge = nil }
         // Toggle: a second hotkey press (or `--activate`) while
         // hint mode is up cancels and returns.
         if activeMode == .hint {
@@ -534,6 +564,9 @@ final class Controller {
                 case "rgrid":
                     Log.line("controller: --rgrid received")
                     self.enterRecursiveGridMode()
+                case "nudge":
+                    Log.line("controller: --nudge received")
+                    self.enterNudgeMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every
