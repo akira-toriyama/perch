@@ -333,7 +333,7 @@ frontmost app's focused window**. The seam is captured at
   Log.line (always on) so users can attach `/tmp/perch.log` to
   bug reports without re-running with `PERCH_DEBUG=1`.
 
-### Scroll mode + search mode + regional mode + menu mode
+### Scroll mode + search mode + regional mode + menu mode + window switcher
 
 - **`ScrollMode` and `SearchMode` are parallel to
   `OverlayWindow`** — each owns its own KeyTap + (for search)
@@ -378,6 +378,30 @@ frontmost app's focused window**. The seam is captured at
   rather than forking SearchMode. Menu items dispatch via the
   same `AXUIElementPerformAction(kAXPressAction)` as everything
   else — no special menu IPC.
+- **Window switcher (issue #54)** is another `SearchMode`
+  variant — same shared `startSearchSession` seam, with
+  `enumerateWindows()` walking `NSWorkspace.runningApplications`
+  → each pid's `AXUIElementCreateApplication` → `kAXWindowsAttribute`.
+  Two adapter-only quirks vs hint / menu mode:
+  - **Dispatch diverges on role.** `AXUIElementSource.act(id:as:)`
+    checks `kAXRoleAttribute == "AXWindow"` and routes `.press` /
+    `.pressContinuous` through `kAXRaiseAction` + the owning
+    `NSRunningApplication.activate(...)` (gated `if #available(macOS 14.0, *)`
+    so we drop `.activateIgnoringOtherApps` on Sonoma+ where the
+    option is deprecated). `kAXPressAction` on a window typically
+    does nothing — don't reintroduce the press path.
+  - **`.copyTitle` uses a label cache.** `customLabelById`
+    stores the composed `"<App> — <Window Title>"` from
+    `enumerateWindows()`; `act(id:.copyTitle)` reads it before
+    falling back to live `kAXTitleAttribute`. Cleared at the top
+    of every enumerator (`prepareWalkRoot`, `enumerateMenu`,
+    `enumerateWindows`) so a stale composed string from a prior
+    window-mode session can't leak into a later non-window
+    copyTitle.
+  Apps are filtered to `.activationPolicy == .regular` so
+  faceless background tools (without user-switchable windows)
+  don't pad the list, and `[behavior].exclude-apps` covers
+  per-app blocking with the same knob hint mode uses.
 
 ### Logging
 

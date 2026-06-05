@@ -234,6 +234,18 @@ visible でないコマンド（Safari の `Develop > Empty Caches` 等）に ke
 で到達できる。エントリは `perch --menu`（CLI only）。
 - **Don't call it:** menu launcher, command palette, コマンドパレット
 
+### WindowSwitcher (cross-app window switcher)
+issue #54。`SearchMode` の派生で、enumerator が
+`UIElementSource.enumerateWindows()` （全 running app の全 window）。
+ラベルは `"<App> — <Window Title>"`（minimised は ` (min)` 付与）、
+レンダリングは `.verticalList`（`--menu` と同じ理由 — window picker
+は frame 非依存）。発火は **AX `kAXRaiseAction` + `NSRunningApplication.
+activate`**（adapter-side で role == "Window" を見て分岐）— `kAXPressAction`
+ではない。`.copyTitle` は `"App — Title"` 全体を pasteboard へ
+（`customLabelById` キャッシュ経由）。エントリは `perch --windows`
+（CLI only）。
+- **Don't call it:** window picker, window list, cmd-tab, ウィンドウスイッチャー
+
 ### RegionalMode (regional hint mode)
 issue #34。**大きいコンテナ**（Group / Article / Section / SplitGroup /
 ScrollArea / Outline / Image, frame >= 200×100）に label を割当てる

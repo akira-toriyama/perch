@@ -47,6 +47,14 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     // enumeration. Re-cleared at the top of every `enumerate()`.
     private var liveById: [String: AXUIElement] = [:]
 
+    // Per-enumeration label override consulted by `act(id:as:)` for
+    // `.copyTitle` (#54). `enumerateWindows()` populates this with
+    // the composed "<App> — <Window Title>" so the copy lands the
+    // string the user actually saw in the picker, not just the raw
+    // window title. Other enumerators don't populate it, falling
+    // back to the live `kAXTitleAttribute` read.
+    private var customLabelById: [String: String] = [:]
+
     // Monotonic counter so each enumerated element gets a unique
     // string id without needing to hash the opaque AXUIElement.
     // Reset at the top of every `enumerate()` along with `liveById`.
@@ -341,6 +349,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// them under the search results.
     public func enumerateMenu() -> [UIElement] {
         liveById.removeAll(keepingCapacity: true)
+        customLabelById.removeAll(keepingCapacity: true)
         nextSeq = 0
 
         guard let front = NSWorkspace.shared.frontmostApplication,
@@ -423,6 +432,76 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         }
     }
 
+    /// Issue #54 — cross-app window switcher. Walks every running
+    /// `NSRunningApplication.activationPolicy == .regular` app
+    /// (skipping faceless background tools that have no user-
+    /// switchable windows) and emits one `UIElement` per AX window:
+    ///
+    ///   - `role`: `"Window"` — `act(id:as:)` uses this as its
+    ///     signal to dispatch `kAXRaiseAction` + activate the
+    ///     owning app, NOT the normal `kAXPressAction`.
+    ///   - `label`: `"<App> — <Window Title>"`, with `" (min)"`
+    ///     appended for minimised windows so the user can see at a
+    ///     glance which picks won't already be on-screen.
+    ///   - `frame`: `.zero` — windows ship to a vertical-list
+    ///     render (same render path as `--menu`), not a pill pinned
+    ///     to a frame.
+    ///   - `id`: the same `"<pid>:<seq>"` shape every other enumerator
+    ///     uses, stored in `liveById` so dispatch resolves it back to
+    ///     the live `AXUIElement`.
+    ///
+    /// Apps the user has blocklisted via `[behavior].exclude-apps`
+    /// are skipped — the same opt-out covers hint mode + window
+    /// switcher with no extra knobs.
+    public func enumerateWindows() -> [UIElement] {
+        liveById.removeAll(keepingCapacity: true)
+        customLabelById.removeAll(keepingCapacity: true)
+        nextSeq = 0
+
+        var out: [UIElement] = []
+        let apps = NSWorkspace.shared.runningApplications
+        for app in apps {
+            guard app.activationPolicy == .regular,
+                  let bundleID = app.bundleIdentifier
+            else { continue }
+            if config.excludeApps.contains(bundleID) { continue }
+            let pid = app.processIdentifier
+            let appName = app.localizedName ?? bundleID
+
+            let appElt = AXUIElementCreateApplication(pid)
+            guard let windowsAny = copyAttribute(
+                appElt, kAXWindowsAttribute) as? [AXUIElement]
+            else { continue }
+
+            for window in windowsAny {
+                let title = (copyAttribute(window, kAXTitleAttribute)
+                             as? String) ?? ""
+                let minimised = (copyAttribute(
+                    window, kAXMinimizedAttribute) as? Bool) ?? false
+                // Honour AX's "this is a real window the user can
+                // interact with" hints. Sheets / panels attached to
+                // a parent window report `AXSubrole == "AXDialog"`
+                // etc. — we'd surface them as duplicates if we
+                // didn't gate on the standard-window subrole. But
+                // we don't filter on subrole here because dialogs
+                // ARE user-switchable; we just dedupe later.
+                let visibleTitle = title.isEmpty ? "(untitled)" : title
+                let suffix = minimised ? " (min)" : ""
+                let label = "\(appName) — \(visibleTitle)\(suffix)"
+
+                nextSeq += 1
+                let id = "\(pid):\(nextSeq)"
+                liveById[id] = window
+                customLabelById[id] = label
+                out.append(UIElement(
+                    id: id, role: "Window", label: label, frame: .zero))
+            }
+        }
+        Log.line("ax: enumerated \(out.count) window(s) "
+                 + "across \(apps.count) running app(s)")
+        return out
+    }
+
     // MARK: - Shared walk setup
 
     /// Reset per-enumeration state + resolve frontmost / wake gate
@@ -435,6 +514,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         window: AXUIElement, bundleID: String, pid: pid_t
     )? {
         liveById.removeAll(keepingCapacity: true)
+        customLabelById.removeAll(keepingCapacity: true)
         nextSeq = 0
 
         guard let front = NSWorkspace.shared.frontmostApplication,
@@ -578,6 +658,19 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         }
         switch action {
         case .press, .pressContinuous:
+            // Window-switcher case (#54): `.press` against a window
+            // means "raise this window AND bring its app to the
+            // front", not "fire the window's press action". AX
+            // distinguishes them — `kAXPressAction` on a window
+            // typically does nothing — so route through
+            // `raiseWindow(_:id:)` whenever the role says `Window`.
+            // `.pressContinuous` is the same dispatch with the
+            // Controller re-entering the picker afterwards (chain
+            // multiple window raises in a row), so it shares this
+            // branch.
+            if isWindowRole(elt) {
+                return raiseWindow(elt, id: id)
+            }
             // Same AX dispatch as a plain press — `.pressContinuous`
             // diverges only in what the controller does AFTER (it
             // re-shows hints). The adapter-side semantics are
@@ -600,12 +693,18 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             Log.line("dispatch: AXFocus failed (\(err.rawValue)) → id=\(id)")
             return false
         case .copyTitle:
-            // Resolve title from the side-table'd UIElement.label
-            // would require keeping it post-enumeration; cheaper
-            // to re-read the live attribute at copy time.
-            let title = (copyAttribute(elt, kAXTitleAttribute) as? String)
-                ?? (copyAttribute(elt, kAXValueAttribute) as? String)
-                ?? ""
+            // Composed label override takes priority — the window
+            // switcher (#54) caches `"<App> — <Title>"` here so
+            // copyTitle lands the string the user actually saw in
+            // the picker, not just the raw window title.
+            let title: String
+            if let cached = customLabelById[id], !cached.isEmpty {
+                title = cached
+            } else {
+                title = (copyAttribute(elt, kAXTitleAttribute) as? String)
+                    ?? (copyAttribute(elt, kAXValueAttribute) as? String)
+                    ?? ""
+            }
             guard !title.isEmpty else {
                 Log.line("dispatch: copyTitle empty → id=\(id)")
                 return false
@@ -616,6 +715,43 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             Log.line("dispatch: copyTitle ok (\(title.count) chars) → id=\(id)")
             return true
         }
+    }
+
+    /// Raise `window` + bring its owning app to the front. The id
+    /// of the form `"<pid>:<seq>"` is the source of the pid; we
+    /// resolve the `NSRunningApplication` from it rather than re-
+    /// querying NSWorkspace (which would race with focus changes
+    /// since `enumerateWindows()` returned).
+    private func raiseWindow(
+        _ window: AXUIElement, id: String
+    ) -> Bool {
+        let raiseErr = AXUIElementPerformAction(
+            window, kAXRaiseAction as CFString)
+        let pidPart = id.split(separator: ":").first.map(String.init) ?? ""
+        let pid = pid_t(pidPart) ?? 0
+        var activated = false
+        if pid != 0, let app = NSRunningApplication(processIdentifier: pid) {
+            if #available(macOS 14.0, *) {
+                activated = app.activate()
+            } else {
+                activated = app.activate(options: [.activateIgnoringOtherApps])
+            }
+        }
+        let ok = raiseErr == .success
+        Log.line("dispatch: AXRaise " + (ok ? "ok" : "failed")
+                 + " (\(raiseErr.rawValue)) activate=\(activated) "
+                 + "→ id=\(id)")
+        return ok
+    }
+
+    /// Is `elt`'s AX role `kAXWindowRole`? Read at dispatch time
+    /// (cheap one-call AX query) rather than caching per-id role —
+    /// only the window switcher (#54) needs this distinction and
+    /// the side-table for it would touch every enumerator.
+    private func isWindowRole(_ elt: AXUIElement) -> Bool {
+        guard let role = copyAttribute(elt, kAXRoleAttribute) as? String
+        else { return false }
+        return role == kAXWindowRole as String
     }
 
     /// Common path for the two action verbs that both go through

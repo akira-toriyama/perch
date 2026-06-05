@@ -111,7 +111,8 @@ watches the file for changes when running as a daemon).
 | `--search` | client | enter search mode (type text, `1-9` picks a match) |
 | `--regional` | client | enter regional mode — label large containers (article / pane / image) instead of every clickable leaf |
 | `--menu` | client | enter menu-search mode — fuzzy-match every menu bar item (deep / hidden commands incl.); pick with `1-9` |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu) |
+| `--windows` | client | enter cross-app window switcher — fuzzy-match every window across every running app; `1-9` raises the window and activates its owning app |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -186,6 +187,26 @@ through the menu:
 Action-mode modifiers behave as in `--search`: Cmd-1 copies the
 menu path, Shift-1 opens its context menu, Alt-1 focuses without
 firing, Cmd+Shift-1 fires + re-enters menu mode for chaining.
+
+### Window switcher
+
+`perch --windows` enters a `--search` variant whose target set is
+**every window across every running app**. Labels read
+`"<App> — <Window Title>"` (`(min)` annotation for minimised
+windows); matches render as the same Spotlight-style vertical
+list as `--menu`. Press a digit:
+
+- `1` raises that window AND activates its owning app
+  (`AXUIElementPerformAction(kAXRaiseAction)` +
+  `NSRunningApplication.activate`).
+- `Cmd-1` copies the full `"App — Window Title"` to the
+  pasteboard.
+- `Cmd+Shift-1` fires + re-enters window mode for chaining
+  (raise five windows in a row without re-pressing the flag).
+
+Where `Cmd+Tab` shows one tile per app and Mission Control needs
+visual scanning, `--windows` lets you reach any specific window
+by name in one keystroke + digit.
 
 ### Regional mode
 

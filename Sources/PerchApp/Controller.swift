@@ -181,6 +181,28 @@ final class Controller {
             reenter: { [weak self] in self?.enterMenuMode() })
     }
 
+    /// Cross-app window switcher (issue #54) — enumerates every
+    /// window across every running app, surfaces matches as a
+    /// `.verticalList` (same render as `--menu` since windows
+    /// have no useful on-screen frame for the picker), and on
+    /// resolve dispatches `kAXRaiseAction` + `NSRunningApplication.
+    /// activate(...)` (handled adapter-side in `act(id:as:)` when
+    /// the element role is `Window`). `.pressContinuous` re-enters
+    /// the picker so the user can raise several windows in a row.
+    /// Same mutual-exclusion + toggle semantics as the other
+    /// SearchMode-driven flows.
+    func enterWindowMode() {
+        if search != nil {
+            cancel()
+            return
+        }
+        startSearchSession(
+            renderMode: .verticalList,
+            enumerator: { $0.enumerateWindows() },
+            statusReason: "windows",
+            reenter: { [weak self] in self?.enterWindowMode() })
+    }
+
     /// Shared builder for the two SearchMode-driven flows
     /// (`--search` and `--menu`). They differ only in:
     ///   - which `UIElementSource` method to enumerate from
@@ -415,6 +437,9 @@ final class Controller {
                 case "menu":
                     Log.line("controller: --menu received")
                     self.enterMenuMode()
+                case "windows":
+                    Log.line("controller: --windows received")
+                    self.enterWindowMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every
