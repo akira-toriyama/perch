@@ -203,6 +203,26 @@ final class Controller {
             reenter: { [weak self] in self?.enterWindowMode() })
     }
 
+    /// Emoji picker (issue #55) — `SearchMode` over the curated
+    /// `EmojiTable` (~250 entries; see [Sources/PerchCore/EmojiTable.swift]).
+    /// `.press` types the chosen glyph at the focused field's
+    /// caret via `CGEvent.keyboardSetUnicodeString` (handled
+    /// adapter-side when the id has the `"emoji:"` prefix) —
+    /// pasteboard stays untouched, unlike the synthetic
+    /// `Cmd+V` approach. `.pressContinuous` re-enters for
+    /// multiple-emoji insertion in a row.
+    func enterEmojiMode() {
+        if search != nil {
+            cancel()
+            return
+        }
+        startSearchSession(
+            renderMode: .verticalList,
+            enumerator: { $0.enumerateEmoji() },
+            statusReason: "emoji",
+            reenter: { [weak self] in self?.enterEmojiMode() })
+    }
+
     /// Shared builder for the two SearchMode-driven flows
     /// (`--search` and `--menu`). They differ only in:
     ///   - which `UIElementSource` method to enumerate from
@@ -440,6 +460,9 @@ final class Controller {
                 case "windows":
                     Log.line("controller: --windows received")
                     self.enterWindowMode()
+                case "emoji":
+                    Log.line("controller: --emoji received")
+                    self.enterEmojiMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every

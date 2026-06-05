@@ -333,7 +333,7 @@ frontmost app's focused window**. The seam is captured at
   Log.line (always on) so users can attach `/tmp/perch.log` to
   bug reports without re-running with `PERCH_DEBUG=1`.
 
-### Scroll mode + search mode + regional mode + menu mode + window switcher
+### Scroll mode + search mode + regional mode + menu mode + window switcher + emoji picker
 
 - **`ScrollMode` and `SearchMode` are parallel to
   `OverlayWindow`** — each owns its own KeyTap + (for search)
@@ -378,6 +378,23 @@ frontmost app's focused window**. The seam is captured at
   rather than forking SearchMode. Menu items dispatch via the
   same `AXUIElementPerformAction(kAXPressAction)` as everything
   else — no special menu IPC.
+- **Emoji picker (issue #55)** is a `SearchMode` variant that
+  doesn't touch AX at all — `enumerateEmoji()` projects the
+  curated `EmojiTable.entries` (≈250 rows, pure Core data) into
+  `UIElement`s with ids of the form `"emoji:<glyph>"` and no
+  `liveById` entry. `AXUIElementSource.act(id:.press)` checks
+  the `"emoji:"` prefix and dispatches through
+  `typeUnicodeString(...)` — `CGEvent.keyboardSetUnicodeString`
+  with a 20-UTF16-unit cap, which fits every emoji in the
+  table (the longest ZWJ sequences are ~11). **Don't reach for
+  the synthetic Cmd+V path** — keeping perch pasteboard-clean
+  is one of the issue's acceptance criteria, and the unicode
+  payload route gets there without timing-dependent
+  save/restore juggling. `.copyTitle` is the lone exception
+  (writes the glyph to the pasteboard — the user asked for it
+  explicitly). Table is intentionally curated, not the full
+  CLDR ≈3700 — add entries when a user reports `"I typed X and
+  got nothing"`, don't bulk-import.
 - **Window switcher (issue #54)** is another `SearchMode`
   variant — same shared `startSearchSession` seam, with
   `enumerateWindows()` walking `NSWorkspace.runningApplications`

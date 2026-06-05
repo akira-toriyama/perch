@@ -44,6 +44,22 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// the no-op.
     func enumerateMenu() -> [UIElement]
 
+    /// Enumerate the curated emoji picker entries (issue #55).
+    /// Each entry is one `UIElement` with role `"Emoji"`, label
+    /// set to the entry's search keywords (so `SearchFilter` can
+    /// fuzzy-match on `"thinking"` / `"thumbs up good ok"` etc.),
+    /// id of the form `"emoji:<glyph>"`, and `.zero` frame —
+    /// emoji ship to the same vertical-list render as `--menu`.
+    ///
+    /// `.press` against an emoji-role element should type the
+    /// glyph at the focused field's caret via `CGEvent`'s Unicode
+    /// string payload (NOT a synthetic Cmd+V) so perch never
+    /// touches the user's pasteboard.
+    ///
+    /// Returns `[]` from the default implementation. The synthetic
+    /// test adapter inherits the no-op.
+    func enumerateEmoji() -> [UIElement]
+
     /// Enumerate every window across every running app (issue #54).
     /// Each window becomes one `UIElement` with role `"Window"`,
     /// label `"<App> — <Window Title>"` (`(min)` suffix for
@@ -93,4 +109,9 @@ public extension UIElementSource {
     /// future backends) inherit the no-op so the Controller
     /// dismisses the picker silently rather than crashing.
     func enumerateWindows() -> [UIElement] { [] }
+
+    /// Default: emoji picker opts in. Backed by the curated
+    /// `EmojiTable` only on the real adapter; tests inherit
+    /// the no-op.
+    func enumerateEmoji() -> [UIElement] { [] }
 }

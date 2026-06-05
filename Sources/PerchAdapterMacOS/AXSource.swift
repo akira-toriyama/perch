@@ -502,6 +502,42 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         return out
     }
 
+    /// Issue #55 — emoji picker. Returns one `UIElement` per
+    /// curated `EmojiTable.Entry`:
+    ///
+    ///   - `role`: `"Emoji"` — the dispatch path (`act(id:as:)`)
+    ///     keys off the `"emoji:"` id prefix instead, but the
+    ///     role tag keeps the wire shape consistent.
+    ///   - `label`: the entry's `keywords` (CLDR name +
+    ///     synonyms), space-joined. `SearchFilter.rank(...)` does
+    ///     the fuzzy match — "thinking" finds 🤔, "good" finds
+    ///     👍, etc.
+    ///   - `frame`: `.zero` — emoji ship to the vertical-list
+    ///     render (same path as `--menu` and `--windows`); no
+    ///     on-screen frame to pin a pill to.
+    ///   - `id`: `"emoji:<glyph>"` — the glyph encoded directly
+    ///     so dispatch can decode without a side-table lookup.
+    ///     No `AXUIElement` exists for an emoji; there's nothing
+    ///     to keep in `liveById`.
+    ///
+    /// `liveById` / `customLabelById` are cleared at the top so a
+    /// stale id from a prior enumeration can't resolve.
+    public func enumerateEmoji() -> [UIElement] {
+        liveById.removeAll(keepingCapacity: true)
+        customLabelById.removeAll(keepingCapacity: true)
+        nextSeq = 0
+
+        let out: [UIElement] = EmojiTable.entries.map { e in
+            UIElement(
+                id: "emoji:\(e.glyph)",
+                role: "Emoji",
+                label: "\(e.glyph) \(e.keywords)",
+                frame: .zero)
+        }
+        Log.line("ax: enumerated \(out.count) emoji entries")
+        return out
+    }
+
     // MARK: - Shared walk setup
 
     /// Reset per-enumeration state + resolve frontmost / wake gate
@@ -652,6 +688,14 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     }
 
     public func act(id: String, as action: HintAction) -> Bool {
+        // Emoji dispatch (#55): id encodes the glyph itself; no
+        // AXUIElement side-table entry — the action is a Unicode
+        // CGEvent that types the glyph at the caret. Short-circuit
+        // before the `liveById` guard since the table never holds
+        // emoji rows.
+        if let glyph = emojiGlyph(fromId: id) {
+            return dispatchEmoji(glyph, action: action, id: id)
+        }
         guard let elt = liveById[id] else {
             Log.line("dispatch: no live element for id=\(id)")
             return false
@@ -752,6 +796,81 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         guard let role = copyAttribute(elt, kAXRoleAttribute) as? String
         else { return false }
         return role == kAXWindowRole as String
+    }
+
+    /// Emoji picker (#55) id encoding: `"emoji:<glyph>"`. Returns
+    /// the glyph if the id matches that shape; nil for everything
+    /// else (lets the caller fall through to `liveById`).
+    private func emojiGlyph(fromId id: String) -> String? {
+        let prefix = "emoji:"
+        guard id.hasPrefix(prefix) else { return nil }
+        let glyph = String(id.dropFirst(prefix.count))
+        return glyph.isEmpty ? nil : glyph
+    }
+
+    /// Type / copy the emoji glyph. `.press` and `.pressContinuous`
+    /// route to `typeUnicodeString(...)` — caret-targeted Unicode
+    /// CGEvent that does NOT touch the pasteboard. `.copyTitle`
+    /// copies the glyph itself (the user asked for it explicitly).
+    /// `.rightClick` / `.focus` aren't meaningful for an emoji and
+    /// log + return false rather than no-op silently.
+    private func dispatchEmoji(
+        _ glyph: String, action: HintAction, id: String
+    ) -> Bool {
+        switch action {
+        case .press, .pressContinuous:
+            return typeUnicodeString(glyph, id: id)
+        case .copyTitle:
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setString(glyph, forType: .string)
+            Log.line("dispatch: emoji copy → \(id)")
+            return true
+        case .rightClick, .focus:
+            Log.line("dispatch: emoji unsupported action "
+                     + "\(action.rawValue) → \(id)")
+            return false
+        }
+    }
+
+    /// Inject `s` at the focused field's caret via
+    /// `CGEvent.keyboardSetUnicodeString` — pasteboard-clean
+    /// (no Cmd+V, no `pb.setString` write). The receiving app
+    /// reads the unicode payload off the synthetic keyDown event
+    /// as if the user had typed it. Same approach the macOS
+    /// built-in emoji picker (Ctrl+Cmd+Space) takes.
+    ///
+    /// CGEvent's unicode-string buffer caps at 20 UTF-16 units —
+    /// fits every emoji in `EmojiTable` (longest ZWJ sequences
+    /// are ~11 UTF-16). Truncation here would silently drop
+    /// payload; the entries are vetted at definition time so
+    /// the cap doesn't trip in practice.
+    private func typeUnicodeString(_ s: String, id: String) -> Bool {
+        let utf16 = Array(s.utf16)
+        guard let src = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(
+                keyboardEventSource: src,
+                virtualKey: 0, keyDown: true),
+              let up = CGEvent(
+                keyboardEventSource: src,
+                virtualKey: 0, keyDown: false)
+        else {
+            Log.line("dispatch: emoji typeUnicode failed "
+                     + "(no event source) → \(id)")
+            return false
+        }
+        utf16.withUnsafeBufferPointer { buf in
+            down.keyboardSetUnicodeString(
+                stringLength: buf.count,
+                unicodeString: buf.baseAddress)
+            up.keyboardSetUnicodeString(
+                stringLength: buf.count,
+                unicodeString: buf.baseAddress)
+        }
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        Log.line("dispatch: emoji typed (\(utf16.count) units) → \(id)")
+        return true
     }
 
     /// Common path for the two action verbs that both go through
