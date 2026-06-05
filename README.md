@@ -145,10 +145,10 @@ and font family in one knob. Ports facet's vocabulary:
 - **Adaptive**: `system` (default — follows macOS accent + light/dark)
 - **Special**: `random` (picks a built-in per `--reload`)
 
-Define your own under `[overlay.theme.<name>]`:
+Define your own under `[overlay.themes.<name>]`:
 
 ```toml
-[overlay.theme.my-theme]
+[overlay.themes.my-theme]
 pill-bg = "#1a1a1a"
 accent  = "#ff8800"
 text    = "#ffffff"

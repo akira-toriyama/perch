@@ -80,14 +80,14 @@ public struct OverlayConfig: Sendable {
     /// Show AX-bound keyboard shortcut annotations on `--menu` pills.
     public let showShortcuts: Bool
 
-    /// User-defined palettes from `[overlay.theme.<name>]` sections.
+    /// User-defined palettes from `[overlay.themes.<name>]` sections.
     /// Keyed by the section name (e.g. `"my-theme"`). When
     /// `[overlay].theme = "<name>"` matches a key here, the custom
     /// palette wins over the built-in catalog.
     ///
     /// Example:
     /// ```toml
-    /// [overlay.theme.my-theme]
+    /// [overlay.themes.my-theme]
     /// pill-bg = "#1a1a1a"
     /// accent  = "#ff8800"
     /// text    = "#ffffff"
@@ -98,7 +98,7 @@ public struct OverlayConfig: Sendable {
     /// ```
     public let customPalettes: [String: ThemePalette]
 
-    /// When `[overlay].theme` matches a `[overlay.theme.<name>]`
+    /// When `[overlay].theme` matches a `[overlay.themes.<name>]`
     /// section, this is the name; otherwise nil. The resolver
     /// checks this before the built-in catalog.
     public let customThemeName: String?
@@ -543,7 +543,7 @@ public struct PerchConfig: Sendable {
         let accent = (doc["overlay"]?["accent"]?.asString)
             .flatMap(sanitiseAccent) ?? "system"
 
-        // [overlay.theme.<name>] user-defined palettes — same flat-
+        // [overlay.themes.<name>] user-defined palettes — same flat-
         // key shape as [behavior."<bundle>"]. Each section is a
         // (pill-bg, accent, text, miss, pill-bg-alpha, font) tuple
         // matching ThemePalette.
@@ -600,9 +600,9 @@ public struct PerchConfig: Sendable {
             customThemeName: customThemeName)
     }
 
-    /// Walk every `[overlay.theme.<name>]` section and assemble a
+    /// Walk every `[overlay.themes.<name>]` section and assemble a
     /// `[name: ThemePalette]` dict. The TOML parser lands these as
-    /// flat keys (`"overlay.theme.my-theme"`), same as
+    /// flat keys (`"overlay.themes.my-theme"`), same as
     /// `[behavior."<bundle>"]`. Unknown / malformed values fall
     /// back to system defaults per typo-tolerance — a typo never
     /// kills the palette.
@@ -610,7 +610,12 @@ public struct PerchConfig: Sendable {
         _ doc: TOML.Document
     ) -> [String: ThemePalette] {
         var out: [String: ThemePalette] = [:]
-        let prefix = "overlay.theme."
+        // Plural `themes` (not `theme`) because `[overlay].theme` is
+        // a scalar (the selector); strict TOML 1.0 parsers reject
+        // `[overlay.themes.<name>]` since `theme` would have to be
+        // both a string AND a table parent. `themes` is a separate
+        // key path with no such conflict.
+        let prefix = "overlay.themes."
         // Names reserved by built-in themes / sentinels — silently
         // ignored if the user shadows them, since the catalog
         // would never see the custom palette.
