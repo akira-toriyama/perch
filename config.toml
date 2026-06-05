@@ -54,14 +54,85 @@ prioritise-center = true
 
 # ---- Overlay appearance ------------------------------------------
 [overlay]
-# Accent colour used for the typed-prefix highlight, the active hint
-# border, and the glow. "system" = the user's macOS accent colour;
-# "#rrggbb" overrides with a literal. Anything else falls back to
+# Color / typography theme for hint pills. Picks the pill background
+# tint, accent (border + matched-glow + typed-prefix), text color,
+# and font family (mono / rounded / system) in one knob. Mirrors
+# facet's `[overlay] theme` vocabulary — drop a familiar theme name
+# here if you carry the facet config around.
+#
+# Dark, monospace (editor-style):
+#   "terminal"   — Tokyo-Night green accent on near-black.
+#   "nord"       — cool polar-night blue-grey; frost-cyan accent.
+#   "dracula"    — vivid dark; purple accent.
+#   "gruvbox"    — retro warm dark; orange accent.
+#   "catppuccin" — soft pastel dark (Mocha); mauve accent.
+#   "rosepine"   — muted aubergine; iris accent.
+#   "everforest" — soft forest dark; green accent.
+#   "solarized"  — classic teal-base dark; blue accent.
+#   "onedark"    — Atom One Dark; blue accent.
+#   "monokai"    — high-energy dark; lime accent.
+#   "hacker"     — black base, neon-green accent (green-on-black).
+#
+# Neon (vivid electric on hue-tinted near-black):
+#   "neon"       — electric cyan on blue-black; magenta miss-flash.
+#   "cyber"      — aqua/teal on teal-black; hot-pink miss-flash.
+#   "vapor"      — synthwave pink on purple-black; gold miss-flash.
+#
+# Light (rounded / system font, dark text on light pill):
+#   "cute"       — soft pastel pink; rounded font.
+#   "kawaii"     — candy lavender; rounded font.
+#   "paper"      — clean daytime white; system font.
+#
+# Monochrome:
+#   "mono-light" — stark black-on-white, mono font.
+#   "mono-dark"  — stark white-on-black / OLED, mono font.
+#   "monotone"   — soft graphite greyscale, system font.
+#
+# Adaptive:
+#   "system"     — NSColor.controlAccentColor + dark pill tint —
+#                  the historical perch default; follows the user's
+#                  macOS accent + light/dark appearance.
+#
+# Special:
+#   "random"     — pick a random theme at each launch / `--reload`
+#                  (excludes "system").
+#
+# Unknown names clamp to "system" silently. Animated themes
+# (rainbow / theme-cycle-seconds in facet) are NOT supported —
+# perch's overlay is typically up for sub-seconds, so cycling
+# accents adds no value.
+theme = "system"
+
+# Accent override. Use to layer a personal highlight color on TOP
+# of `theme` — e.g. nord pill body + hot-pink typed-prefix:
+#   theme  = "nord"
+#   accent = "#ff85b3"
+# "system" (the default) lets the theme's palette accent win.
+# A `#rrggbb` literal overrides it. Anything else falls back to
 # "system" silently (typo can't break the daemon).
 accent = "system"
 
-# Hint pill font size (pt). Clamped 8..32. Pills use a monospaced
-# system font so labels grid-align cleanly.
+# Pill geometry preset — independent of `theme` (theme picks colors
+# + font; this picks the body shape).
+#
+#   "pill"      10pt rounded rect — the historical perch default.
+#   "square"    sharp-corner rect (1pt corner). Denser feel.
+#   "circle"    true circle — applies to single-character labels
+#               only; 2+ char labels silently fall back to "pill"
+#               (a circle that fits "aa" breaks the density grid).
+#   "underline" no body; just a 2pt accent bar under the label.
+#               Minimalist — good for light themes where a filled
+#               pill reads as noise.
+#   "tag"       pill + a small triangle pointing at the element.
+#               Reinforces the "this label belongs to that UI piece"
+#               cue, at the cost of a few pts of width.
+#
+# Unknown values clamp to "pill" silently.
+pill-shape = "pill"
+
+# Hint pill font size (pt). Clamped 8..32. The font FAMILY is
+# picked by `theme` (mono / rounded / system); this knob only
+# controls the size.
 font-size = 14
 
 # Frosted-glass background under each pill (NSVisualEffectView,
@@ -89,6 +160,206 @@ show-shortcuts = true
 # typo-tolerance. Only applies to hint mode (`--activate` /
 # `--regional`); search / menu / grid modes are unaffected.
 peek-key = "space"
+
+# When true, hint pills display a small ⌃⌥⇧⌘ glyph in their
+# top-right corner reflecting whatever modifiers the user is
+# CURRENTLY holding. Confirms the action mode that will fire on
+# resolve (Cmd → copyTitle, Shift → rightClick, Alt → focus,
+# Cmd+Shift → pressContinuous) without having to remember the
+# mapping. False (default) keeps pills clean.
+show-modifier-badge = false
+
+
+# ---- Overlay effects ---------------------------------------------
+# Animations layered on top of the hint flow. Mirrors wand's
+# `[gesture.effect]` vocabulary, scoped to perch's single-pill
+# resolve target. Both directions default to "none" so the snappy
+# bare-resolve UX is preserved.
+#
+# Requires `[overlay].anim-enabled = true` (the global motion
+# kill-switch). With anim off, both knobs collapse to the
+# historical immediate-hide / 200ms-red-flash baseline.
+[overlay.effect]
+
+# What pills do as the overlay APPEARS. Symmetric with `match` /
+# `unmatch` / `narrow` below — same kind vocabulary, fires on
+# entrance. Default `"pop"` keeps the historical 150ms scale-in
+# 0.85 → 1.0; pick another kind to pair an entrance with a
+# matching exit (e.g. `appear = "drop-in"` + `match = "rise"`).
+#
+#   "none"      — pills paint at full size, no delay.
+#   "pop"       — historical 150ms scale-in (default).
+#   "cascade"   — pills appear one after another (30ms × index)
+#                 with a bloom + alpha chain. Reads as a wave.
+#   "fade-in"   — alpha 0 → 1, no scale.
+#   "drop-in"   — pills fall from 40pt above into their slot.
+#   "bloom"     — 0.4 → 1.0 scale + alpha (explode in reverse).
+#   "random"    — pick a non-none non-random kind each activation.
+appear = "pop"
+
+# What happens to the WINNING pill at hint-resolve time. AXPress
+# fires in parallel with the animation so the click isn't delayed
+# — the user sees a visual ack riding on top of an already-firing
+# press. Non-winning pills always dismiss immediately (except for
+# particle effects, which can be `everyPill` on `unmatch`).
+#
+# Vocabulary mirrors wand's `[gesture.effect] match` verbatim:
+#
+#   "none"        — pill vanishes instantly (default — no latency).
+#   "fade"        — fades to transparent over 120ms.
+#   "explode"     — scales 1.0 → ~1.4 and fades over 140ms.
+#   "drop"        — translates downward off-screen while fading.
+#   "rise"        — translates upward off-screen while fading.
+#   "slide-left"  — slides out to the left while fading.
+#   "slide-right" — slides out to the right while fading.
+#   "vibrate"     — high-frequency 2-D jitter in place, then fades.
+#   "fireworks"   — particle burst radiating outward from the pill
+#                   center (most attention-grabbing — natural for
+#                   the moment a click actually fires).
+#   "confetti"    — particles rain past the pill with gravity.
+#   "random"      — pick a random non-none kind each resolve.
+#
+# Unknown kinds clamp to "none" silently.
+match = "none"
+
+# What happens on a missed keypress (a typed key that no label
+# starts with, or a non-letter key). The existing 200ms RED FLASH
+# is the baseline — this knob layers ADDITIONAL motion on top so
+# the user FEELS the miss (motion is faster to read than color).
+#
+# Same vocabulary as `match` (every kind works on both directions).
+# Differences on `unmatch`:
+#   - `vibrate` reads like a "no!" buzz over the red flash.
+#   - `fireworks` / `confetti` emit from EVERY visible pill (vs
+#     the winning-only emission on `match`) so the miss feedback
+#     fills the screen.
+#   - `random` excludes `none` so a miss always shows motion.
+#
+# Unknown kinds clamp to "none" silently.
+unmatch = "none"
+
+# What happens to pills that get FILTERED OUT mid-typing — e.g.
+# the user types `a` while `aa, ab, ac, xx` are on screen, so `xx`
+# disappears because its label doesn't start with `a`. Off (`"none"`,
+# the default) is instant removal — the historical perch behavior.
+# Set to any `match` kind to give each disappearing pill a visual
+# exit at its original position.
+#
+# Kind vocabulary is the same as `match` (see above). Notes:
+#   - `fireworks` / `confetti` downgrade to `fade` here — a particle
+#     burst PER eliminated pill quickly turns into hundreds of
+#     simultaneous particles when the user types the first letter
+#     against a dense hint set.
+#   - `random` re-rolls per typed letter so two consecutive narrows
+#     can show different effects.
+#
+# Tip: pair `narrow = "drop"` with `match = "explode"` so the
+# typing rhythm reads as "candidates drop out / picked one bursts".
+narrow = "none"
+
+# Overall magnitude scaler for ALL three directions — multiplies the
+# spatial dimension (explode peak scale, shake amplitude, slide
+# distance, particle velocity) but NOT the duration.
+#
+#   "subtle" ≈ 0.6×   (calm — barely-there motion)
+#   "normal" ≈ 1.0×   (default — the calibrated baseline)
+#   "bold"   ≈ 1.6×   (more attention-grabbing)
+#   "wild"   ≈ 2.5×   (over-the-top — screencast / demo mode)
+intensity = "normal"
+
+# Multiplier on every animation DURATION (match / unmatch / narrow).
+# 1.0 = the calibrated baseline (120-220ms depending on kind),
+# 2.0 = doubles every duration so the effect is easier to see,
+# 0.5 = halves (snappy mode).
+#
+# The baseline durations for reference:
+#   match.fade        120ms
+#   match.explode     140ms
+#   match.drop/rise/slide-*  180ms
+#   match.vibrate     200ms
+#   match.fireworks/confetti 220ms
+#   unmatch (all)     200ms  (also stretches the red-flash window)
+#   narrow (all)      180ms  (per eliminated pill)
+#
+# Clamped 0.1..5.0; out-of-range falls back to 1.0 silently. Useful
+# for screencasts (set to ~2.0 so viewers can see the effect kind)
+# or for users who think the default is too quick to notice.
+duration-scale = 1.0
+
+
+# ---- Overlay border (neon) ---------------------------------------
+# Glowing colored border on each pill — ports facet's `[border]`
+# vocabulary onto perch's per-pill border. Off by default; every
+# pill keeps its 1pt accent-tinted hairline. When enabled, the
+# border replaces the default hairline on non-matched idle pills.
+# Matched pills keep the accent glow border so the typed-prefix
+# highlight stays visually distinct.
+[overlay.border]
+
+# Effect preset. Layered on top of the theme palette.
+#
+#   "off"     — no effect (default — keeps the 1pt accent hairline).
+#   "neon"    — electric cyan; Tokyo-Night flair.
+#   "cyber"   — teal / aqua matrix.
+#   "vapor"   — synthwave pink → purple.
+#   "kawaii"  — soft pastels.
+#   "rainbow" — full-spectrum hue rotation (white base → cycles).
+#   "random"  — pick a non-off non-random kind at activation.
+effect = "off"
+
+# NSShadow bloom under the border — gives the "neon tube" feel.
+# false renders a flat colored stroke.
+glow = true
+
+# Border line width in points. Clamped 0.5..30. Default 1.5
+# pairs cleanly with the pill 10pt corner radius.
+width = 1.5
+
+# Hue rotation period in seconds — the border's hue rotates
+# around the color wheel over this many seconds, returning to its
+# base color every cycle. Set to 0 to lock the color (rainbow
+# then collapses to a static white border). Clamped 0..120.
+cycle-seconds = 3.0
+
+
+# ---- Overlay sound -----------------------------------------------
+# Audio feedback for activate / match / unmatch. Each knob accepts
+# either:
+#
+#   - a macOS system-sound NAME (NSSound resolves these from
+#     /System/Library/Sounds/<Name>.aiff — same list shown in
+#     System Settings → Sound → Sound Effects). Examples:
+#       "Tink" / "Pop" / "Glass" / "Hero" / "Sosumi" / "Bottle" /
+#       "Blow" / "Funk" / "Frog" / "Submarine" / "Morse" / "Ping" /
+#       "Purr" / "Basso"
+#
+#   - a FILE PATH (tilde-expanded). Drop any audio file
+#     `AVFoundation` can decode (mp3 / m4a / wav / aiff):
+#       match = "~/Library/Sounds/click.mp3"
+#       match = "/Users/me/sounds/typewriter.wav"
+#
+#   - "none" / "off" / empty — silenced for that direction.
+#
+# Path interpretation wins over system-name when both could match
+# (so `~/Pop.mp3` beats the system `Pop`). Unresolved specs log
+# and silence rather than crashing the daemon.
+[overlay.sound]
+
+# Plays on hint resolve (any modifier).
+match = "none"
+
+# Plays on a missed keypress (non-matching letter or non-letter
+# key). Layered with the existing 200ms red flash + unmatch motion.
+unmatch = "none"
+
+# Plays when hint mode activates (hotkey fires, AX walk completes,
+# panel paints). Helpful as an "ah, perch heard me" cue when
+# Reduce Motion is on and the visual entrance is muted.
+activate = "none"
+
+# Master volume for all sounds, 0.0..1.0. Default 0.5 keeps system
+# sounds at half their natural volume.
+volume = 0.5
 
 
 # ---- Behaviour ---------------------------------------------------

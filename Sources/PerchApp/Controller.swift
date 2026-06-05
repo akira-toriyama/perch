@@ -43,6 +43,7 @@ final class Controller {
     private(set) var config: PerchConfig
     private let source: AXUIElementSource
     private let overlay: OverlayWindow
+    private let sound: SoundPlayer
     // Created in `start()` because the callback captures `self` — a
     // self-capturing closure can't be passed during the initializer
     // (Swift forbids accessing self before all stored properties are
@@ -80,10 +81,18 @@ final class Controller {
     /// avoid stranding the mouseDown. Mutually exclusive.
     private var drag: DragMode?
 
+    /// File-system watcher on `~/.config/perch/config.toml`. Fires
+    /// `reload(cause: "fs")` on save so users don't need to invoke
+    /// `perch --reload` after every edit. Created in `start()` so
+    /// the callback can capture `self` after stored-property init
+    /// completes (same lifecycle as `hotkey`).
+    private var configWatcher: ConfigWatcher?
+
     init(config: PerchConfig) {
         self.config = config
         self.source = AXUIElementSource(config: config)
-        self.overlay = OverlayWindow(config: config)
+        self.sound = SoundPlayer(config: config)
+        self.overlay = OverlayWindow(config: config, sound: sound)
     }
 
     func start() {
@@ -98,6 +107,18 @@ final class Controller {
         self.hotkey = monitor
         installControlObserver()
         installAppActivationObserver()
+        // Hot-reload: watch the user's config file so saves take
+        // effect without a `perch --reload` IPC round-trip. The
+        // watcher is a no-op when the file doesn't exist (the
+        // built-in defaults are already loaded; user can `perch
+        // --reload` after creating it).
+        let watcher = ConfigWatcher { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.reload(cause: "fs")
+            }
+        }
+        _ = watcher.start()
+        self.configWatcher = watcher
         // Catch the case where perch starts WHILE a Chromium app is
         // already frontmost — the activation notification only fires
         // on subsequent switches, so we'd miss the very first one.
@@ -116,6 +137,7 @@ final class Controller {
         config = new
         source.updateConfig(new)
         overlay.updateConfig(new)
+        sound.updateConfig(new)
         if hotkeyChanged {
             hotkey?.install(combo: new.hotkey)
         }
@@ -557,6 +579,7 @@ final class Controller {
         // `enumerate()` and this line would otherwise let per-app
         // `roles` / `min-size` apply to (say) Chrome while
         // `auto-click-on-unique` resolved against Word's override.
+        sound.playActivate()
         overlay.show(
             hints: hints,
             bundleID: source.lastEnumeratedBundleID,

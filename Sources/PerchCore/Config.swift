@@ -54,7 +54,27 @@ public struct PerchConfig: Sendable {
     /// hint border, and the glow. `"system"` resolves to the user's
     /// macOS accent colour (`NSColor.controlAccentColor`); a `#rrggbb`
     /// literal overrides. Same colour vocabulary as stroke's overlay.
+    ///
+    /// When `overlayTheme != .system` AND `overlayTheme != .random`,
+    /// the theme palette's accent takes precedence. Users who want
+    /// the theme's body colors but a different accent (e.g. nord's
+    /// frost-blue pills with a hot-pink highlight) set both knobs.
     public let overlayAccent: String
+
+    /// Pill color palette + typography preset — picks pill background
+    /// tint, accent (border/matched-glow/typed-prefix), text color,
+    /// miss-flash color, and font family in one knob. Mirrors facet's
+    /// `[overlay] theme` vocabulary so users carrying a facet config
+    /// see the same names. Default `.system` keeps the historical
+    /// adaptive look (NSColor.controlAccentColor, dark pill tint).
+    public let overlayTheme: Theme
+
+    /// Geometric preset for the pill body. `.pill` (default) is the
+    /// historical 10pt rounded rect; alternates let users dial
+    /// density (`.square` is denser, `.underline` removes the body
+    /// entirely for minimalists). Orthogonal to `overlayTheme` —
+    /// the palette + the shape combine freely.
+    public let pillShape: PillShape
 
     public let overlayFontSize: Double
 
@@ -84,6 +104,108 @@ public struct PerchConfig: Sendable {
     /// Empty disables the feature. Default `"space"`. Unknown names
     /// silently fall back to disabled per typo-tolerance.
     public let overlayPeekKey: String
+
+    /// `true` to draw a small modifier-glyph badge in the top-right
+    /// corner of every pill when the user holds Cmd / Shift / Alt
+    /// during hint mode. Confirms the action mode that will fire on
+    /// resolve (Cmd → copyTitle, Shift → rightClick, Alt → focus,
+    /// Cmd+Shift → pressContinuous). False (default) keeps pills
+    /// clean — same UX as before this knob existed.
+    public let showModifierBadge: Bool
+
+    /// What pills do as the overlay APPEARS — symmetric with
+    /// `matchEffect` / `unmatchEffect` / `narrowEffect`. Default
+    /// `.pop` is the historical 150ms scale-in. Use `.none` to
+    /// suppress entrance animation entirely.
+    public let appearEffect: AppearEffect
+
+    /// What perch does to the WINNING pill at hint-resolve time.
+    /// Ports wand's `[gesture.effect] match` vocabulary, scoped to
+    /// perch's single-pill resolve. Default `.none` keeps the snappy
+    /// "pill vanishes the instant AXPress fires" UX; `.fade` /
+    /// `.explode` decorate the moment for screencasts or first-time
+    /// users. Non-winning pills always dismiss immediately.
+    public let matchEffect: MatchEffect
+
+    /// What perch does on a missed keypress / non-letter input.
+    /// The existing 200ms red-flash is the baseline; this knob
+    /// layers ADDITIONAL motion (`.shake`) or replaces the hold
+    /// with a fade (`.fade`). Off (`.none`) → historical red-flash
+    /// behavior.
+    public let unmatchEffect: UnmatchEffect
+
+    /// What perch does to pills that get FILTERED OUT mid-typing
+    /// (the user typed `a` while `aa, ab, ac, xx` were on screen —
+    /// `xx` disappears because its label doesn't start with the
+    /// typed prefix). Off (`.none`) → instant removal (the
+    /// historical behavior). Uses the same kind vocabulary as
+    /// `matchEffect` since the underlying problem is the same:
+    /// "this pill is going away, give it a visual exit".
+    public let narrowEffect: MatchEffect
+
+    /// Pill border neon preset — ports facet's `[border]` vocabulary
+    /// onto perch's per-pill border. `.off` keeps the existing 1pt
+    /// accent-tinted hairline; the other kinds (neon / cyber / vapor /
+    /// kawaii / rainbow / random) paint a brighter colored border
+    /// optionally with bloom + hue-cycle over time. Layered on top
+    /// of `overlayTheme` so the body palette stays the same.
+    public let borderEffect: BorderEffect
+
+    /// `true` adds an NSShadow glow under the border so it reads
+    /// like a real neon tube; `false` keeps the border flat.
+    /// Only takes effect when `borderEffect != .off`.
+    public let borderGlow: Bool
+
+    /// Border line width in points. Clamped 0.5..30. Default 1.5
+    /// (matches facet's default and pairs cleanly with the 10pt
+    /// pill corner radius).
+    public let borderWidth: Double
+
+    /// Hue / palette rotation period in seconds. The painter
+    /// rotates the border's hue around the color wheel over this
+    /// period, so a 3-second cycle returns to the same color
+    /// every 3 seconds. Clamped 1..120. Set to 0 to lock the
+    /// color (rainbow then collapses to a static white border).
+    public let borderCycleSeconds: Double
+
+    /// Magnitude scaler for `matchEffect` / `unmatchEffect` /
+    /// `narrowEffect`. Ports wand's `intensity` vocabulary verbatim.
+    /// Affects spatial dimension (explode scale, shake amplitude)
+    /// but not duration — that's `effectDurationScale` below.
+    public let effectIntensity: EffectIntensity
+
+    /// macOS system-sound name (`"Tink"` / `"Pop"` / `"Glass"` /
+    /// `"Hero"` / `"Sosumi"` / …) OR a file path (`"~/foo.mp3"` /
+    /// `"/Users/me/click.wav"`). The adapter expands `~`, tries the
+    /// path first, then falls back to `NSSound(named:)`. Empty
+    /// string or `"none"` disables sound for this direction.
+    /// Plays on hint resolve (any modifier).
+    public let matchSound: String
+
+    /// Sound to play on a missed keypress (non-matching letter /
+    /// non-letter key). Same format as `matchSound`.
+    public let unmatchSound: String
+
+    /// Sound to play when hint mode activates (hotkey fires, AX
+    /// enumeration completes, panel paints). Same format.
+    public let activateSound: String
+
+    /// Master volume for all sounds, 0.0..1.0. Clamped per
+    /// typo-tolerance. Default 0.5 — keeps system sounds at half
+    /// their natural volume so a screen full of pills + a chime
+    /// doesn't become startling.
+    public let soundVolume: Double
+
+    /// Multiplier on every animation duration (match / unmatch /
+    /// narrow). 1.0 = the calibrated baseline (120-220ms depending
+    /// on kind). 2.0 doubles every duration so the user can
+    /// actually SEE the effect; 0.5 halves for the snappy crowd.
+    /// Clamped to 0.1..5.0 per typo-tolerance.
+    ///
+    /// Unmatch's underlying red-flash window stretches with the
+    /// same scale — without that, a 0.5× scale would tear the
+    /// flash down before the animation peaks.
+    public let effectDurationScale: Double
 
     // MARK: - [behavior]
 
@@ -220,11 +342,28 @@ public struct PerchConfig: Sendable {
         alphabet: defaultAlphabet,
         prioritiseCenter: true,
         overlayAccent: "system",
+        overlayTheme: .system,
+        pillShape: .pill,
         overlayFontSize: 15,
         overlayBlurEnabled: true,
         overlayAnimEnabled: true,
         overlayShowShortcuts: true,
         overlayPeekKey: "space",
+        showModifierBadge: false,
+        appearEffect: .pop,
+        matchEffect: .none,
+        unmatchEffect: .none,
+        narrowEffect: .none,
+        borderEffect: .off,
+        borderGlow: true,
+        borderWidth: 1.5,
+        borderCycleSeconds: 3.0,
+        effectIntensity: .normal,
+        matchSound: "",
+        unmatchSound: "",
+        activateSound: "",
+        soundVolume: 0.5,
+        effectDurationScale: 1.0,
         autoClickOnUnique: true,
         roles: defaultRoles,
         excludeApps: [],
@@ -309,6 +448,14 @@ public struct PerchConfig: Sendable {
         // falls back to "system" so a typo never erases the accent.
         let accent = (doc["overlay"]?["accent"]?.asString)
             .flatMap(sanitiseAccent) ?? "system"
+        // Theme palette — unknown names clamp to `.system` per
+        // typo-tolerance. `.random` is resolved once at parse time
+        // so the chosen palette stays stable for the daemon's life
+        // (each `--reload` rolls fresh).
+        let theme = (doc["overlay"]?["theme"]?.asString)
+            .flatMap(Theme.parse)?.resolvingRandom() ?? .system
+        let shape = (doc["overlay"]?["pill-shape"]?.asString)
+            .flatMap(PillShape.parse) ?? .pill
         let size = (doc["overlay"]?["font-size"]?.asDouble).map {
             min(max($0, 8), 32)
         } ?? 15
@@ -322,6 +469,64 @@ public struct PerchConfig: Sendable {
         let peekKey = (doc["overlay"]?["peek-key"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             ?? "space"
+        let showBadge = doc["overlay"]?["show-modifier-badge"]?.asBool
+            ?? false
+
+        // [overlay.border] — neon border preset. Same flat-key
+        // shape as [overlay.effect]. All knobs clamp / fall back
+        // to defaults per typo-tolerance.
+        let borderSection = doc["overlay.border"]
+        let borderEff = (borderSection?["effect"]?.asString)
+            .flatMap(BorderEffect.parse)?.resolvingRandom() ?? .off
+        let borderGlow = borderSection?["glow"]?.asBool ?? true
+        let borderWidth: Double = {
+            guard let raw = borderSection?["width"]?.asDouble
+            else { return 1.5 }
+            return raw >= 0.5 && raw <= 30 ? raw : 1.5
+        }()
+        let borderCycle: Double = {
+            guard let raw = borderSection?["cycle-seconds"]?.asDouble
+            else { return 3.0 }
+            return raw >= 0 && raw <= 120 ? raw : 3.0
+        }()
+
+        // [overlay.effect] — wand-style match / unmatch / intensity.
+        // Same flat-key shape as [behavior.web]: TOML's dotted-table
+        // header lands as a single `"overlay.effect"` key in our
+        // hand-rolled parser. Unknown kinds clamp per typo-tolerance.
+        let effSection = doc["overlay.effect"]
+        let appearEff = (effSection?["appear"]?.asString)
+            .flatMap(AppearEffect.parse)?.resolvingRandom() ?? .pop
+        let matchEff = (effSection?["match"]?.asString)
+            .flatMap(MatchEffect.parse) ?? .none
+        let unmatchEff = (effSection?["unmatch"]?.asString)
+            .flatMap(UnmatchEffect.parse) ?? .none
+        let narrowEff = (effSection?["narrow"]?.asString)
+            .flatMap(MatchEffect.parse) ?? .none
+        let intensity = (effSection?["intensity"]?.asString)
+            .flatMap(EffectIntensity.parse) ?? .normal
+        // duration-scale clamp 0.1..5.0 per typo-tolerance: values
+        // outside that range fall back to 1.0 (the baseline) so a
+        // misconfigured user never gets stuck with a 30-second
+        // fade or a 1ms invisible flash.
+        let durScale: Double = {
+            guard let raw = effSection?["duration-scale"]?.asDouble
+            else { return 1.0 }
+            return raw >= 0.1 && raw <= 5.0 ? raw : 1.0
+        }()
+
+        // [overlay.sound] — accept either a macOS system-sound
+        // name (NSSound(named:)) or a file path (tilde-expanded
+        // at load time on the adapter side). Empty/"none" disables.
+        let soundSection = doc["overlay.sound"]
+        let matchSnd = soundSection?["match"]?.asString ?? ""
+        let unmatchSnd = soundSection?["unmatch"]?.asString ?? ""
+        let activateSnd = soundSection?["activate"]?.asString ?? ""
+        let volume: Double = {
+            guard let raw = soundSection?["volume"]?.asDouble
+            else { return 0.5 }
+            return max(0, min(1, raw))
+        }()
 
         let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
@@ -444,11 +649,28 @@ public struct PerchConfig: Sendable {
             alphabet: alphabet,
             prioritiseCenter: priority,
             overlayAccent: accent,
+            overlayTheme: theme,
+            pillShape: shape,
             overlayFontSize: size,
             overlayBlurEnabled: blur,
             overlayAnimEnabled: anim,
             overlayShowShortcuts: showShortcuts,
             overlayPeekKey: peekKey,
+            showModifierBadge: showBadge,
+            appearEffect: appearEff,
+            matchEffect: matchEff,
+            unmatchEffect: unmatchEff,
+            narrowEffect: narrowEff,
+            borderEffect: borderEff,
+            borderGlow: borderGlow,
+            borderWidth: borderWidth,
+            borderCycleSeconds: borderCycle,
+            effectIntensity: intensity,
+            matchSound: matchSnd,
+            unmatchSound: unmatchSnd,
+            activateSound: activateSnd,
+            soundVolume: volume,
+            effectDurationScale: durScale,
             autoClickOnUnique: autoClick,
             roles: roles,
             excludeApps: excludes,
