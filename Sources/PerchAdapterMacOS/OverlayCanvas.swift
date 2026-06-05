@@ -44,6 +44,8 @@ final class OverlayCanvas: NSView {
 
     private var config: PerchConfig
     private let placement: PillPlacement
+    private let particleDriver: ParticleDriver
+    private let ghostDriver: GhostDriver
     private var pills: [PillLayout] = []
     private var typed: String = ""
     private var state: VisualState = .idle
@@ -81,6 +83,8 @@ final class OverlayCanvas: NSView {
         let p = HintPainter(frame: frameRect)
         p.autoresizingMask = [.width, .height]
         self.painter = p
+        self.particleDriver = ParticleDriver(painter: p)
+        self.ghostDriver = GhostDriver(painter: p)
 
         super.init(frame: frameRect)
         wantsLayer = true
@@ -253,12 +257,12 @@ final class OverlayCanvas: NSView {
         case .vibrate:
             runVibrate(intensity: intensity, completion: completion)
         case .fireworks:
-            runParticles(
+            burstParticles(
                 emission: .fireworks, target: .everyPill,
                 intensity: intensity, duration: scaled(0.2),
                 completion: completion)
         case .confetti:
-            runParticles(
+            burstParticles(
                 emission: .confetti, target: .everyPill,
                 intensity: intensity, duration: scaled(0.2),
                 completion: completion)
@@ -401,12 +405,12 @@ final class OverlayCanvas: NSView {
         case .fireworks:
             // Burst from the winning pill's center, no per-pill
             // motion — the burst IS the ack.
-            runParticles(
+            burstParticles(
                 emission: .fireworks, target: .winningOnly(winning),
                 intensity: intensity, duration: scaled(0.22),
                 completion: completion)
         case .confetti:
-            runParticles(
+            burstParticles(
                 emission: .confetti, target: .winningOnly(winning),
                 intensity: intensity, duration: scaled(0.22),
                 completion: completion)
@@ -553,271 +557,53 @@ final class OverlayCanvas: NSView {
         tick()
     }
 
-    // MARK: - Ghost (narrow-effect) driver
+    // MARK: - Effect-driver delegates
 
-    /// Per-ghost simulation state. Spawned when `present(...)`
-    /// detects a pill leaving the visible set; advanced by
-    /// `tickGhosts` until `progress >= 1` at which point the ghost
-    /// is removed from the list. Multiple spawns can be in-flight
-    /// simultaneously (the user typing two letters in quick
-    /// succession before the first ghost's animation finishes),
-    /// each independent with its own `start` time.
-    private struct LiveGhost {
-        let hint: Hint
-        let baseRect: CGRect
-        let kind: MatchEffect             // resolved (no `.random`)
-        let intensity: EffectIntensity
-        let start: TimeInterval
-        let duration: TimeInterval
-        var scale: CGFloat = 1
-        var dx: CGFloat = 0
-        var dy: CGFloat = 0
-        var alpha: CGFloat = 1
-    }
-    private var liveGhosts: [LiveGhost] = []
-    private var ghostTickActive = false
-
-    /// Spawn one ghost per eliminated pill, then start the global
-    /// tick if it's not already running. Re-resolving `.random` per
-    /// spawn means each spawn batch picks its own concrete kind —
-    /// so typing the same letter twice can show two different
-    /// effects, matching the `match.random` UX.
-    private func spawnGhosts(_ eliminated: [(Hint, CGRect)]) {
-        let resolved = config.effect.narrow.resolvingRandom()
-        guard resolved != .none else { return }
-        let now = CACurrentMediaTime()
-        // Particle effects (fireworks / confetti) on every
-        // eliminated pill would emit hundreds of particles when
-        // the user types the first letter of a label set with many
-        // non-matching pills. Cap by falling back to `.fade` for
-        // those kinds in the narrow context — same visual idiom
-        // (something is going away), without the CPU cost.
-        let safe: MatchEffect =
-            (resolved == .fireworks || resolved == .confetti)
-                ? .fade : resolved
-        for (h, r) in eliminated {
-            liveGhosts.append(LiveGhost(
-                hint: h, baseRect: r, kind: safe,
-                intensity: config.effect.intensity,
-                start: now, duration: scaled(0.18)))
-        }
-        publishGhosts()
-        if !ghostTickActive {
-            ghostTickActive = true
-            tickGhosts()
-        }
-    }
-
-    /// Advance every live ghost. Removes any whose progress has
-    /// reached 1.0 and stops the tick when the list empties. Runs
-    /// at ~60Hz only while ghosts are alive — idle CPU is 0.
-    private func tickGhosts() {
-        let now = CACurrentMediaTime()
-        var next: [LiveGhost] = []
-        next.reserveCapacity(liveGhosts.count)
-        for var g in liveGhosts {
-            let p = (now - g.start) / g.duration
-            if p >= 1 { continue }   // animation done; drop ghost
-            updateGhost(&g, p: p)
-            next.append(g)
-        }
-        liveGhosts = next
-        publishGhosts()
-        if liveGhosts.isEmpty {
-            ghostTickActive = false
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) {
-            [weak self] in
-            MainActor.assumeIsolated { self?.tickGhosts() }
-        }
-    }
-
-    /// Compute the per-ghost (scale, dx, dy, alpha) for the given
-    /// normalised progress 0..1. Effect kinds re-use the match-
-    /// effect amplitude formulas so the visual reads consistently:
-    /// a `.drop` ghost falls the same distance a `.drop` match
-    /// would. Ease-out cubic on the bulk of them so the ghost
-    /// starts fast and settles.
-    private func updateGhost(_ g: inout LiveGhost, p: TimeInterval) {
-        let eased = 1 - pow(1 - p, 3)
-        let e = CGFloat(eased)
-        let i = g.intensity.scale
-        switch g.kind {
-        case .none, .random:
-            break
-        case .fade:
-            g.alpha = 1 - e
-        case .explode:
-            g.scale = 1 + (0.4 * i) * e
-            g.alpha = 1 - e
-        case .drop:
-            g.dy = (120 * i) * e
-            g.alpha = 1 - e
-        case .rise:
-            g.dy = -(120 * i) * e
-            g.alpha = 1 - e
-        case .slideLeft:
-            g.dx = -(160 * i) * e
-            g.alpha = 1 - e
-        case .slideRight:
-            g.dx = (160 * i) * e
-            g.alpha = 1 - e
-        case .vibrate:
-            let amp: CGFloat = 3 * i
-            let damp = 1 - p
-            g.dx = amp * CGFloat(sin(2 * .pi * 6 * p)) * CGFloat(damp)
-            g.dy = amp * CGFloat(cos(2 * .pi * 7 * p)) * CGFloat(damp)
-            g.alpha = max(0, 1 - CGFloat(p) * 0.6)
-        case .fireworks, .confetti:
-            // `spawnGhosts` already downgraded these to `.fade`
-            // for the narrow context; this case is defensive.
-            g.alpha = 1 - e
-        }
-    }
-
-    /// Push the current ghost state into the painter for the next
-    /// redraw. Adapter layer maps the simulation struct → the
-    /// painter's render struct (HintPainter.Ghost).
-    private func publishGhosts() {
-        painter.setGhosts(liveGhosts.map {
-            HintPainter.Ghost(
-                hint: $0.hint, baseRect: $0.baseRect,
-                scale: $0.scale, dx: $0.dx, dy: $0.dy,
-                alpha: $0.alpha)
-        })
-    }
-
-    // MARK: - Particle drivers
-
-    /// Particle emission pattern. `fireworks` shoots radially outward
-    /// from each emission point with light gravity; `confetti` emits
-    /// laterally with stronger downward gravity so it "rains" past
-    /// the pill.
-    private enum ParticleEmission { case fireworks, confetti }
-
-    /// Which pills the particles emit from. Match → winning only;
-    /// unmatch → every visible pill (the whole miss-feedback set).
+    /// Where a particle burst emits from. Match → winning pill;
+    /// unmatch → every visible pill.
     private enum ParticleTarget {
         case winningOnly(Hint)
         case everyPill
     }
 
-    /// Per-particle simulation state — extends the painter's render
-    /// struct with velocity + a base color so the driver can advance
-    /// the system each tick without re-allocating the list.
-    private struct LiveParticle {
-        var x: CGFloat
-        var y: CGFloat
-        var vx: CGFloat
-        var vy: CGFloat
-        var radius: CGFloat
-        var color: NSColor
-        var alpha: CGFloat
-    }
-
-    /// Spawn + simulate particles across `duration`, calling
-    /// `completion` when the burst fades out. Intensity scales the
-    /// PER-EMISSION particle count + the initial velocity magnitude.
-    private func runParticles(
+    /// Resolve the target into canvas-local emitter points + delegate
+    /// to `ParticleDriver`. Centralises the pills-lookup so each
+    /// `animateMatch`/`animateUnmatch` switch case stays one line.
+    private func burstParticles(
         emission: ParticleEmission,
         target: ParticleTarget,
         intensity: EffectIntensity,
         duration: TimeInterval,
         completion: @escaping () -> Void
     ) {
-        let palette = HintPainter.resolvePalette(cfg: config)
-        let accent = palette.accentColor
-        let extra: [NSColor] = [
-            HintPainter.color(hex: 0xFFD700, alpha: 1),  // gold
-            HintPainter.color(hex: 0xFF6EC7, alpha: 1),  // pink
-            HintPainter.color(hex: 0x00E5FF, alpha: 1),  // cyan
-            accent,
-        ]
-        var emitters: [CGPoint] = []
+        let emitters: [CGPoint]
         switch target {
         case .winningOnly(let h):
             if let r = pills.first(where: { $0.hint.keys == h.keys })?.rect {
-                emitters.append(CGPoint(x: r.midX, y: r.midY))
+                emitters = [CGPoint(x: r.midX, y: r.midY)]
+            } else {
+                emitters = []
             }
         case .everyPill:
             emitters = pills.map { CGPoint(x: $0.rect.midX, y: $0.rect.midY) }
         }
-        // Per-emitter particle count. Scale up with intensity but
-        // hard-cap so an .everyPill burst on a 60-pill screen doesn't
-        // spawn 600 simultaneous particles.
-        let baseCount = emission == .fireworks ? 14 : 18
-        let perEmitter = max(4, min(30, Int(CGFloat(baseCount) * intensity.scale)))
-        var live: [LiveParticle] = []
-        live.reserveCapacity(emitters.count * perEmitter)
-        for emit in emitters {
-            for _ in 0..<perEmitter {
-                let v = emission == .fireworks
-                    ? randomFireworkVelocity(intensity: intensity)
-                    : randomConfettiVelocity(intensity: intensity)
-                live.append(LiveParticle(
-                    x: emit.x, y: emit.y,
-                    vx: v.dx, vy: v.dy,
-                    radius: CGFloat.random(in: 1.5...3.0),
-                    color: extra.randomElement() ?? accent,
-                    alpha: 1))
-            }
-        }
-        // Gravity (canvas-flipped: positive y = downward = falling).
-        let gravity: CGFloat = emission == .confetti ? 900 : 360
-        let start = CACurrentMediaTime()
-        var prev = start
-        func tick() {
-            let now = CACurrentMediaTime()
-            let dt = CGFloat(now - prev)
-            prev = now
-            let p = min((now - start) / duration, 1)
-            // Advance simulation.
-            for i in live.indices {
-                live[i].vy += gravity * dt
-                live[i].x += live[i].vx * dt
-                live[i].y += live[i].vy * dt
-                // Linear alpha fade across the burst window. Easeout
-                // would feel laggy at this duration; linear reads as
-                // "tail dimming" which is what particles do IRL.
-                live[i].alpha = max(0, 1 - CGFloat(p))
-            }
-            painter.setParticles(live.map {
-                HintPainter.Particle(
-                    x: $0.x, y: $0.y, radius: $0.radius,
-                    color: $0.color, alpha: $0.alpha)
-            })
-            if p < 1 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) {
-                    MainActor.assumeIsolated { tick() }
-                }
-            } else {
-                painter.setParticles([])
-                completion()
-            }
-        }
-        tick()
+        let accent = HintPainter.resolvePalette(cfg: config).accentColor
+        particleDriver.burst(
+            from: emitters, emission: emission,
+            intensity: intensity, accent: accent,
+            duration: duration, completion: completion)
     }
 
-    /// Random radial velocity for a fireworks particle. Angle is
-    /// uniform over the full circle; speed scales with intensity.
-    private func randomFireworkVelocity(
-        intensity: EffectIntensity
-    ) -> CGVector {
-        let angle = CGFloat.random(in: 0...(2 * .pi))
-        let speed = CGFloat.random(in: 120...260) * intensity.scale
-        return CGVector(
-            dx: cos(angle) * speed,
-            dy: sin(angle) * speed)
-    }
-
-    /// Confetti emits mostly downward with horizontal spread.
-    private func randomConfettiVelocity(
-        intensity: EffectIntensity
-    ) -> CGVector {
-        let dx = CGFloat.random(in: -120...120) * intensity.scale
-        let dy = CGFloat.random(in: 20...160) * intensity.scale
-        return CGVector(dx: dx, dy: dy)
+    /// Spawn ghosts via the dedicated driver. Wrapping function
+    /// applies the `narrow` effect kind from config + the scaled
+    /// per-ghost duration; the driver handles simulation.
+    private func spawnGhosts(_ eliminated: [(Hint, CGRect)]) {
+        let resolved = config.effect.narrow.resolvingRandom()
+        ghostDriver.spawn(
+            eliminated: eliminated,
+            kind: resolved,
+            intensity: config.effect.intensity,
+            duration: scaled(0.18))
     }
 
     /// Push the currently-held modifier flags into the painter so
