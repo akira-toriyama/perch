@@ -84,24 +84,106 @@ alphabet = "asdfjklghqweruiopzxcvbnm"
 prioritise-center = true         # closest-to-center element gets 'a'
 
 [overlay]
-accent = "system"                # accent for matched pill / typed prefix
-                                 # "system" = user's macOS accent; #rrggbb also OK
-font-size = 14                   # 8..32 — monospaced semibold
+theme = "system"                 # palette preset — see "Themes" below
+accent = "system"                # accent override on top of theme; #rrggbb literal OK
+pill-shape = "pill"              # pill / square / circle / underline / tag
+font-size = 14                   # 8..32
 blur-enabled = true              # frosted-glass background per pill
-anim-enabled = true              # 150ms scale-in + 200ms red miss-flash
-peek-key = "space"               # hold to temporarily hide the overlay
-                                 # ("" disables; hint mode only)
+anim-enabled = true              # global motion kill-switch (off = no effects)
+peek-key = "space"               # hold to hide the overlay (hint / grid only)
+show-modifier-badge = "off"      # off / glyph / action — show ⌃⌥⇧⌘ on pill corner
+
+# Animations — see "Effects" below for the kind vocabulary.
+[overlay.effect]
+appear         = "pop"           # entrance: none / pop / cascade / fade-in / drop-in / bloom / random
+match          = "none"          # on resolve (winning pill only)
+unmatch        = "none"          # on missed key (layered over red flash)
+narrow         = "none"          # on prefix-filtered pills (the ones leaving)
+intensity      = "normal"        # subtle / normal / bold / wild
+duration-scale = 1.0             # 0.1..5.0 — global tempo multiplier
+
+# Neon border (off by default).
+[overlay.border]
+effect        = "off"            # off / neon / cyber / vapor / kawaii / rainbow / random
+glow          = true             # NSShadow bloom
+width         = 1.5
+cycle-seconds = 3.0              # hue rotation period
+
+# Audio feedback. Each value: system-sound name ("Tink" / "Pop" / ...)
+# OR a file path ("~/foo.mp3" / "/path/click.wav"). Empty / "none" silences.
+[overlay.sound]
+match    = ""                    # plays on resolve
+unmatch  = ""                    # plays on miss
+activate = ""                    # plays on hint mode entry
+volume   = 0.5                   # 0..1
 
 [behavior]
 auto-click-on-unique = true      # fire as soon as one candidate remains
 roles = ["Button", "MenuItem", "Link", "Tab", ...]
 exclude-apps = []                # bundle IDs perch ignores
 
-# Per-app overrides — change `roles`, `min-size`, or
-# `auto-click-on-unique` per frontmost bundle id. Unset keys fall
-# through to the global `[behavior]` value.
+# Per-app overrides — `roles`, `min-size`, `auto-click-on-unique`,
+# AND any of the effect kinds (`match-effect`, `appear-effect`,
+# `unmatch-effect`, `narrow-effect`). Unset keys fall through.
 [behavior."com.google.Chrome"]
-min-size = 20                    # declutter 16×16 window-control glyphs
+min-size = 20
+
+[behavior."com.figma.Desktop"]
+match-effect = "none"            # silence flashy effects inside Figma
+```
+
+### Themes
+
+`[overlay] theme` picks pill background, accent, text, miss-flash color,
+and font family in one knob. Ports facet's vocabulary:
+
+- **Dark / mono**: `terminal`, `nord`, `dracula`, `gruvbox`, `catppuccin`,
+  `rosepine`, `everforest`, `solarized`, `onedark`, `monokai`, `hacker`
+- **Neon**: `neon`, `cyber`, `vapor`
+- **Light**: `cute`, `kawaii`, `paper`
+- **Monochrome**: `mono-light`, `mono-dark`, `monotone`
+- **Adaptive**: `system` (default — follows macOS accent + light/dark)
+- **Special**: `random` (picks a built-in per `--reload`)
+
+Define your own under `[overlay.theme.<name>]`:
+
+```toml
+[overlay.theme.my-theme]
+pill-bg = "#1a1a1a"
+accent  = "#ff8800"
+text    = "#ffffff"
+font    = "rounded"
+
+[overlay]
+theme = "my-theme"
+```
+
+### Effects
+
+`[overlay.effect]` has four channels — all share the same kind vocab:
+
+- **`appear`** — pills entering (`pop` is the default scale-in)
+- **`match`** — winning pill on resolve
+- **`unmatch`** — missed-key feedback (layered on red flash)
+- **`narrow`** — pill exiting when filtered by the typed prefix
+
+Kinds: `none` / `fade` / `explode` / `drop` / `rise` / `slide-left` /
+`slide-right` / `vibrate` / `fireworks` / `confetti` / `random`
+(plus `pop` / `cascade` / `fade-in` / `drop-in` / `bloom` for entry).
+
+`intensity` (subtle/normal/bold/wild) scales amplitude.
+`duration-scale` (0.1..5.0) scales tempo. Use ~2.5 for screencasts.
+
+### Sound
+
+`[overlay.sound]` accepts macOS system-sound names OR file paths:
+
+```toml
+[overlay.sound]
+match    = "Tink"                # built-in macOS sound
+unmatch  = "Sosumi"
+activate = "~/Music/click.mp3"   # your own audio (mp3/m4a/wav/aiff)
+volume   = 0.5
 ```
 
 Reload after edits: `perch --reload` (or just save — perch

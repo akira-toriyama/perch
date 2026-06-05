@@ -88,13 +88,38 @@ alphabet = "asdfjklghqweruiopzxcvbnm"
 prioritise-center = true
 
 [overlay]
-accent = "system"                # マッチ中ピル/入力済プリフィックスのアクセント
-                                 # "system" = macOS のアクセントカラー、#rrggbb 可
-font-size = 14                   # 8..32  monospaced semibold
-blur-enabled = true              # ピル背景のフロスト(磨りガラス)
-anim-enabled = true              # 出現 150ms scale-in + ミス時 200ms 赤フラッシュ
-peek-key = "space"               # ホールド中だけオーバーレイを一時非表示
-                                 # ("" で無効化、hint モードのみ)
+theme = "system"                 # パレットプリセット — 下の "テーマ" 参照
+accent = "system"                # theme の上に重ねるアクセント上書き、#rrggbb 可
+pill-shape = "pill"              # pill / square / circle / underline / tag
+font-size = 14                   # 8..32
+blur-enabled = true              # ピル背景のフロスト
+anim-enabled = true              # 全演出の大元キル スイッチ
+peek-key = "space"               # ホールドでオーバーレイ一時非表示 (hint / grid)
+show-modifier-badge = "off"      # off / glyph / action — ピル角に⌃⌥⇧⌘表示
+
+# アニメ — kind 語彙は下の "演出" 参照
+[overlay.effect]
+appear         = "pop"           # 入場: none / pop / cascade / fade-in / drop-in / bloom / random
+match          = "none"          # 確定時（勝者 pill のみ）
+unmatch        = "none"          # ミス時（赤フラッシュに重畳）
+narrow         = "none"          # 絞り込みで消える pill の演出
+intensity      = "normal"        # subtle / normal / bold / wild
+duration-scale = 1.0             # 0.1..5.0 — 全 duration の倍率
+
+# ネオン ボーダー（既定 off）
+[overlay.border]
+effect        = "off"            # off / neon / cyber / vapor / kawaii / rainbow / random
+glow          = true
+width         = 1.5
+cycle-seconds = 3.0              # 色相回転周期
+
+# サウンド — システムサウンド名 ("Tink" / "Pop" / ...) または
+# ファイルパス ("~/foo.mp3" 等)。空 / "none" でサイレント。
+[overlay.sound]
+match    = ""
+unmatch  = ""
+activate = ""
+volume   = 0.5                   # 0..1
 
 [behavior]
 auto-click-on-unique = true
@@ -102,10 +127,68 @@ roles = ["Button", "MenuItem", "Link", "Tab", ...]
 exclude-apps = []
 
 # アプリ単位の上書き — `roles` / `min-size` / `auto-click-on-unique`
-# を bundle id ごとに差し替え。未設定キーは global の `[behavior]`
-# にフォールバック（typo-tolerance policy の延長）。
+# + 演出系 (`match-effect` / `appear-effect` / `unmatch-effect` /
+# `narrow-effect`) を bundle id ごとに差し替え。
 [behavior."com.google.Chrome"]
-min-size = 20                    # 16×16 ウィンドウコントロールを除外
+min-size = 20
+
+[behavior."com.figma.Desktop"]
+match-effect = "none"            # Figma 内では派手な演出を抑制
+```
+
+### テーマ
+
+`[overlay] theme` で pill 背景 / アクセント / テキスト / ミス色 / フォントを
+一括指定。facet 互換語彙:
+
+- **Dark / mono**: `terminal` / `nord` / `dracula` / `gruvbox` /
+  `catppuccin` / `rosepine` / `everforest` / `solarized` / `onedark` /
+  `monokai` / `hacker`
+- **Neon**: `neon` / `cyber` / `vapor`
+- **Light**: `cute` / `kawaii` / `paper`
+- **Monochrome**: `mono-light` / `mono-dark` / `monotone`
+- **Adaptive**: `system`（既定 — macOS アクセント + ライト/ダーク追従）
+- **Special**: `random`（`--reload` ごとにランダム）
+
+自分でも定義可能（`[overlay.theme.<name>]`）:
+
+```toml
+[overlay.theme.my-theme]
+pill-bg = "#1a1a1a"
+accent  = "#ff8800"
+text    = "#ffffff"
+font    = "rounded"
+
+[overlay]
+theme = "my-theme"
+```
+
+### 演出
+
+`[overlay.effect]` は 4 系統、全部同じ kind 語彙:
+
+- **`appear`** — 出現時（既定 `pop` で 150ms scale-in）
+- **`match`** — 確定時（勝者 pill のみ）
+- **`unmatch`** — ミス時（赤フラッシュに重畳）
+- **`narrow`** — 絞り込みで消える pill
+
+Kind: `none` / `fade` / `explode` / `drop` / `rise` / `slide-left` /
+`slide-right` / `vibrate` / `fireworks` / `confetti` / `random`
+（appear は `pop` / `cascade` / `fade-in` / `drop-in` / `bloom` 固有）。
+
+`intensity`（subtle/normal/bold/wild）で振幅、`duration-scale`
+（0.1..5.0）で速度。screencast 用は 2.5 推奨。
+
+### サウンド
+
+`[overlay.sound]` は macOS システムサウンド名 OR ファイルパス対応:
+
+```toml
+[overlay.sound]
+match    = "Tink"                # macOS 標準
+unmatch  = "Sosumi"
+activate = "~/Music/click.mp3"   # 自分の音声 (mp3/m4a/wav/aiff)
+volume   = 0.5
 ```
 
 編集後の反映: `perch --reload` (デーモン稼働中ならファイル保存
