@@ -215,7 +215,9 @@ AX 列挙の 5 段フィルタ。各段は web-shell apps の **具体的な fai
 hint mode と **排他** な並列モード。`CGEvent.scrollWheelEvent` を focused
 window に注入。perch は focus を取らないので scroll はユーザー caret の
 位置に届く。`gg` / `Shift+g` で top / bottom（20 大ノッチで OS の clamp に
-任せる）。
+任せる）。issue #56 で **count buffer** (`5j` → 5 ノッチ、上限 200) と
+vim 正統の **`Ctrl+d` / `Ctrl+u` / `Ctrl+f` / `Ctrl+b`** バインド追加
+（`d` / `u` は alias として保持）。
 - **Don't call it:** scroll feature, vim scroll, スクロール機能
 
 ### SearchMode

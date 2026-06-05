@@ -134,12 +134,23 @@ entry) puts perch into scroll mode and intercepts:
 |---|---|
 | `j` | scroll down one notch |
 | `k` | scroll up one notch |
-| `d` | scroll down half a screen |
-| `u` | scroll up half a screen |
+| `d` / `Ctrl+d` | scroll down half a screen |
+| `u` / `Ctrl+u` | scroll up half a screen |
+| `Ctrl+f` | scroll down a full screen |
+| `Ctrl+b` | scroll up a full screen |
+| `<digits>` | count prefix for the next motion (`5j` = 5 notches, `12k` = 12 up) |
 | `gg` | jump to top |
 | `Shift+g` | jump to bottom |
 | `esc` (or the configured cancel key) | exit scroll mode |
 | any other key | exit + let the key through |
+
+The count prefix is capped at 200 so a typo (`999999j`) can't
+pin the daemon. Count is consumed on motion fire, cleared on
+Esc / unmapped key, and applied to `j` / `k` / `d` / `u` /
+`Ctrl+f` / `Ctrl+b`. `gg` / `Shift+g` consume any pending count
+but don't multiply (no useful "go to top 5 times"). Plain `d` /
+`u` are kept as aliases for the vim canonical `Ctrl+d` /
+`Ctrl+u`.
 
 Scroll dispatches via `CGEvent.scrollWheelEvent` against the
 focused window, so perch itself stays headless and the scroll
