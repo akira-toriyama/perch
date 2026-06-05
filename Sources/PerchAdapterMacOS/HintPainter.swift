@@ -88,6 +88,12 @@ final class HintPainter: NSView {
     /// `[overlay].show-modifier-badge` is on.
     private var modifierFlags: CGEventFlags = []
 
+    /// Normalised hue rotation for the border effect (0..1). The
+    /// OverlayCanvas cycle driver updates this each tick when
+    /// `[overlay.border].cycle-seconds > 0`. 0 = base hue; 0.5 =
+    /// 180° around the wheel; 1 ≡ 0.
+    private var borderHueOffset: CGFloat = 0
+
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -162,6 +168,14 @@ final class HintPainter: NSView {
     /// `show-modifier-badge`).
     func setModifierFlags(_ flags: CGEventFlags) {
         modifierFlags = flags
+        needsDisplay = true
+    }
+
+    /// Set the border hue offset for the neon-border effect.
+    /// Driver in OverlayCanvas updates this each tick while
+    /// `[overlay.border].cycle-seconds > 0`.
+    func setBorderHueOffset(_ offset: CGFloat) {
+        borderHueOffset = offset
         needsDisplay = true
     }
 
@@ -267,6 +281,17 @@ final class HintPainter: NSView {
                     path.lineWidth = 2
                     path.stroke()
                     NSGraphicsContext.restoreGraphicsState()
+                } else if state == .idle, cfg.borderEffect != .off {
+                    // Neon border preset — replaces the default
+                    // accent hairline for non-matched idle pills.
+                    // Uses the configured width + optional glow,
+                    // hue-rotated by the current cycle offset so a
+                    // long-lived overlay paints a slow palette
+                    // rotation. Matched pills (above) keep the
+                    // accent path so the typed-prefix highlight
+                    // stays visually distinct.
+                    drawNeonBorder(
+                        path: path, cfg: cfg, palette: palette)
                 } else {
                     let border: NSColor
                     let width: CGFloat
@@ -434,6 +459,59 @@ final class HintPainter: NSView {
             ctx.cgContext.setAlpha(1)
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    // MARK: - Neon border
+
+    /// Stroke the pill border with the configured neon preset.
+    /// Uses `cfg.borderWidth` + an optional NSShadow glow when
+    /// `cfg.borderGlow` is true. The base color comes from the
+    /// `BorderEffect` palette (or `palette.accentColor` if the
+    /// effect somehow lacks a hex), then rotated by
+    /// `borderHueOffset` so a cycle period rotates the hue.
+    private func drawNeonBorder(
+        path: NSBezierPath,
+        cfg: PerchConfig,
+        palette: ResolvedPalette
+    ) {
+        let baseHex = cfg.borderEffect.baseHex ?? 0xFFFFFF
+        var color = Self.color(hex: baseHex, alpha: 1)
+        // Rotate hue around the wheel. For `.rainbow` the base is
+        // white so saturation jumps from 0 to 1 — produce a
+        // saturated color at the rotated hue. For colored bases,
+        // shift the existing hue.
+        if borderHueOffset != 0 {
+            color = Self.rotateHue(color, by: borderHueOffset)
+        }
+        NSGraphicsContext.saveGraphicsState()
+        if cfg.borderGlow {
+            let glow = NSShadow()
+            glow.shadowColor = color.withAlphaComponent(0.7)
+            glow.shadowBlurRadius = 6
+            glow.set()
+        }
+        color.withAlphaComponent(0.95).setStroke()
+        path.lineWidth = CGFloat(cfg.borderWidth)
+        path.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// Rotate the given color's hue by `offset` (0..1) around the
+    /// color wheel. White input lands with saturation pulled up to
+    /// 1.0 so the rotation actually produces visible color — the
+    /// `.rainbow` border preset depends on this so its white base
+    /// hex doesn't render as a stationary grey.
+    static func rotateHue(_ color: NSColor, by offset: CGFloat) -> NSColor {
+        let conv = color.usingColorSpace(.deviceRGB) ?? color
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 1, a: CGFloat = 1
+        conv.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        let newH = (h + offset).truncatingRemainder(dividingBy: 1)
+        let newS = max(s, 0.9)        // ensure white inputs colourise
+        return NSColor(
+            hue: newH < 0 ? newH + 1 : newH,
+            saturation: newS,
+            brightness: max(b, 0.85),
+            alpha: a)
     }
 
     // MARK: - Modifier badge

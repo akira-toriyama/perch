@@ -389,6 +389,49 @@ public enum UnmatchEffect: String, Sendable, CaseIterable {
     }
 }
 
+/// Neon border preset for the pill perimeter — ports facet's
+/// `[border]` vocabulary onto perch's pill geometry. Layered on
+/// top of the theme palette; the theme picks pill body colors,
+/// this picks the border's identity. Off by default — every pill
+/// keeps the existing 1pt accent-tinted hairline.
+public enum BorderEffect: String, Sendable, CaseIterable {
+    case off
+    case neon                   // electric cyan on blue base
+    case cyber                  // teal / aqua matrix
+    case vapor                  // synthwave pink → purple
+    case kawaii                 // soft pastels
+    case rainbow                // full-spectrum hue rotation
+    case random                 // pick a non-off non-random kind at activation
+
+    public static func parse(_ s: String) -> BorderEffect? {
+        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
+        return BorderEffect(rawValue: t)
+    }
+
+    /// Resolve `.random` to a concrete effect, excluding `.off`
+    /// (so random never collapses to no border) and itself.
+    public func resolvingRandom() -> BorderEffect {
+        guard self == .random else { return self }
+        let pool = BorderEffect.allCases.filter { $0 != .random && $0 != .off }
+        return pool.randomElement() ?? .neon
+    }
+
+    /// Base color the painter strokes the border with at hue
+    /// offset 0. Returns nil for `.off` (caller falls back to the
+    /// accent palette). Hues are picked to match facet's neon
+    /// family — same intent: "this looks like a neon tube".
+    public var baseHex: UInt32? {
+        switch self.resolvingRandom() {
+        case .off, .random:    return nil
+        case .neon:            return 0x00E5FF
+        case .cyber:           return 0x00FFCC
+        case .vapor:           return 0xFF6EC7
+        case .kawaii:          return 0xFFB6E1
+        case .rainbow:         return 0xFFFFFF   // hue cycles, sat fixed
+        }
+    }
+}
+
 /// Overall magnitude scaler for `match` / `unmatch` effects.
 /// Ports wand's `intensity` vocabulary verbatim. Multiplies the
 /// effect's spatial dimension (explode scale, shake amplitude) but

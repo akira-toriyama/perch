@@ -184,6 +184,7 @@ public final class OverlayWindow {
                  + "screens=\(NSScreen.screens.count)")
 
         canvas.present(hints: hints, typed: typed)
+        canvas.startBorderCycle()
         // .orderFrontRegardless paints the panel without activating
         // perch — the underlying app stays key, its caret keeps
         // blinking, and we avoid the "focus jumped out from under
@@ -238,6 +239,7 @@ public final class OverlayWindow {
     public func hide() {
         keyTap?.uninstall()
         keyTap = nil
+        canvas.stopBorderCycle()
         panel.orderOut(nil)
         canvas.clear()
         hints = []

@@ -799,6 +799,39 @@ final class OverlayCanvas: NSView {
         painter.setModifierFlags(flags)
     }
 
+    /// Start the border hue-cycle tick. Idempotent — calling while
+    /// already running is a no-op. The tick runs at ~30Hz (smooth
+    /// enough for a slow rotation, half the cost of 60Hz) and stops
+    /// when `stopBorderCycle` is called or the overlay hides.
+    func startBorderCycle() {
+        guard config.borderEffect != .off,
+              config.borderCycleSeconds > 0,
+              !borderCycleActive else { return }
+        borderCycleActive = true
+        borderCycleStart = CACurrentMediaTime()
+        tickBorderCycle()
+    }
+
+    func stopBorderCycle() {
+        borderCycleActive = false
+        painter.setBorderHueOffset(0)
+    }
+
+    private var borderCycleActive = false
+    private var borderCycleStart: TimeInterval = 0
+
+    private func tickBorderCycle() {
+        guard borderCycleActive else { return }
+        let elapsed = CACurrentMediaTime() - borderCycleStart
+        let period = max(0.1, config.borderCycleSeconds)
+        let progress = (elapsed.truncatingRemainder(dividingBy: period)) / period
+        painter.setBorderHueOffset(CGFloat(progress))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 30) {
+            [weak self] in
+            MainActor.assumeIsolated { self?.tickBorderCycle() }
+        }
+    }
+
     func clear() {
         pills.removeAll(keepingCapacity: true)
         typed = ""

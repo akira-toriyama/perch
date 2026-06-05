@@ -137,6 +137,31 @@ public struct PerchConfig: Sendable {
     /// "this pill is going away, give it a visual exit".
     public let narrowEffect: MatchEffect
 
+    /// Pill border neon preset — ports facet's `[border]` vocabulary
+    /// onto perch's per-pill border. `.off` keeps the existing 1pt
+    /// accent-tinted hairline; the other kinds (neon / cyber / vapor /
+    /// kawaii / rainbow / random) paint a brighter colored border
+    /// optionally with bloom + hue-cycle over time. Layered on top
+    /// of `overlayTheme` so the body palette stays the same.
+    public let borderEffect: BorderEffect
+
+    /// `true` adds an NSShadow glow under the border so it reads
+    /// like a real neon tube; `false` keeps the border flat.
+    /// Only takes effect when `borderEffect != .off`.
+    public let borderGlow: Bool
+
+    /// Border line width in points. Clamped 0.5..30. Default 1.5
+    /// (matches facet's default and pairs cleanly with the 10pt
+    /// pill corner radius).
+    public let borderWidth: Double
+
+    /// Hue / palette rotation period in seconds. The painter
+    /// rotates the border's hue around the color wheel over this
+    /// period, so a 3-second cycle returns to the same color
+    /// every 3 seconds. Clamped 1..120. Set to 0 to lock the
+    /// color (rainbow then collapses to a static white border).
+    public let borderCycleSeconds: Double
+
     /// Magnitude scaler for `matchEffect` / `unmatchEffect` /
     /// `narrowEffect`. Ports wand's `intensity` vocabulary verbatim.
     /// Affects spatial dimension (explode scale, shake amplitude)
@@ -300,6 +325,10 @@ public struct PerchConfig: Sendable {
         matchEffect: .none,
         unmatchEffect: .none,
         narrowEffect: .none,
+        borderEffect: .off,
+        borderGlow: true,
+        borderWidth: 1.5,
+        borderCycleSeconds: 3.0,
         effectIntensity: .normal,
         effectDurationScale: 1.0,
         autoClickOnUnique: true,
@@ -409,6 +438,24 @@ public struct PerchConfig: Sendable {
             ?? "space"
         let showBadge = doc["overlay"]?["show-modifier-badge"]?.asBool
             ?? false
+
+        // [overlay.border] — neon border preset. Same flat-key
+        // shape as [overlay.effect]. All knobs clamp / fall back
+        // to defaults per typo-tolerance.
+        let borderSection = doc["overlay.border"]
+        let borderEff = (borderSection?["effect"]?.asString)
+            .flatMap(BorderEffect.parse)?.resolvingRandom() ?? .off
+        let borderGlow = borderSection?["glow"]?.asBool ?? true
+        let borderWidth: Double = {
+            guard let raw = borderSection?["width"]?.asDouble
+            else { return 1.5 }
+            return raw >= 0.5 && raw <= 30 ? raw : 1.5
+        }()
+        let borderCycle: Double = {
+            guard let raw = borderSection?["cycle-seconds"]?.asDouble
+            else { return 3.0 }
+            return raw >= 0 && raw <= 120 ? raw : 3.0
+        }()
 
         // [overlay.effect] — wand-style match / unmatch / intensity.
         // Same flat-key shape as [behavior.web]: TOML's dotted-table
@@ -565,6 +612,10 @@ public struct PerchConfig: Sendable {
             matchEffect: matchEff,
             unmatchEffect: unmatchEff,
             narrowEffect: narrowEff,
+            borderEffect: borderEff,
+            borderGlow: borderGlow,
+            borderWidth: borderWidth,
+            borderCycleSeconds: borderCycle,
             effectIntensity: intensity,
             effectDurationScale: durScale,
             autoClickOnUnique: autoClick,
