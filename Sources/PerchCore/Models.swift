@@ -29,11 +29,28 @@ public struct UIElement: Sendable, Hashable {
     /// On-screen frame in screen coordinates (top-left origin).
     public let frame: CGRect
 
-    public init(id: String, role: String, label: String, frame: CGRect) {
+    /// AX-bound keyboard shortcut (issue #58), pre-formatted with
+    /// the macOS modifier glyphs in the canonical order
+    /// (`⌃⌥⇧⌘<key>`). `nil` when the element has no associated
+    /// shortcut OR the adapter didn't populate it.
+    ///
+    /// Today `AXUIElementSource.enumerateMenu()` is the only call
+    /// site that reads `kAXMenuItemCmdChar` / `kAXMenuItemCmdModifiers`
+    /// to fill this in — toolbar / window / emoji / hint walkers
+    /// leave it `nil`. The renderer (SearchCanvas) hides the
+    /// annotation when this is nil, so a `nil` here costs nothing
+    /// at draw time.
+    public let shortcut: String?
+
+    public init(
+        id: String, role: String, label: String,
+        frame: CGRect, shortcut: String? = nil
+    ) {
         self.id = id
         self.role = role
         self.label = label
         self.frame = frame
+        self.shortcut = shortcut
     }
 }
 

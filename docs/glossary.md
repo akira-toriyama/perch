@@ -246,6 +246,20 @@ fallback to `.press`。`Esc` で press 自体を中止。修飾キー系
 （Cmd / Shift / Alt / Cmd+Shift）は影響を受けず従来通り。
 - **Don't call it:** keyboard chord, chord input, コード入力（一般名は可）
 
+### AX shortcut annotation
+issue #58。`--menu` の各 pill 右端に **AX バインドのキーボード
+ショートカット**（`⌘Q` / `⇧⌘N` 等、macOS 標準グリフ順
+`⌃⌥⇧⌘<key>`）を薄色描画する機能。`AXUIElementSource.readMenuShortcut(_)`
+が `AXMenuItemCmdChar` + `AXMenuItemCmdModifiers`（Carbon 流の
+bitmask: bit3=NoCommand のため `mods & 8 == 0` で ⌘ 含む）を
+読み、`UIElement.shortcut` に格納。`SearchCanvas.pillTextParts(...)`
+が opt-out（`[overlay].show-shortcuts = false`）と shortcut なし
+（多くの要素）の両方で空 gutter にフォールバック — 行幅は
+shortcut のある行に合わせて統一されるので Spotlight 風の
+整列が崩れない。`AXMenuItemCmdVirtualKey` / `AXMenuItemCmdGlyph`
+（function キー / Tab / 矢印キー等）は follow-up 扱い。
+- **Don't call it:** menu hint, shortcut hint, ショートカット表示（一般名は可）
+
 ### EmojiPicker (emoji picker)
 issue #55。`SearchMode` の派生で、enumerator が
 `UIElementSource.enumerateEmoji()` （curated `EmojiTable.entries` を

@@ -339,13 +339,19 @@ private final class SearchCanvas: NSView {
     /// Per-match pill positioned over the match's AX frame
     /// (`--search` default). Each pill is clamped into the canvas
     /// so a partially-off-screen match still renders inside.
+    /// `--search` targets the full app AX walk, where elements
+    /// rarely carry `kAXMenuItemCmd*` attributes, so the shortcut
+    /// annotation is omitted here — the menu mode's vertical list
+    /// is the only renderer that surfaces shortcuts (issue #58).
     private func drawMatchPillsOverFrames(
         font: NSFont, small: NSFont, accent: NSColor
     ) {
         for (i, e) in matches.enumerated() {
-            let combined = pillText(digit: i + 1, element: e,
-                                    font: font, small: small)
-            let tSize = combined.size()
+            let parts = pillTextParts(
+                digit: i + 1, element: e,
+                font: font, small: small,
+                showShortcut: false)
+            let tSize = parts.label.size()
             let w = ceil(tSize.width) + 20
             let h = ceil(font.boundingRectForFont.height) + 14
 
@@ -359,7 +365,7 @@ private final class SearchCanvas: NSView {
             y = min(max(y, 6), bounds.height - h - 6)
             let r = CGRect(x: x, y: y, width: w, height: h)
             drawPill(rect: r, accent: accent)
-            combined.draw(at: NSPoint(
+            parts.label.draw(at: NSPoint(
                 x: r.origin.x + 10,
                 y: r.origin.y + (h - tSize.height) / 2 - 1))
         }
@@ -370,40 +376,74 @@ private final class SearchCanvas: NSView {
     /// widest label so the column reads as a single Spotlight-style
     /// result list. Used when match frames are `.zero` (menu items
     /// have no on-screen frame).
+    ///
+    /// Issue #58: when at least one match has a `shortcut`, the
+    /// pill width grows to accommodate a right-aligned shortcut
+    /// annotation (`⌘Q`, `⇧⌘N`, …). Pills without a shortcut
+    /// still align cleanly against the right-edge gutter because
+    /// every pill in the column shares one width. The gutter
+    /// collapses to zero when no match has a shortcut, so the
+    /// idle / opt-out / fall-through cases render exactly as they
+    /// did pre-#58.
     private func drawMatchListBelowStrip(
         font: NSFont, small: NSFont, accent: NSColor,
         listOriginY: CGFloat
     ) {
         guard !matches.isEmpty else { return }
+        let showShortcuts = config.overlayShowShortcuts
         let rendered = matches.enumerated().map { i, e in
-            pillText(digit: i + 1, element: e,
-                     font: font, small: small)
+            pillTextParts(
+                digit: i + 1, element: e,
+                font: font, small: small,
+                showShortcut: showShortcuts)
         }
         let h = ceil(font.boundingRectForFont.height) + 14
         let gap: CGFloat = 6
-        let widest = rendered.map { $0.size().width }.max() ?? 0
-        let w = ceil(widest) + 20
+        let maxLabelW = rendered
+            .map { $0.label.size().width }.max() ?? 0
+        let maxShortcutW = rendered
+            .map { $0.shortcut?.size().width ?? 0 }.max() ?? 0
+        // Collapse the inter-column gap when no row has a
+        // shortcut so the column doesn't grow visibly wider just
+        // because the feature is enabled.
+        let interGap: CGFloat = maxShortcutW > 0 ? 20 : 0
+        let w = ceil(maxLabelW + interGap + maxShortcutW) + 20
         let x = (bounds.width - w) / 2
 
-        for (i, txt) in rendered.enumerated() {
+        for (i, parts) in rendered.enumerated() {
             let y = listOriginY + CGFloat(i) * (h + gap)
             let r = CGRect(x: x, y: y, width: w, height: h)
             drawPill(rect: r, accent: accent)
-            let tSize = txt.size()
-            txt.draw(at: NSPoint(
+            let labelSize = parts.label.size()
+            parts.label.draw(at: NSPoint(
                 x: r.origin.x + 10,
-                y: r.origin.y + (h - tSize.height) / 2 - 1))
+                y: r.origin.y + (h - labelSize.height) / 2 - 1))
+            if let sc = parts.shortcut {
+                let scSize = sc.size()
+                sc.draw(at: NSPoint(
+                    x: r.origin.x + w - scSize.width - 10,
+                    y: r.origin.y + (h - scSize.height) / 2 - 1))
+            }
         }
     }
 
-    /// Build the `<digit> <label>` attributed string for one match.
+    /// Build the (label, shortcut) attributed strings for one
+    /// match. Label is the `<digit> <truncated-title>` pair every
+    /// renderer needs; `shortcut` is the dimmer right-aligned
+    /// annotation that `--menu` surfaces. `shortcut` is `nil` when
+    /// the element has no `UIElement.shortcut`, when
+    /// `showShortcut` is false, OR when the caller is the
+    /// pills-over-frames renderer that doesn't surface shortcuts.
+    ///
     /// Truncated to 64 chars so deeply-nested menu paths
     /// (`Develop > Web Inspector > Open Inspector`) stay readable
     /// without overflowing the list column.
-    private func pillText(
+    private func pillTextParts(
         digit: Int, element: UIElement,
-        font: NSFont, small: NSFont
-    ) -> NSAttributedString {
+        font: NSFont, small: NSFont,
+        showShortcut: Bool
+    ) -> (label: NSAttributedString,
+          shortcut: NSAttributedString?) {
         let digitAttr = NSAttributedString(
             string: "\(digit)",
             attributes: [.font: font,
@@ -414,10 +454,21 @@ private final class SearchCanvas: NSView {
                             : element.label).prefix(64).description,
             attributes: [.font: small,
                          .foregroundColor: NSColor.white])
-        let combined = NSMutableAttributedString()
-        combined.append(digitAttr)
-        combined.append(titleAttr)
-        return combined
+        let label = NSMutableAttributedString()
+        label.append(digitAttr)
+        label.append(titleAttr)
+
+        var shortcut: NSAttributedString? = nil
+        if showShortcut, let s = element.shortcut, !s.isEmpty {
+            shortcut = NSAttributedString(
+                string: s,
+                attributes: [
+                    .font: small,
+                    .foregroundColor: NSColor.white
+                        .withAlphaComponent(0.65),
+                ])
+        }
+        return (label, shortcut)
     }
 
     /// Common rounded-rect fill + hairline border used by both

@@ -75,6 +75,13 @@ blur-enabled = true
 # you find effects distracting.
 anim-enabled = true
 
+# Show the AX-bound keyboard shortcut (⌘Q, ⇧⌘N, …) on `--menu`
+# pills as a right-aligned, dimmer annotation. Lets you discover
+# the native shortcut while still picking the menu item with 1-9.
+# Set to false if menu titles already include their own shortcut
+# hint, or for screenshot / demo work where the annotation clutters.
+show-shortcuts = true
+
 
 # ---- Behaviour ---------------------------------------------------
 [behavior]
