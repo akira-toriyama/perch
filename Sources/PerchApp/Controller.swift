@@ -73,6 +73,12 @@ final class Controller {
     /// No overlay panel — the cursor is the only visual feedback.
     /// Mutually exclusive with every other mode.
     private var nudge: NudgeMode?
+    /// Set when drag mode (issue #69 / M4-δ) owns the KeyTap.
+    /// Holds a system-level `leftMouseDown` while active (the
+    /// `.dragging` phase) — `cancel()` and the safety paths in
+    /// `DragMode.stop()` MUST release before tearing down to
+    /// avoid stranding the mouseDown. Mutually exclusive.
+    private var drag: DragMode?
 
     init(config: PerchConfig) {
         self.config = config
@@ -141,6 +147,10 @@ final class Controller {
         if let n = nudge {
             n.stop()
             nudge = nil
+        }
+        if let d = drag {
+            d.stop()
+            drag = nil
         }
     }
 
@@ -234,6 +244,29 @@ final class Controller {
     func enterGridMode() {
         startGridSession(maxDepth: 1, statusReason: "grid",
                          reenter: { [weak self] in self?.enterGridMode() })
+    }
+
+    /// Drag mode (issue #69 / M4-δ) — keyboard-driven drag-and-
+    /// drop. Enters in `.positioning` (cursor free, no button
+    /// held); `d` grabs (mouseDown); arrows move cursor + fire
+    /// mouseDragged; `d` / space / Enter releases (mouseUp + exit).
+    /// Esc is a safety release — fires mouseUp before exiting so
+    /// we don't strand a mouseDown in the system input queue.
+    func enterDragMode() {
+        if drag != nil {
+            cancel()
+            return
+        }
+        cancel()
+        let dm = DragMode(
+            cancelKey: config.cancelKey,
+            onExit: { [weak self] in
+                Task { @MainActor [weak self] in self?.drag = nil }
+            })
+        if dm.start() {
+            drag = dm
+            writeStatus(reason: "drag mode")
+        }
     }
 
     /// Arrow-nudge mode (issue #68 / M4-γ) — last-mile pixel
@@ -366,6 +399,7 @@ final class Controller {
         if let s = search { s.stop(); search = nil }
         if let g = grid { g.stop(); grid = nil }
         if let n = nudge { n.stop(); nudge = nil }
+        if let d = drag { d.stop(); drag = nil }
         // Toggle: a second hotkey press (or `--activate`) while
         // hint mode is up cancels and returns.
         if activeMode == .hint {
@@ -567,6 +601,9 @@ final class Controller {
                 case "nudge":
                     Log.line("controller: --nudge received")
                     self.enterNudgeMode()
+                case "drag":
+                    Log.line("controller: --drag received")
+                    self.enterDragMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every
