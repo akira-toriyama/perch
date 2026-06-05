@@ -56,6 +56,31 @@ public final class OverlayWindow {
     /// hint dispatch.
     private var activeBundleID: String?
 
+    /// Chord-suffix state machine (issue #57). Only active when
+    /// `config.chordLeader` is non-empty AND a bare-resolve fired
+    /// (no Cmd / Shift / Alt held). Otherwise the existing snappy
+    /// resolve path is unchanged.
+    private enum ChordPhase {
+        case none
+        case waitingForLeader   // resolved; next char is `,` or fire-default
+        case waitingForChord    // leader pressed; next char picks the action
+    }
+    private var chordPhase: ChordPhase = .none
+    /// The deferred `(hint, default action)` pair, set when we enter
+    /// `waitingForLeader`. `finalizeChord` reads and clears it.
+    private var pendingResolve: (Hint, HintAction)?
+    /// Live timer cancel handle for the chord wait. Replaced on each
+    /// phase transition so a `,` press extends the window cleanly.
+    private var chordTimer: DispatchWorkItem?
+    /// Lookup table mapping chord suffix char → action. Built once
+    /// per `show()` so per-call lookup is constant.
+    private static let chordActions: [Character: HintAction] = [
+        "c": .copyTitle,
+        "o": .revealInFinder,
+        "u": .copyURL,
+        "s": .speakTitle,
+    ]
+
     public init(config: PerchConfig) {
         self.config = config
 
@@ -190,6 +215,15 @@ public final class OverlayWindow {
     private func handleTapKeyDown(
         keyCode: CGKeyCode, flags: CGEventFlags, char: String
     ) -> Bool {
+        // Chord-suffix phase (issue #57): a bare-resolve is parked
+        // waiting for `<leader><action-char>`. Route to the chord
+        // state machine FIRST so a stray modifier-less press
+        // doesn't fall back into the hint-mode keymap.
+        if chordPhase != .none {
+            return handleChordKey(
+                keyCode: keyCode, flags: flags, char: char)
+        }
+
         // Cancel key (configurable; Esc by default). Match keyCode
         // regardless of modifiers so the user can mash Esc with
         // anything held.
@@ -241,21 +275,156 @@ public final class OverlayWindow {
         // per-app via `[behavior."<bundle-id>"]`).
         if config.effectiveAutoClickOnUnique(for: activeBundleID),
            surviving.count == 1 {
-            let only = surviving[0]
-            let cb = onResolve
-            hide()
-            cb?(only, action)
+            deliverResolve(hint: surviving[0], action: action)
             return true
         }
         // Exact match wins immediately.
         if let resolved = Labeler.resolve(hints: hints, keys: typed) {
-            let cb = onResolve
-            hide()
-            cb?(resolved, action)
+            deliverResolve(hint: resolved, action: action)
             return true
         }
         canvas.present(hints: surviving, typed: typed)
         return true
+    }
+
+    /// Funnel for both resolve paths (auto-click-on-unique and
+    /// exact-match). When chord support is enabled AND the action
+    /// is the modifier-less default `.press`, defer the dispatch
+    /// into the chord wait state; otherwise the existing snappy
+    /// path runs unchanged.
+    private func deliverResolve(hint: Hint, action: HintAction) {
+        if action == .press, !config.chordLeader.isEmpty {
+            enterChordWait(hint: hint)
+            return
+        }
+        let cb = onResolve
+        hide()
+        cb?(hint, action)
+    }
+
+    /// Park the resolved hint, orderOut the panel (the user knows
+    /// their pick was accepted — the pill goes away), keep the
+    /// KeyTap installed so we can catch the chord suffix, and
+    /// install a timeout. On timeout we fire `.press` as if no
+    /// chord arrived.
+    private func enterChordWait(hint: Hint) {
+        pendingResolve = (hint, .press)
+        chordPhase = .waitingForLeader
+        panel.orderOut(nil)
+        canvas.clear()
+        Log.line("overlay: chord wait → \(hint.keys)")
+        scheduleChordTimeout()
+    }
+
+    /// Dispatch the chord state machine. Returns whether to
+    /// swallow the event.
+    ///
+    /// - `waitingForLeader`:
+    ///   - Esc / cancel-key → abort the pending press
+    ///     (`onCancel`-equivalent — the user changed their mind)
+    ///   - `chordLeader` → transition to `waitingForChord`, swallow
+    ///   - anything else → finalize with `.press`, let the key
+    ///     through so the user's deliberate next keystroke
+    ///     reaches the focused app
+    /// - `waitingForChord`:
+    ///   - Esc / cancel-key → abort
+    ///   - recognised chord char → finalize with chord action,
+    ///     swallow
+    ///   - unrecognised char → finalize with `.press`, let through
+    private func handleChordKey(
+        keyCode: CGKeyCode, flags: CGEventFlags, char: String
+    ) -> Bool {
+        // Esc / cancel-key during either chord phase: cancel the
+        // deferred press entirely.
+        if keyCode == cancelKeyCode {
+            abortChord()
+            return true
+        }
+        // Ctrl is reserved for user system shortcuts even during
+        // chord wait — let the press fall through to .press +
+        // pass the Ctrl combo to the focused app.
+        if flags.contains(.maskControl) {
+            finalizeChord(with: nil)
+            return false
+        }
+        switch chordPhase {
+        case .none:
+            return false
+        case .waitingForLeader:
+            if let ch = char.first,
+               String(ch).lowercased() == config.chordLeader {
+                chordPhase = .waitingForChord
+                scheduleChordTimeout()
+                return true
+            }
+            // Not the leader — finalize as plain press and let the
+            // typed key reach the focused field.
+            finalizeChord(with: nil)
+            return false
+        case .waitingForChord:
+            if let ch = char.first?.lowercased().first,
+               let action = Self.chordActions[ch] {
+                finalizeChord(with: action)
+                return true
+            }
+            // Unmapped char in chord position — fall back to press
+            // and pass the keystroke through.
+            finalizeChord(with: nil)
+            return false
+        }
+    }
+
+    /// Fire the pending resolve with either `chordAction` (when set)
+    /// or the original `.press` action. Either way: clear chord
+    /// state, hide the overlay, and hand control back to the
+    /// Controller's `onResolve` callback.
+    private func finalizeChord(with chordAction: HintAction?) {
+        cancelChordTimer()
+        guard let (hint, base) = pendingResolve else {
+            chordPhase = .none
+            return
+        }
+        pendingResolve = nil
+        chordPhase = .none
+        let action = chordAction ?? base
+        Log.line("overlay: chord finalize \(action.rawValue) "
+                 + "→ \(hint.keys)")
+        let cb = onResolve
+        hide()
+        cb?(hint, action)
+    }
+
+    /// Esc during chord wait: drop the deferred press entirely.
+    /// The element is NOT clicked — the user explicitly cancelled.
+    private func abortChord() {
+        cancelChordTimer()
+        pendingResolve = nil
+        chordPhase = .none
+        Log.line("overlay: chord aborted")
+        let cb = onCancel
+        hide()
+        cb?()
+    }
+
+    /// (Re-)arm the chord timer with the configured timeout.
+    /// Called on each phase entry so the user has the full
+    /// timeout window between leader and chord char.
+    private func scheduleChordTimeout() {
+        cancelChordTimer()
+        let work = DispatchWorkItem { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.finalizeChord(with: nil)
+            }
+        }
+        chordTimer = work
+        let secs = max(0.05, config.chordTimeoutMs / 1000)
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + secs, execute: work)
+    }
+
+    private func cancelChordTimer() {
+        chordTimer?.cancel()
+        chordTimer = nil
     }
 
     /// Flash the overlay red for 200ms (when anim is enabled) then

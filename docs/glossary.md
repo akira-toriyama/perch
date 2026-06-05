@@ -236,6 +236,16 @@ visible でないコマンド（Safari の `Develop > Empty Caches` 等）に ke
 で到達できる。エントリは `perch --menu`（CLI only）。
 - **Don't call it:** menu launcher, command palette, コマンドパレット
 
+### chord-suffix action mode
+issue #57。bare-resolve（修飾キーなし）後に **modifier 不要の代替
+action 選択**を提供する OverlayWindow の state machine。`[chord].leader`
+（既定空 = OFF）が non-empty のとき有効化。`<leader><action-char>`
+2 phase: `c` copyTitle / `o` revealInFinder / `u` copyURL /
+`s` speakTitle。各 phase は `[chord].timeout-ms`（既定 600ms）で
+fallback to `.press`。`Esc` で press 自体を中止。修飾キー系
+（Cmd / Shift / Alt / Cmd+Shift）は影響を受けず従来通り。
+- **Don't call it:** keyboard chord, chord input, コード入力（一般名は可）
+
 ### EmojiPicker (emoji picker)
 issue #55。`SearchMode` の派生で、enumerator が
 `UIElementSource.enumerateEmoji()` （curated `EmojiTable.entries` を

@@ -113,6 +113,26 @@ public struct PerchConfig: Sendable {
     /// asymmetric with `regionalMinWidth`. Clamped to `>= 0`.
     public let regionalMinHeight: Double
 
+    // MARK: - [chord]
+
+    /// Chord-suffix leader character (issue #57). Empty (the
+    /// default) **disables chord mode** so the bare-resolve UX
+    /// stays snappy. Set to `","` (or another single char) to
+    /// enable: after a bare-modifier hint resolve, perch holds
+    /// the `.press` dispatch for `chordTimeoutMs` waiting for
+    /// `<leader><action-char>` (e.g. `,o` → revealInFinder).
+    /// Modifier-driven action mode (Cmd/Shift/Alt) is unaffected
+    /// — chord is only the modifier-less alternative.
+    /// Lowercased so the lookup matches the lowercased keypress.
+    public let chordLeader: String
+
+    /// Chord-suffix timeout in milliseconds. Resets between the
+    /// leader keypress and the action character — so a slow
+    /// typist can take up to `2 × chordTimeoutMs` total. Default
+    /// 600ms keeps the deferred-press feel under a beat. Capped
+    /// at 5000ms (5s) so a typo can't strand a dispatch.
+    public let chordTimeoutMs: Double
+
     // MARK: - [search]
 
     /// Synonym groups for `SearchMode` / `MenuMode`. Each entry is
@@ -162,6 +182,8 @@ public struct PerchConfig: Sendable {
         perApp: [:],
         regionalMinWidth: 200,
         regionalMinHeight: 100,
+        chordLeader: "",
+        chordTimeoutMs: 600,
         searchSynonyms: [:]
     )
 
@@ -292,6 +314,25 @@ public struct PerchConfig: Sendable {
         let regionalMinH = (doc["regional"]?["min-height"]?.asDouble)
             .map { max(0, $0) } ?? 100
 
+        // Chord-suffix knobs (#57). Leader is normalised to a
+        // single lowercased character; empty (the default) means
+        // chord mode is OFF and the bare-resolve UX is unchanged.
+        // Multi-char values are clamped to the first character so
+        // a typo like `leader = "comma"` doesn't silently break
+        // chord lookups — the first letter ("c") at least lines
+        // up with one of the action chars.
+        let chordLeader: String = {
+            guard let raw = doc["chord"]?["leader"]?.asString else {
+                return ""
+            }
+            let trimmed = raw
+                .trimmingCharacters(in: .whitespaces)
+                .lowercased()
+            return String(trimmed.prefix(1))
+        }()
+        let chordTimeoutMs = (doc["chord"]?["timeout-ms"]?.asDouble)
+            .map { max(0, min($0, 5000)) } ?? 600
+
         // Search synonyms (#53) — `[search.synonyms]` parses as a
         // flat `"search.synonyms"` section (same shape as
         // `[behavior.web]`). Every value is a string array; entries
@@ -328,6 +369,8 @@ public struct PerchConfig: Sendable {
             perApp: perApp,
             regionalMinWidth: regionalMinW,
             regionalMinHeight: regionalMinH,
+            chordLeader: chordLeader,
+            chordTimeoutMs: chordTimeoutMs,
             searchSynonyms: synonyms)
     }
 

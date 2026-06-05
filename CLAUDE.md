@@ -256,6 +256,29 @@ frontmost app's focused window**. The seam is captured at
   Ctrl is the only modifier that still cancels — reserved for
   the user's own shortcuts (Ctrl-C etc.) so system bindings
   keep working.
+- **Chord-suffix action mode (issue #57)** is an opt-in
+  alternative to the modifier-based dispatch above. When
+  `[chord].leader` is non-empty, a bare-resolve enters
+  `OverlayWindow.enterChordWait(hint:)`: the panel orderOuts,
+  the KeyTap stays installed, and a `[chord].timeout-ms` timer
+  arms. `,c|o|u|s` finalizes with `.copyTitle` /
+  `.revealInFinder` / `.copyURL` / `.speakTitle`; timeout or
+  any other key finalizes with `.press`; Esc aborts entirely.
+  **Default is leader empty → chord mode OFF** so the
+  bare-resolve UX stays snappy — opting in is a config-only
+  step. The chord state machine lives **only in OverlayWindow
+  (hint mode)**; search-mode variants (`--search` / `--menu` /
+  `--windows` / `--emoji`) keep the modifier-only mapping.
+  Don't grow chord into those without a real demand — their
+  digit-pick UX (`1-9`) already covers the multi-action pivot
+  case.
+  New actions are dispatched in `AXUIElementSource.act(...)`:
+  `.copyURL` reads `kAXURLAttribute` (NSURL or NSString —
+  handle both), `.revealInFinder` does the same and routes
+  file-URLs through `NSWorkspace.activateFileViewerSelecting`,
+  `.speakTitle` queues an `AVSpeechUtterance` on the instance's
+  long-lived `speechSynth`. **Don't make `speechSynth` a local
+  var** — utterances stop when the synth deallocates.
 - **Panel covers the UNION of every connected NSScreen**, not
   `NSScreen.main.frame`. AX positions arrive in CG global coords
   anchored to the primary display's top-left, so a pill for a

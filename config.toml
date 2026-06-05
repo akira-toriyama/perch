@@ -154,6 +154,30 @@ min-size = 6
 # min-size = 12                     # Xcode toolbar density
 
 
+# ---- Chord-suffix action mode ------------------------------------
+# After a bare-modifier hint resolve (no Cmd / Shift / Alt held),
+# perch can hold the press for a short window and pick a non-default
+# action based on a chord suffix:
+#
+#   <label>          → press (default)
+#   <label> ,c       → copy title
+#   <label> ,o       → reveal in Finder      (file-URL elements only)
+#   <label> ,u       → copy URL              (link / file elements)
+#   <label> ,s       → speak title via AVSpeechSynthesizer
+#
+# Modifier-driven action mode (Cmd+as / Shift+as / Alt+as /
+# Cmd+Shift+as) is unaffected — chord is a modifier-less alternative.
+#
+# Default is empty leader → chord mode OFF, bare-resolve fires the
+# press immediately (no deferred dispatch). Set the leader to ","
+# (or another single char) to opt in. Each phase of the chord waits
+# `timeout-ms`; on timeout perch falls back to the default press.
+# Esc during chord wait aborts the press entirely.
+# [chord]
+# leader = ","          # single char; "" = chord mode OFF (default)
+# timeout-ms = 600      # per-phase wait (0..5000)
+
+
 # ---- Search-mode synonyms ----------------------------------------
 # `perch --search` / `perch --menu` rank labels with a fuzzy
 # subsequence matcher (so `Cls` finds "Close Tab", `prfs` finds

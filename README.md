@@ -220,6 +220,30 @@ Where `Cmd+Tab` shows one tile per app and Mission Control needs
 visual scanning, `--windows` lets you reach any specific window
 by name in one keystroke + digit.
 
+### Chord-suffix action mode
+
+Optional vim-style alternative to the modifier-based action map
+(issue #57). After a bare-modifier hint resolve, perch can hold
+the press briefly and route through a chord suffix instead:
+
+| Chord | Action |
+|---|---|
+| `,c` | copy title (same as `Cmd+<label>`) |
+| `,o` | reveal in Finder (file-URL elements only) |
+| `,u` | copy URL (link / file elements) |
+| `,s` | speak title via `AVSpeechSynthesizer` |
+
+Default is **off** — set `[chord].leader = ","` in
+`config.toml` to opt in. With chord mode on:
+
+- Plain `<label>` still fires `.press` after `timeout-ms`
+  (default 600ms) — no behaviour change beyond the slight wait.
+- `<label>,c|o|u|s` fires the chord action.
+- `Esc` during the chord wait aborts the press entirely.
+- `Cmd+<label>` / `Shift+<label>` / `Alt+<label>` /
+  `Cmd+Shift+<label>` still work as today — chord is a
+  modifier-less alternative, not a replacement.
+
 ### Emoji picker
 
 `perch --emoji` enters a `--search` variant whose target set is

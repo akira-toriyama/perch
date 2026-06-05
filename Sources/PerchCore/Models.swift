@@ -74,6 +74,19 @@ public enum HintAction: String, Sendable, CaseIterable {
     /// between each. Exit via Esc / cancel-key / hotkey-again.
     /// Surfingkeys-style `cf` (continuous follow).
     case pressContinuous
+    /// Chord `,o` (issue #57) — reveal the element's file URL
+    /// (Finder selection). Only meaningful for AX elements that
+    /// expose `kAXURLAttribute` pointing at a `file://` URL —
+    /// e.g. Finder selection, Safari downloads list. Otherwise
+    /// dispatch logs + returns false.
+    case revealInFinder
+    /// Chord `,u` (issue #57) — copy the element's `kAXURLAttribute`
+    /// to the pasteboard. Lets you grab a link without
+    /// right-clicking → Copy Link.
+    case copyURL
+    /// Chord `,s` (issue #57) — speak the element's title via
+    /// `AVSpeechSynthesizer`. Accessibility / proofreading use.
+    case speakTitle
 }
 
 /// Parsed `[hotkey].combo` value.
