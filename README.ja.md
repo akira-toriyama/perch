@@ -63,8 +63,15 @@ perch                              # デーモン起動
 git clone https://github.com/akira-toriyama/perch
 cd perch
 ./setup-signing-cert.sh            # TCC 維持用の永続署名 (1 回)
-./run.sh                           # Perch.app をビルドして起動
+./run.sh                           # Perch-dev.app をビルド + 起動
+./install-cli.sh                   # `perch` を $PATH に symlink
 ```
+
+`./install-cli.sh` は `Perch-dev.app`（`./run.sh` の出力）を
+優先し、無ければ `Perch.app`（release）にフォールバック。
+書き込み可能な PATH ディレクトリを
+`/opt/homebrew/bin` → `/usr/local/bin` → `~/.local/bin` の順で
+拾う。
 
 ## 設定
 

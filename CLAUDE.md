@@ -38,6 +38,8 @@ swift test                   # tests — needs Xcode (XCTest); fails on CLT
 .build/debug/perch --validate
 ./run.sh                     # debug → Perch-dev.app + log tail (dev loop)
 ./run.sh --release           # release → Perch.app (pre-publish verify)
+./install-cli.sh             # symlink `perch` onto $PATH
+                             #   (prefers Perch-dev.app → Perch.app)
 ./stop.sh                    # kill every running instance
 ```
 

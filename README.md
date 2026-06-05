@@ -60,8 +60,14 @@ Or build from source:
 git clone https://github.com/akira-toriyama/perch
 cd perch
 ./setup-signing-cert.sh            # persistent TCC identity (once)
-./run.sh                           # builds Perch.app and launches
+./run.sh                           # builds Perch-dev.app and launches
+./install-cli.sh                   # symlink `perch` onto $PATH
 ```
+
+`./install-cli.sh` prefers `Perch-dev.app` (what `./run.sh`
+produces) and falls back to `Perch.app` (release). It picks the
+first writable dir on your `PATH` from
+`/opt/homebrew/bin` → `/usr/local/bin` → `~/.local/bin`.
 
 ## Configuration
 
