@@ -113,7 +113,8 @@ watches the file for changes when running as a daemon).
 | `--menu` | client | enter menu-search mode — fuzzy-match every menu bar item (deep / hidden commands incl.); pick with `1-9` |
 | `--windows` | client | enter cross-app window switcher — fuzzy-match every window across every running app; `1-9` raises the window and activates its owning app |
 | `--emoji` | client | enter emoji picker — fuzzy-match a curated emoji table by name; `1-9` types the glyph at the caret (Unicode injection — no pasteboard write) |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji) |
+| `--grid` | client | enter coordinate grid — divide the screen into labeled cells, type a label to warp the cursor + left-click via synthetic `CGEvent` (AX-bypass fallback for Figma canvas / Photoshop / custom-drawn UI) |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -205,6 +206,32 @@ Each pill shows the AX-bound keyboard shortcut on the right
 learning loop: discover the native shortcut while picking the
 menu item with `1-9`. Set `[overlay].show-shortcuts = false`
 in `config.toml` to hide.
+
+### Grid mode (AX-bypass)
+
+`perch --grid` is the explicit fallback for UIs that hint mode
+**can't see**: Figma canvas, Photoshop, Logic, web `<canvas>`,
+custom-drawn views. Instead of asking the AX layer where the
+clickables are, perch divides the screen into a `[grid].cols ×
+[grid].rows` grid (default 12×8) and labels each cell with the
+same alphabet hint mode uses.
+
+| Key | Effect |
+|---|---|
+| `<label>` | warp cursor to cell center + left click |
+| `Shift+<label>` | warp + right click |
+| `Cmd+<label>` | warp only (no click) — set up the cursor for `--drag` |
+| `Cmd+Shift+<label>` | left click + re-enter grid for chained operations |
+| `esc` | exit silently |
+
+Dispatch is **synthetic `CGEvent` mouse events**, not AX — the
+cursor WILL visibly jump on click. That's the accepted trade-off
+for reaching AX-invisible UI. Hint mode (`shift+space` /
+`--activate`) remains the snappy, no-cursor-jump default; reach
+for `--grid` only when hint mode can't help.
+
+For pixel-precise targeting, recursive grid (`--rgrid`,
+roadmap M4-β) drills down through the chosen cell — coming soon.
 
 ### Window switcher
 

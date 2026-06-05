@@ -62,6 +62,13 @@ final class Controller {
     /// Set when search mode owns the KeyTap. Mutually exclusive
     /// with the overlay-based modes and scroll.
     private var search: SearchMode?
+    /// Set when grid mode (issue #66 / M4-α) owns the KeyTap.
+    /// Mutually exclusive with every other mode. Tracked
+    /// separately from `search` because the rendering surface
+    /// (GridCanvas vs SearchCanvas) and dispatch (CGEvent mouse
+    /// vs AX action) diverge enough that conflating them would
+    /// mean special-case logic in every teardown path.
+    private var grid: GridMode?
 
     init(config: PerchConfig) {
         self.config = config
@@ -122,6 +129,10 @@ final class Controller {
         if let s = search {
             s.stop()
             search = nil
+        }
+        if let g = grid {
+            g.stop()
+            grid = nil
         }
     }
 
@@ -203,6 +214,33 @@ final class Controller {
             reenter: { [weak self] in self?.enterWindowMode() })
     }
 
+    /// Coordinate grid (issue #66 / M4-α) — the explicit AX-bypass
+    /// fallback for Figma canvas / Photoshop / web `<canvas>` and
+    /// other UIs where hint mode can't see the target. Divides the
+    /// screen union into `[grid].cols × [grid].rows` cells, labels
+    /// each via `Labeler.assign(...)`, and warps the cursor +
+    /// synthesises a `CGEvent` mouse click on resolve. Modifier-
+    /// driven action mapping: bare → left click, Shift → right,
+    /// Cmd → warp only, Cmd+Shift → click + re-enter for chained
+    /// operations. Mutually exclusive with every other mode.
+    func enterGridMode() {
+        if grid != nil {
+            cancel()
+            return
+        }
+        cancel()            // tear down any other active mode
+        let gm = GridMode(
+            config: config,
+            onExit: { [weak self] in
+                Task { @MainActor [weak self] in self?.grid = nil }
+            },
+            onReenter: { [weak self] in self?.enterGridMode() })
+        if gm.start() {
+            grid = gm
+            writeStatus(reason: "grid mode")
+        }
+    }
+
     /// Emoji picker (issue #55) — `SearchMode` over the curated
     /// `EmojiTable` (~250 entries; see [Sources/PerchCore/EmojiTable.swift]).
     /// `.press` types the chosen glyph at the focused field's
@@ -267,10 +305,11 @@ final class Controller {
     }
 
     private func activate() {
-        // Scroll / search are mutually exclusive with the overlay-
-        // based modes — tear them down first.
+        // Scroll / search / grid are mutually exclusive with the
+        // overlay-based modes — tear them down first.
         if let s = scroll { s.stop(); scroll = nil }
         if let s = search { s.stop(); search = nil }
+        if let g = grid { g.stop(); grid = nil }
         // Toggle: a second hotkey press (or `--activate`) while
         // hint mode is up cancels and returns.
         if activeMode == .hint {
@@ -463,6 +502,9 @@ final class Controller {
                 case "emoji":
                     Log.line("controller: --emoji received")
                     self.enterEmojiMode()
+                case "grid":
+                    Log.line("controller: --grid received")
+                    self.enterGridMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every
