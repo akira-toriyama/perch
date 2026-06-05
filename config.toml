@@ -154,6 +154,21 @@ min-size = 6
 # min-size = 12                     # Xcode toolbar density
 
 
+# ---- Search-mode synonyms ----------------------------------------
+# `perch --search` / `perch --menu` rank labels with a fuzzy
+# subsequence matcher (so `Cls` finds "Close Tab", `prfs` finds
+# "Preferences…"). Synonym groups extend that with intent matching:
+# typing any form in a group surfaces labels that contain ANY other
+# form of the same group. The table is bidirectional — you don't
+# need to remember which form is the canonical key.
+#
+# Examples (commented — uncomment + edit to opt in):
+# [search.synonyms]
+# close  = ["shut", "quit", "kill"]
+# delete = ["remove", "trash", "rm"]
+# open   = ["launch", "start"]
+
+
 # ---- Regional hint mode ------------------------------------------
 # Entered via `perch --regional`. Labels large containers (article
 # body, sidebar pane, embedded image, scroll area, outline view)

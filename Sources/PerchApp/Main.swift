@@ -124,10 +124,13 @@ enum PerchApp {
             let perApp = cfg.perApp.isEmpty
                 ? ""
                 : ", \(cfg.perApp.count) per-app override(s)"
+            let synonyms = cfg.searchSynonyms.isEmpty
+                ? ""
+                : ", \(cfg.searchSynonyms.count) synonym group(s)"
             FileHandle.standardError.write(Data((
                 "perch: loaded hotkey=\(human(cfg.hotkey)), "
                 + "alphabet=\"\(cfg.alphabet)\", "
-                + "\(cfg.roles.count) role(s)\(perApp)\n"
+                + "\(cfg.roles.count) role(s)\(perApp)\(synonyms)\n"
             ).utf8))
             exit(0)
         }

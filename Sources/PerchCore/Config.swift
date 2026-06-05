@@ -113,6 +113,17 @@ public struct PerchConfig: Sendable {
     /// asymmetric with `regionalMinWidth`. Clamped to `>= 0`.
     public let regionalMinHeight: Double
 
+    // MARK: - [search]
+
+    /// Synonym groups for `SearchMode` / `MenuMode`. Each entry is
+    /// one group: the key plus every value form expand to each
+    /// other at match time, so a user can type `rm` and find a
+    /// "Delete" item without having to remember which form the
+    /// table's key uses. Empty when the user hasn't configured any —
+    /// matching falls back to plain fuzzy subsequence.
+    /// See `SearchFilter.rank(...)` for the consumer.
+    public let searchSynonyms: [String: [String]]
+
     // MARK: - Constants
 
     /// Resolved path of the user's config file.
@@ -150,7 +161,8 @@ public struct PerchConfig: Sendable {
         webRoles: defaultRoles,
         perApp: [:],
         regionalMinWidth: 200,
-        regionalMinHeight: 100
+        regionalMinHeight: 100,
+        searchSynonyms: [:]
     )
 
     // MARK: - Per-app resolution
@@ -280,6 +292,25 @@ public struct PerchConfig: Sendable {
         let regionalMinH = (doc["regional"]?["min-height"]?.asDouble)
             .map { max(0, $0) } ?? 100
 
+        // Search synonyms (#53) — `[search.synonyms]` parses as a
+        // flat `"search.synonyms"` section (same shape as
+        // `[behavior.web]`). Every value is a string array; entries
+        // with empty key or empty value list are dropped per
+        // typo-tolerance. Keys lowercased so lookup is canonical.
+        var synonyms: [String: [String]] = [:]
+        if let section = doc["search.synonyms"] {
+            for (rawKey, value) in section {
+                let key = rawKey.lowercased()
+                guard !key.isEmpty,
+                      let arr = value.asStringArray else { continue }
+                let cleaned = arr
+                    .map { $0.lowercased() }
+                    .filter { !$0.isEmpty && $0 != key }
+                if cleaned.isEmpty { continue }
+                synonyms[key] = cleaned
+            }
+        }
+
         return PerchConfig(
             hotkey: hk,
             cancelKey: cancel,
@@ -296,7 +327,8 @@ public struct PerchConfig: Sendable {
             webRoles: webRoles,
             perApp: perApp,
             regionalMinWidth: regionalMinW,
-            regionalMinHeight: regionalMinH)
+            regionalMinHeight: regionalMinH,
+            searchSynonyms: synonyms)
     }
 
     /// Drop duplicates and non-typeable characters, lowercase the

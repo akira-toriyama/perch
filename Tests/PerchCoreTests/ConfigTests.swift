@@ -297,6 +297,46 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.regionalMinHeight, 100)
     }
 
+    // MARK: - [search.synonyms] (#53)
+
+    /// `[search.synonyms]` populates `searchSynonyms`. Keys are
+    /// lowercased; the entries flow through to
+    /// `SearchFilter.rank(...)` so the user-typed form (`rm`) can
+    /// surface a "Delete" match.
+    func testSearchSynonymsParse() {
+        let src = """
+        [search.synonyms]
+        close = ["shut", "quit", "kill"]
+        delete = ["remove", "trash", "rm"]
+        """
+        let cfg = PerchConfig.parse(src)
+        XCTAssertEqual(cfg.searchSynonyms["close"],
+                       ["shut", "quit", "kill"])
+        XCTAssertEqual(cfg.searchSynonyms["delete"],
+                       ["remove", "trash", "rm"])
+    }
+
+    /// Empty arrays / empty keys / non-array values are dropped per
+    /// typo-tolerance — a malformed line never breaks the lookup.
+    func testSearchSynonymsTypoTolerant() {
+        let src = """
+        [search.synonyms]
+        ok = ["alright"]
+        empty = []
+        wrong = "string-not-array"
+        """
+        let cfg = PerchConfig.parse(src)
+        XCTAssertEqual(cfg.searchSynonyms.keys.sorted(), ["ok"])
+        XCTAssertEqual(cfg.searchSynonyms["ok"], ["alright"])
+    }
+
+    /// No `[search.synonyms]` section → empty dictionary so the
+    /// ranker stays in pure-fuzzy mode (no behaviour change for
+    /// users who haven't opted in).
+    func testSearchSynonymsDefaultsEmpty() {
+        XCTAssertTrue(PerchConfig.parse("").searchSynonyms.isEmpty)
+    }
+
     /// Hotkey combos can include multiple modifiers, in any order,
     /// case-insensitively. The parser must canonicalise the key
     /// to lowercase and accept the modifiers as a set.

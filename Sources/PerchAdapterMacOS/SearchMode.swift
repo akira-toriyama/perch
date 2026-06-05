@@ -223,27 +223,22 @@ public final class SearchMode {
     }
 
     private func recompute() {
-        let q = query.lowercased()
-        // Split on whitespace into AND'd substring tokens.
+        // Split on whitespace into AND'd tokens.
         //   "f b"  matches "Foo Bar" and "Foo's Big Idea", not
         //          "foobar" (no second token to find).
-        //   "foo"  is one token — equivalent to the previous
-        //          single-substring behaviour.
+        //   "foo"  is one token — fuzzy subsequence, so "f" alone
+        //          still surfaces everything that used to substring-
+        //          match (no regression vs the pre-#53 filter).
         // `split(whereSeparator:)` drops empty tokens, so a
         // trailing space doesn't introduce an unmatchable "".
-        let tokens = q.split(whereSeparator: { $0.isWhitespace })
+        let tokens = query
+            .split(whereSeparator: { $0.isWhitespace })
             .map(String.init)
-        if tokens.isEmpty {
-            matches = Array(elements.prefix(Self.topN))
-        } else {
-            matches = elements
-                .filter { e in
-                    let label = e.label.lowercased()
-                    return tokens.allSatisfy { label.contains($0) }
-                }
-                .prefix(Self.topN)
-                .map { $0 }
-        }
+        let ranked = SearchFilter.rank(
+            tokens: tokens,
+            elements: elements,
+            synonyms: config.searchSynonyms)
+        matches = ranked.prefix(Self.topN).map(\.element)
         canvas.present(query: query, matches: matches)
     }
 
