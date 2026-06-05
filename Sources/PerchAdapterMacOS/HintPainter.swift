@@ -680,8 +680,19 @@ final class HintPainter: NSView {
 
     /// Module-internal so OverlayCanvas's particle driver can read
     /// the accent color for tinting bursts.
+    ///
+    /// Resolution order:
+    /// 1. User-defined `[overlay.theme.<name>]` matching `theme = <name>`
+    /// 2. Built-in palette from `Theme.builtinPalettes`
+    /// 3. System sentinel (NSColor.controlAccentColor)
     static func resolvePalette(cfg: PerchConfig) -> ResolvedPalette {
-        let raw = cfg.overlay.theme.palette()
+        let raw: ThemePalette
+        if let custom = cfg.overlay.customThemeName,
+           let palette = cfg.overlay.customPalettes[custom] {
+            raw = palette
+        } else {
+            raw = cfg.overlay.theme.palette()
+        }
         // `.system` palette uses `accentHex == 0` as a sentinel — fall
         // back to NSColor.controlAccentColor so light/dark + the user's
         // chosen macOS accent are honored.
