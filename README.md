@@ -200,6 +200,12 @@ Action-mode modifiers behave as in `--search`: Cmd-1 copies the
 menu path, Shift-1 opens its context menu, Alt-1 focuses without
 firing, Cmd+Shift-1 fires + re-enters menu mode for chaining.
 
+Each pill shows the AX-bound keyboard shortcut on the right
+(e.g. `1  File > Quit  ⌘Q`) when one exists — a Superkey-style
+learning loop: discover the native shortcut while picking the
+menu item with `1-9`. Set `[overlay].show-shortcuts = false`
+in `config.toml` to hide.
+
 ### Window switcher
 
 `perch --windows` enters a `--search` variant whose target set is

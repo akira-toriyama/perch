@@ -428,8 +428,10 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             nextSeq += 1
             let id = "\(pid):\(nextSeq)"
             liveById[id] = node
+            let shortcut = readMenuShortcut(node)
             out.append(UIElement(
-                id: id, role: role, label: path, frame: .zero))
+                id: id, role: role, label: path,
+                frame: .zero, shortcut: shortcut))
         }
 
         let kids = (copyAttribute(node, kAXChildrenAttribute)
@@ -893,6 +895,47 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         guard let role = copyAttribute(elt, kAXRoleAttribute) as? String
         else { return false }
         return role == kAXWindowRole as String
+    }
+
+    /// Read the AX-bound shortcut on a menu item (issue #58).
+    /// Returns the macOS canonical glyph form (`⌃⌥⇧⌘<key>`) or
+    /// `nil` if the item has no character-based shortcut.
+    ///
+    /// `kAXMenuItemCmdChar` is the trigger character (string,
+    /// usually one Unicode scalar). `kAXMenuItemCmdModifiers` is
+    /// a Carbon-style bitmask with an unusual convention:
+    ///
+    ///   bit 0 (1)  →  ⌃ Control
+    ///   bit 1 (2)  →  ⌥ Option
+    ///   bit 2 (4)  →  ⇧ Shift
+    ///   bit 3 (8)  →  **no command** (cmd is implied unless this
+    ///                  bit is set)
+    ///
+    /// So `kAXMenuItemCmdModifiers == 0` means `⌘<char>`, not
+    /// "no modifiers". This matches Carbon's `kMenuShiftModifier`
+    /// / `kMenuNoCommandModifier` constants documented for
+    /// `CGEventCreateKeyboardEvent` & friends.
+    ///
+    /// Items that bind via `kAXMenuItemCmdVirtualKey` /
+    /// `kAXMenuItemCmdGlyph` (function keys, Tab, arrow keys, …)
+    /// fall through to `nil` for v1 — the glyph-table mapping is
+    /// in scope for a follow-up. Char-bound shortcuts cover the
+    /// overwhelming majority of menu commands users reach for.
+    private func readMenuShortcut(_ node: AXUIElement) -> String? {
+        let char = (copyAttribute(
+            node, "AXMenuItemCmdChar") as? String) ?? ""
+        guard !char.isEmpty else { return nil }
+        let mods = (copyAttribute(
+            node, "AXMenuItemCmdModifiers") as? Int) ?? 0
+        // Canonical macOS glyph order: ⌃⌥⇧⌘<key>. Cmd is last —
+        // appending (not prepending) keeps "⌘⇧N" wrong; "⇧⌘N"
+        // right.
+        var glyphs = ""
+        if mods & 1 != 0 { glyphs += "⌃" }
+        if mods & 2 != 0 { glyphs += "⌥" }
+        if mods & 4 != 0 { glyphs += "⇧" }
+        if mods & 8 == 0 { glyphs += "⌘" }
+        return glyphs + char.uppercased()
     }
 
     /// Emoji picker (#55) id encoding: `"emoji:<glyph>"`. Returns

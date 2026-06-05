@@ -70,6 +70,14 @@ public struct PerchConfig: Sendable {
     /// have Reduce Motion enabled or just dislike effects.
     public let overlayAnimEnabled: Bool
 
+    /// `true` (default) to render the AX-bound keyboard shortcut
+    /// on `--menu` pills (issue #58) as a right-aligned suffix
+    /// (e.g. `1 File > Quit  ⌘Q`). `false` to hide the annotation
+    /// — useful when the menu items already include their own
+    /// shortcut hint in the title, or for screenshot work where
+    /// the annotation clutters.
+    public let overlayShowShortcuts: Bool
+
     // MARK: - [behavior]
 
     public let autoClickOnUnique: Bool
@@ -174,6 +182,7 @@ public struct PerchConfig: Sendable {
         overlayFontSize: 15,
         overlayBlurEnabled: true,
         overlayAnimEnabled: true,
+        overlayShowShortcuts: true,
         autoClickOnUnique: true,
         roles: defaultRoles,
         excludeApps: [],
@@ -259,6 +268,7 @@ public struct PerchConfig: Sendable {
         } ?? 15
         let blur = doc["overlay"]?["blur-enabled"]?.asBool ?? true
         let anim = doc["overlay"]?["anim-enabled"]?.asBool ?? true
+        let showShortcuts = doc["overlay"]?["show-shortcuts"]?.asBool ?? true
 
         let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
@@ -361,6 +371,7 @@ public struct PerchConfig: Sendable {
             overlayFontSize: size,
             overlayBlurEnabled: blur,
             overlayAnimEnabled: anim,
+            overlayShowShortcuts: showShortcuts,
             autoClickOnUnique: autoClick,
             roles: roles,
             excludeApps: excludes,
