@@ -80,6 +80,29 @@ public struct OverlayConfig: Sendable {
     /// Show AX-bound keyboard shortcut annotations on `--menu` pills.
     public let showShortcuts: Bool
 
+    /// User-defined palettes from `[overlay.theme.<name>]` sections.
+    /// Keyed by the section name (e.g. `"my-theme"`). When
+    /// `[overlay].theme = "<name>"` matches a key here, the custom
+    /// palette wins over the built-in catalog.
+    ///
+    /// Example:
+    /// ```toml
+    /// [overlay.theme.my-theme]
+    /// pill-bg = "#1a1a1a"
+    /// accent  = "#ff8800"
+    /// text    = "#ffffff"
+    /// font    = "rounded"
+    ///
+    /// [overlay]
+    /// theme = "my-theme"
+    /// ```
+    public let customPalettes: [String: ThemePalette]
+
+    /// When `[overlay].theme` matches a `[overlay.theme.<name>]`
+    /// section, this is the name; otherwise nil. The resolver
+    /// checks this before the built-in catalog.
+    public let customThemeName: String?
+
     /// Hold-to-peek key. Empty = disabled.
     public let peekKey: String
 
@@ -96,7 +119,9 @@ public struct OverlayConfig: Sendable {
         theme: Theme, accent: String, pillShape: PillShape,
         fontSize: Double, blurEnabled: Bool, animEnabled: Bool,
         showShortcuts: Bool, peekKey: String,
-        modifierBadge: ModifierBadgeStyle
+        modifierBadge: ModifierBadgeStyle,
+        customPalettes: [String: ThemePalette] = [:],
+        customThemeName: String? = nil
     ) {
         self.theme = theme
         self.accent = accent
@@ -107,6 +132,8 @@ public struct OverlayConfig: Sendable {
         self.showShortcuts = showShortcuts
         self.peekKey = peekKey
         self.modifierBadge = modifierBadge
+        self.customPalettes = customPalettes
+        self.customThemeName = customThemeName
     }
 }
 
@@ -515,10 +542,31 @@ public struct PerchConfig: Sendable {
     private static func parseOverlay(_ doc: TOML.Document) -> OverlayConfig {
         let accent = (doc["overlay"]?["accent"]?.asString)
             .flatMap(sanitiseAccent) ?? "system"
-        // .random resolves once at parse so the chosen palette stays
-        // stable for the daemon's life (each --reload rolls fresh).
-        let theme = (doc["overlay"]?["theme"]?.asString)
-            .flatMap(Theme.parse)?.resolvingRandom() ?? .system
+
+        // [overlay.theme.<name>] user-defined palettes — same flat-
+        // key shape as [behavior."<bundle>"]. Each section is a
+        // (pill-bg, accent, text, miss, pill-bg-alpha, font) tuple
+        // matching ThemePalette.
+        let customPalettes = parseCustomPalettes(doc)
+
+        // Resolve [overlay].theme: raw string first, then check
+        // custom palettes, then the built-in enum. `.random`
+        // resolves to a concrete built-in here.
+        let rawTheme = (doc["overlay"]?["theme"]?.asString)
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            ?? ""
+        let theme: Theme
+        let customThemeName: String?
+        if !rawTheme.isEmpty, customPalettes[rawTheme] != nil {
+            // Custom palette wins — store the name, leave Theme on
+            // .system so the built-in resolver can't accidentally
+            // hide the custom palette later.
+            customThemeName = rawTheme
+            theme = .system
+        } else {
+            customThemeName = nil
+            theme = Theme.parse(rawTheme)?.resolvingRandom() ?? .system
+        }
         let shape = (doc["overlay"]?["pill-shape"]?.asString)
             .flatMap(PillShape.parse) ?? .pill
         let size = (doc["overlay"]?["font-size"]?.asDouble).map {
@@ -547,7 +595,78 @@ public struct PerchConfig: Sendable {
             theme: theme, accent: accent, pillShape: shape,
             fontSize: size, blurEnabled: blur, animEnabled: anim,
             showShortcuts: showShortcuts, peekKey: peekKey,
-            modifierBadge: badge)
+            modifierBadge: badge,
+            customPalettes: customPalettes,
+            customThemeName: customThemeName)
+    }
+
+    /// Walk every `[overlay.theme.<name>]` section and assemble a
+    /// `[name: ThemePalette]` dict. The TOML parser lands these as
+    /// flat keys (`"overlay.theme.my-theme"`), same as
+    /// `[behavior."<bundle>"]`. Unknown / malformed values fall
+    /// back to system defaults per typo-tolerance — a typo never
+    /// kills the palette.
+    private static func parseCustomPalettes(
+        _ doc: TOML.Document
+    ) -> [String: ThemePalette] {
+        var out: [String: ThemePalette] = [:]
+        let prefix = "overlay.theme."
+        // Names reserved by built-in themes / sentinels — silently
+        // ignored if the user shadows them, since the catalog
+        // would never see the custom palette.
+        let reserved: Set<String> = Set(
+            Theme.allCases.map { $0.rawValue })
+        for (rawKey, section) in doc {
+            guard rawKey.hasPrefix(prefix) else { continue }
+            let name = String(rawKey.dropFirst(prefix.count))
+                .lowercased()
+            guard !name.isEmpty, !reserved.contains(name) else {
+                Log.line("config: skipping custom theme \"\(name)\" "
+                         + "— name shadows a built-in")
+                continue
+            }
+            let pillBg = parseHexValue(section["pill-bg"]?.asString)
+                ?? 0x000000
+            let accent = parseHexValue(section["accent"]?.asString)
+                ?? 0xFFFFFF
+            let text = parseHexValue(section["text"]?.asString)
+                ?? 0xFFFFFF
+            let miss = parseHexValue(section["miss"]?.asString)
+                ?? 0xEF4444
+            let alpha: CGFloat = {
+                guard let raw = section["pill-bg-alpha"]?.asDouble
+                else { return 0.55 }
+                return CGFloat(max(0, min(1, raw)))
+            }()
+            let font: ThemeFont = {
+                guard let raw = section["font"]?.asString
+                else { return .mono }
+                switch raw.trimmingCharacters(in: .whitespaces).lowercased() {
+                case "mono":    return .mono
+                case "rounded": return .rounded
+                case "system":  return .system
+                default:        return .mono
+                }
+            }()
+            out[name] = ThemePalette(
+                pillBgHex: pillBg, accentHex: accent,
+                textHex: text, missHex: miss,
+                pillBgAlpha: alpha, font: font)
+        }
+        return out
+    }
+
+    /// `"#rrggbb"` → `0xRRGGBB`. Trims + lowercases + validates 6
+    /// hex digits. Returns nil on malformed input so the caller can
+    /// fall back to a default.
+    private static func parseHexValue(_ s: String?) -> UInt32? {
+        guard var t = s?.trimmingCharacters(in: .whitespaces)
+            .lowercased() else { return nil }
+        if t.hasPrefix("#") { t.removeFirst() }
+        guard t.count == 6,
+              t.allSatisfy({ "0123456789abcdef".contains($0) })
+        else { return nil }
+        return UInt32(t, radix: 16)
     }
 
     private static func parseEffect(_ doc: TOML.Document) -> EffectConfig {
