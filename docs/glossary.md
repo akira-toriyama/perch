@@ -261,17 +261,24 @@ shortcut のある行に合わせて統一されるので Spotlight 風の
 - **Don't call it:** menu hint, shortcut hint, ショートカット表示（一般名は可）
 
 ### GridMode (coordinate grid)
-issue #66 (M4-α)。hint mode の **AX-bypass フォールバック**。
-Figma canvas / Photoshop / 任意の custom-drawn UI など hint mode
-が見えない領域用。screen union を `[grid].cols × [grid].rows`
-（既定 12×8、clamp 2..32）に分割、各 cell に既存 `Labeler.assign(...)`
-で label（hint mode と同じアルファベット）。発火は **AX ではなく
-`CGEvent` で warp + mouse down/up**（カーソルジャンプは設計上の
-許容コスト）。Action mapping: bare → left click / Shift → right /
-Cmd → warp only / Cmd+Shift → click + 再エントリ。エントリは
-`perch --grid`（CLI only）。CLAUDE.md の "AX press never simulates
-synthetic click" ルールは grid 系（M4 シリーズ全般）でのみ
-**deliberate carve-out**。
+issue #66 (M4-α) + issue #67 (M4-β)。hint mode の **AX-bypass
+フォールバック**。Figma canvas / Photoshop / 任意の custom-drawn
+UI など hint mode が見えない領域用。screen union を
+`[grid].cols × [grid].rows`（既定 12×8、clamp 2..32）に分割、
+各 cell に既存 `Labeler.assign(...)` で label（hint mode と同じ
+アルファベット）。発火は **AX ではなく `CGEvent` で warp + mouse
+down/up**（カーソルジャンプは設計上の許容コスト）。Action mapping:
+bare → left click / Shift → right / Cmd → warp only /
+Cmd+Shift → click + 再エントリ。CLAUDE.md の "AX press never
+simulates synthetic click" ルールは grid 系（M4 シリーズ全般）
+でのみ **deliberate carve-out**。
+
+**`maxDepth` knob** で 1 段 (`--grid`, M4-α) と recursive
+(`--rgrid`, M4-β, default `[grid].max-depth = 3`、clamp 1..5)
+を切替。recursive 時は label pick → drill、深度予算尽きで
+terminal click。`space` / `Enter` で任意深度から terminal、
+`Backspace` で 1 段 pop。同じ `GridMode` クラスで両方カバー、
+Controller の `startGridSession(maxDepth:...)` が seam。
 - **Don't call it:** mouse grid, coordinate picker, グリッドモード（一般名は可）
 
 ### EmojiPicker (emoji picker)

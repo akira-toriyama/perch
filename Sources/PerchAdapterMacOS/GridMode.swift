@@ -1,8 +1,18 @@
-// Coordinate-grid mode (issue #66 / M4-α). The explicit AX-bypass
-// fallback: when hint mode can't see the target (Figma canvas,
-// Photoshop, custom-drawn UI, web `<canvas>`), perch overlays a
-// labeled grid across the screen union and warps the cursor to
-// the picked cell's center via synthetic `CGEvent`.
+// Coordinate-grid mode (issue #66 / M4-α + issue #67 / M4-β).
+// The explicit AX-bypass fallback: when hint mode can't see the
+// target (Figma canvas, Photoshop, custom-drawn UI, web `<canvas>`),
+// perch overlays a labeled grid across the screen union and warps
+// the cursor to the picked cell's center via synthetic `CGEvent`.
+//
+// `--grid` enters with `maxDepth = 1` — a single grid pass, label
+// pick → click. `--rgrid` (M4-β) enters with `maxDepth = config.
+// gridMaxDepth` (default 3) — each label pick subdivides the
+// chosen cell and re-renders a finer grid until the depth budget
+// runs out. The terminal action (click) happens either at the
+// final depth automatically OR earlier via `space` / `Enter` (the
+// "good enough, click here" shortcut). `Backspace` pops one level
+// (returns to the parent grid) so a misclick doesn't force a
+// restart.
 //
 // CLAUDE.md previously banned synthetic mouse clicks ("AX press
 // is less disruptive"). That rule was right for hint mode — every
@@ -41,6 +51,11 @@ import PerchCore
 public final class GridMode {
 
     private let config: PerchConfig
+    /// Max subdivision depth. `1` (the `--grid` entry) means single
+    /// pass: label pick fires the terminal action immediately.
+    /// `>1` (the `--rgrid` entry, M4-β) means each label drills
+    /// into the picked cell up to `maxDepth` times.
+    private let maxDepth: Int
     private let onExit: () -> Void
     /// Fired immediately after a `.pressContinuous` (Cmd+Shift)
     /// click so the Controller can re-enter the picker with the
@@ -54,13 +69,25 @@ public final class GridMode {
     private var keyTap: KeyTap?
     private var cancelKeyCode: CGKeyCode = 53        // Esc
 
-    /// The labeled hints (one per cell). Built once on `start()`
-    /// — the grid layout doesn't change while the mode is up.
+    /// The labeled hints (one per cell) for the **current** grid
+    /// pass. Rebuilt on each drill so labels track the smaller
+    /// rect.
     private var hints: [Hint] = []
-    /// Prefix typed so far. Same disjoint single/two-letter
-    /// invariant as hint mode, so a two-letter label can't be
-    /// "completed" by a single-letter pick.
+    /// Prefix typed so far at the current depth. Cleared on drill
+    /// + backspace so each level starts with an empty prefix.
     private var typed: String = ""
+    /// 1-indexed depth of the currently-displayed grid. Starts at
+    /// `1`; each drill increments. Reaching `maxDepth` makes the
+    /// next label pick a terminal click instead of another drill.
+    private var depth: Int = 1
+    /// Rect currently being subdivided. Starts as the screen
+    /// union; becomes the picked cell's rect on each drill.
+    /// `space` / `Enter` clicks the center of this rect.
+    private var currentFrame: CGRect = .zero
+    /// Parent frames for `Backspace` pop. The top of the stack is
+    /// the rect we were subdividing one level up. Empty stack at
+    /// depth=1 means backspace is a no-op (don't pop past root).
+    private var frameStack: [CGRect] = []
 
     /// Action verbs surfaced by the grid mode. Mapped from the
     /// modifier flags held when the user finishes typing the
@@ -77,11 +104,13 @@ public final class GridMode {
 
     public init(
         config: PerchConfig,
+        maxDepth: Int = 1,
         onResolve: @escaping () -> Void = {},
         onExit: @escaping () -> Void,
         onReenter: @escaping () -> Void = {}
     ) {
         self.config = config
+        self.maxDepth = max(1, min(maxDepth, 5))
         self.onExit = onExit
         self.onReenter = onReenter
         self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
@@ -118,19 +147,10 @@ public final class GridMode {
     @discardableResult
     public func start() -> Bool {
         let union = OverlayCoords.unionFrame()
-        let cols = config.gridCols
-        let rows = config.gridRows
-        let cells = Self.buildCells(unionFrame: union,
-                                    cols: cols, rows: rows)
-        hints = Labeler.assign(
-            elements: cells,
-            alphabet: config.alphabet,
-            // Center-priority makes intuitive sense here too — the
-            // closest-to-screen-center cell gets the shortest /
-            // easiest label.
-            prioritiseCenter: config.prioritiseCenter,
-            screenSize: union.size)
-        typed = ""
+        depth = 1
+        frameStack = []
+        currentFrame = union
+        rebuildHints()
 
         panel.setFrame(union, display: false)
         canvas.frame = NSRect(origin: .zero, size: union.size)
@@ -152,7 +172,8 @@ public final class GridMode {
         }
         keyTap = tap
         Log.line("grid: mode entered "
-                 + "(\(cols)×\(rows) = \(hints.count) cells)")
+                 + "(\(config.gridCols)×\(config.gridRows) cells, "
+                 + "maxDepth=\(maxDepth))")
         return true
     }
 
@@ -162,7 +183,31 @@ public final class GridMode {
         panel.orderOut(nil)
         hints = []
         typed = ""
+        depth = 1
+        frameStack.removeAll(keepingCapacity: false)
+        currentFrame = .zero
         Log.line("grid: mode exited")
+    }
+
+    /// Rebuild `hints` from `currentFrame`. Called on entry +
+    /// after every drill / pop so labels track the new rect.
+    /// The cell grid keeps its `cols × rows` density at every
+    /// level (so 12×8 cells per level × 3 levels of subdivision
+    /// = 288 effective addressable points).
+    private func rebuildHints() {
+        let cells = Self.buildCells(
+            unionFrame: currentFrame,
+            cols: config.gridCols,
+            rows: config.gridRows)
+        hints = Labeler.assign(
+            elements: cells,
+            alphabet: config.alphabet,
+            // Center-priority makes intuitive sense here too — the
+            // closest-to-current-frame-center cell gets the
+            // shortest / easiest label.
+            prioritiseCenter: config.prioritiseCenter,
+            screenSize: currentFrame.size)
+        typed = ""
     }
 
     // MARK: - Key handling
@@ -185,10 +230,31 @@ public final class GridMode {
             onExit()
             return false
         }
-        // Backspace — drop the last typed character.
+        // Space / Return — terminal click at center of the current
+        // frame (M4-β). Lets the user say "good enough, click here"
+        // at any depth without finishing the recursion. Action mods
+        // apply (Shift → right click, Cmd → warp only, …).
+        if kc == 49 || kc == 36 || kc == 76 {       // Space, Return, KeypadEnter
+            fireAtCenter(of: currentFrame,
+                         label: "center@depth=\(depth)",
+                         flags: flags)
+            return true
+        }
+        // Backspace — pop one drill level if we have one. At depth
+        // 1 (root grid) it drops the last typed character instead,
+        // matching the existing edit-as-you-go behaviour for
+        // two-letter labels.
         if kc == 51 {
-            if !typed.isEmpty { typed.removeLast() }
-            canvas.present(hints: filtered(), typed: typed)
+            if !frameStack.isEmpty {
+                currentFrame = frameStack.removeLast()
+                depth -= 1
+                rebuildHints()
+                canvas.present(hints: hints, typed: typed)
+                Log.line("grid: popped to depth=\(depth)")
+            } else if !typed.isEmpty {
+                typed.removeLast()
+                canvas.present(hints: filtered(), typed: typed)
+            }
             return true
         }
         // Only letters drive label resolution. Anything else (digits,
@@ -215,27 +281,60 @@ public final class GridMode {
         // mode). No per-app override knob here — grid mode is
         // app-agnostic by design.
         if surviving.count == 1 {
-            fire(hint: surviving[0], flags: flags)
+            resolve(hint: surviving[0], flags: flags)
             return true
         }
         // Exact match wins immediately (covers the "two-letter
         // label resolved" case).
         if let resolved = Labeler.resolve(hints: hints, keys: typed) {
-            fire(hint: resolved, flags: flags)
+            resolve(hint: resolved, flags: flags)
             return true
         }
         canvas.present(hints: surviving, typed: typed)
         return true
     }
 
+    /// Decision point on a label resolve: drill into the picked
+    /// cell (when more depth budget remains) OR fire the terminal
+    /// click. Modifier flags ride along for the click case; on
+    /// drill they're ignored (the click hasn't happened yet — only
+    /// the final keystroke's modifiers matter).
+    private func resolve(hint: Hint, flags: CGEventFlags) {
+        if depth < maxDepth {
+            frameStack.append(currentFrame)
+            currentFrame = hint.element.frame
+            depth += 1
+            rebuildHints()
+            canvas.present(hints: hints, typed: typed)
+            Log.line("grid: drill to depth=\(depth) "
+                     + "frame=\(OverlayCoords.rectString(currentFrame))")
+            return
+        }
+        // Out of depth budget — fire the terminal action at the
+        // picked cell's center.
+        fire(hint: hint, flags: flags)
+    }
+
     private func filtered() -> [Hint] {
         Labeler.filter(hints: hints, prefix: typed)
     }
 
-    /// Resolve modifier flags → grid action and dispatch. Action
-    /// mapping is documented at the top of this file; precedence:
-    /// Cmd+Shift > Cmd > Shift > bare.
+    /// Resolve modifier flags → grid action and dispatch at the
+    /// picked cell's center.
     private func fire(hint: Hint, flags: CGEventFlags) {
+        fireAtCenter(of: hint.element.frame,
+                     label: hint.keys,
+                     flags: flags)
+    }
+
+    /// Shared terminal action: warp + click at the center of `rect`.
+    /// Action mapping precedence: Cmd+Shift > Cmd > Shift > bare.
+    /// Used both by `fire(hint:)` (label-driven click at the picked
+    /// cell) and by `space` / `Enter` (mid-recursion "good enough,
+    /// click here" — `rect = currentFrame`).
+    private func fireAtCenter(
+        of rect: CGRect, label: String, flags: CGEventFlags
+    ) {
         let cmd = flags.contains(.maskCommand)
         let shift = flags.contains(.maskShift)
         let action: GridAction
@@ -244,14 +343,8 @@ public final class GridMode {
         else if shift             { action = .rightClick }
         else                      { action = .leftClick }
 
-        // Cell center in CG global coords (top-left origin). The
-        // hint frame is screen-local from `buildCells`, so this is
-        // the click point.
-        let center = CGPoint(
-            x: hint.element.frame.midX,
-            y: hint.element.frame.midY)
-
-        dispatch(action: action, at: center, label: hint.keys)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        dispatch(action: action, at: center, label: label)
 
         // Re-enter for chained clicks; otherwise tear down and let
         // the caller know we're done.

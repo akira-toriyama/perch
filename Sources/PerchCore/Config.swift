@@ -137,6 +137,15 @@ public struct PerchConfig: Sendable {
     /// Rows in the `--grid` overlay. See `gridCols`.
     public let gridRows: Int
 
+    /// Max subdivision depth for `--rgrid` (issue #67 / M4-β).
+    /// Default 3 — `cols × rows × depth` cells of effective
+    /// addressable points: 12×8×3 = 288 levels, each level
+    /// halving the cell size, so 3 drills on a 4K screen lands
+    /// inside a ~5px region. Clamped to `1..5`; depth=1
+    /// degenerates to `--grid` (single level), depth=5 hits
+    /// sub-pixel territory long before becoming useful.
+    public let gridMaxDepth: Int
+
     // MARK: - [chord]
 
     /// Chord-suffix leader character (issue #57). Empty (the
@@ -209,6 +218,7 @@ public struct PerchConfig: Sendable {
         regionalMinHeight: 100,
         gridCols: 12,
         gridRows: 8,
+        gridMaxDepth: 3,
         chordLeader: "",
         chordTimeoutMs: 600,
         searchSynonyms: [:]
@@ -354,6 +364,11 @@ public struct PerchConfig: Sendable {
             guard let raw = doc["grid"]?["rows"]?.asInt else { return 8 }
             return raw >= 2 && raw <= 32 ? raw : 8
         }()
+        let gridMaxDepth: Int = {
+            guard let raw = doc["grid"]?["max-depth"]?.asInt
+            else { return 3 }
+            return raw >= 1 && raw <= 5 ? raw : 3
+        }()
 
         // Chord-suffix knobs (#57). Leader is normalised to a
         // single lowercased character; empty (the default) means
@@ -413,6 +428,7 @@ public struct PerchConfig: Sendable {
             regionalMinHeight: regionalMinH,
             gridCols: gridCols,
             gridRows: gridRows,
+            gridMaxDepth: gridMaxDepth,
             chordLeader: chordLeader,
             chordTimeoutMs: chordTimeoutMs,
             searchSynonyms: synonyms)

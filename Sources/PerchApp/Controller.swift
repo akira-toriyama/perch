@@ -224,6 +224,31 @@ final class Controller {
     /// Cmd → warp only, Cmd+Shift → click + re-enter for chained
     /// operations. Mutually exclusive with every other mode.
     func enterGridMode() {
+        startGridSession(maxDepth: 1, statusReason: "grid",
+                         reenter: { [weak self] in self?.enterGridMode() })
+    }
+
+    /// Recursive grid (issue #67 / M4-β) — `--grid` with a
+    /// configurable subdivision budget. Each label pick drills
+    /// into the chosen cell instead of clicking immediately, up to
+    /// `[grid].max-depth` levels. `space` / `Enter` clicks at the
+    /// current cell center (terminate early); `Backspace` pops one
+    /// level. Pixel-precision tool for AX-blind UIs — three drills
+    /// on a 4K screen lands inside a ~5px region.
+    func enterRecursiveGridMode() {
+        startGridSession(
+            maxDepth: config.gridMaxDepth,
+            statusReason: "rgrid",
+            reenter: { [weak self] in self?.enterRecursiveGridMode() })
+    }
+
+    /// Shared `GridMode` builder. Toggle-on-second-press semantics
+    /// match the rest of the mode-entry methods.
+    private func startGridSession(
+        maxDepth: Int,
+        statusReason: String,
+        reenter: @escaping () -> Void
+    ) {
         if grid != nil {
             cancel()
             return
@@ -231,13 +256,14 @@ final class Controller {
         cancel()            // tear down any other active mode
         let gm = GridMode(
             config: config,
+            maxDepth: maxDepth,
             onExit: { [weak self] in
                 Task { @MainActor [weak self] in self?.grid = nil }
             },
-            onReenter: { [weak self] in self?.enterGridMode() })
+            onReenter: reenter)
         if gm.start() {
             grid = gm
-            writeStatus(reason: "grid mode")
+            writeStatus(reason: "\(statusReason) mode")
         }
     }
 
@@ -505,6 +531,9 @@ final class Controller {
                 case "grid":
                     Log.line("controller: --grid received")
                     self.enterGridMode()
+                case "rgrid":
+                    Log.line("controller: --rgrid received")
+                    self.enterRecursiveGridMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every
