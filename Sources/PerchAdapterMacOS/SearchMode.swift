@@ -89,7 +89,7 @@ public final class SearchMode {
         self.enumerator = enumerator
         self.onResolve = onResolve
         self.onExit = onExit
-        self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
+        self.cancelKeyCode = Self.resolveCancelKeyCode(config.hotkey.cancel)
 
         let frame = OverlayCoords.unionFrame()
         let p = NSPanel(
@@ -237,7 +237,7 @@ public final class SearchMode {
         let ranked = SearchFilter.rank(
             tokens: tokens,
             elements: elements,
-            synonyms: config.searchSynonyms)
+            synonyms: config.search.synonyms)
         matches = ranked.prefix(Self.topN).map(\.element)
         canvas.present(query: query, matches: matches)
     }
@@ -296,11 +296,11 @@ private final class SearchCanvas: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let accent = SearchCanvas.accent(config.overlayAccent)
+        let accent = SearchCanvas.accent(config.overlay.accent)
         let font = NSFont.monospacedSystemFont(
-            ofSize: CGFloat(config.overlayFontSize), weight: .semibold)
+            ofSize: CGFloat(config.overlay.fontSize), weight: .semibold)
         let small = NSFont.monospacedSystemFont(
-            ofSize: CGFloat(config.overlayFontSize) - 1, weight: .regular)
+            ofSize: CGFloat(config.overlay.fontSize) - 1, weight: .regular)
 
         // 1) Query strip at top centre.
         let label = "🔍  " + (query.isEmpty ? "search…" : query)
@@ -390,7 +390,7 @@ private final class SearchCanvas: NSView {
         listOriginY: CGFloat
     ) {
         guard !matches.isEmpty else { return }
-        let showShortcuts = config.overlayShowShortcuts
+        let showShortcuts = config.overlay.showShortcuts
         let rendered = matches.enumerated().map { i, e in
             pillTextParts(
                 digit: i + 1, element: e,

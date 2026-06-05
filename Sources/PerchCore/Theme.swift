@@ -172,122 +172,57 @@ public enum PillShape: String, Sendable, CaseIterable {
 
 extension Theme {
 
-    /// Resolve this theme into a backend-neutral palette. `.system`
-    /// returns a sentinel palette where `accentHex == 0` — the
-    /// Adapter sees that and substitutes `NSColor.controlAccentColor`
-    /// so the daemon picks up the user's live macOS accent + light/dark
-    /// appearance changes. Everything else is a hard-coded palette.
-    public func palette() -> ThemePalette {
-        switch self.resolvingRandom() {
-        case .system:
-            // Sentinel: accentHex = 0 → adapter substitutes
-            // NSColor.controlAccentColor; pillBg uses black-tint
-            // historical default, alpha 0.30.
-            return ThemePalette(
-                pillBgHex: 0x000000, accentHex: 0,
-                textHex: 0xFFFFFF, missHex: 0xEF4444,
-                pillBgAlpha: 0.30, font: .system)
-
+    /// Catalog of built-in palettes keyed by theme case. `.system`
+    /// and `.random` aren't in the dict — they have special handling
+    /// in `palette()`. Centralising the table (vs the old switch)
+    /// makes new themes a one-entry diff and enables a future
+    /// `[overlay.theme.<name>]` user-defined palette to write into
+    /// the same shape.
+    public static let builtinPalettes: [Theme: ThemePalette] = [
         // Dark / mono.
-        case .terminal:
-            return ThemePalette(
-                pillBgHex: 0x0E1117, accentHex: 0x9ECE6A,
-                textHex: 0xE6EDF3, font: .mono)
-        case .nord:
-            return ThemePalette(
-                pillBgHex: 0x2E3440, accentHex: 0x88C0D0,
-                textHex: 0xECEFF4, font: .mono)
-        case .dracula:
-            return ThemePalette(
-                pillBgHex: 0x282A36, accentHex: 0xBD93F9,
-                textHex: 0xF8F8F2, font: .mono)
-        case .gruvbox:
-            return ThemePalette(
-                pillBgHex: 0x282828, accentHex: 0xFE8019,
-                textHex: 0xEBDBB2, font: .mono)
-        case .catppuccin:
-            return ThemePalette(
-                pillBgHex: 0x1E1E2E, accentHex: 0xCBA6F7,
-                textHex: 0xCDD6F4, font: .mono)
-        case .rosepine:
-            return ThemePalette(
-                pillBgHex: 0x191724, accentHex: 0xC4A7E7,
-                textHex: 0xE0DEF4, font: .mono)
-        case .everforest:
-            return ThemePalette(
-                pillBgHex: 0x2D353B, accentHex: 0xA7C080,
-                textHex: 0xD3C6AA, font: .mono)
-        case .solarized:
-            return ThemePalette(
-                pillBgHex: 0x002B36, accentHex: 0x268BD2,
-                textHex: 0x93A1A1, font: .mono)
-        case .onedark:
-            return ThemePalette(
-                pillBgHex: 0x282C34, accentHex: 0x61AFEF,
-                textHex: 0xABB2BF, font: .mono)
-        case .monokai:
-            return ThemePalette(
-                pillBgHex: 0x272822, accentHex: 0xA6E22E,
-                textHex: 0xF8F8F2, font: .mono)
-        case .hacker:
-            return ThemePalette(
-                pillBgHex: 0x000000, accentHex: 0x00FF41,
-                textHex: 0xCFFFCF, font: .mono)
+        .terminal:   ThemePalette(pillBgHex: 0x0E1117, accentHex: 0x9ECE6A, textHex: 0xE6EDF3, font: .mono),
+        .nord:       ThemePalette(pillBgHex: 0x2E3440, accentHex: 0x88C0D0, textHex: 0xECEFF4, font: .mono),
+        .dracula:    ThemePalette(pillBgHex: 0x282A36, accentHex: 0xBD93F9, textHex: 0xF8F8F2, font: .mono),
+        .gruvbox:    ThemePalette(pillBgHex: 0x282828, accentHex: 0xFE8019, textHex: 0xEBDBB2, font: .mono),
+        .catppuccin: ThemePalette(pillBgHex: 0x1E1E2E, accentHex: 0xCBA6F7, textHex: 0xCDD6F4, font: .mono),
+        .rosepine:   ThemePalette(pillBgHex: 0x191724, accentHex: 0xC4A7E7, textHex: 0xE0DEF4, font: .mono),
+        .everforest: ThemePalette(pillBgHex: 0x2D353B, accentHex: 0xA7C080, textHex: 0xD3C6AA, font: .mono),
+        .solarized:  ThemePalette(pillBgHex: 0x002B36, accentHex: 0x268BD2, textHex: 0x93A1A1, font: .mono),
+        .onedark:    ThemePalette(pillBgHex: 0x282C34, accentHex: 0x61AFEF, textHex: 0xABB2BF, font: .mono),
+        .monokai:    ThemePalette(pillBgHex: 0x272822, accentHex: 0xA6E22E, textHex: 0xF8F8F2, font: .mono),
+        .hacker:     ThemePalette(pillBgHex: 0x000000, accentHex: 0x00FF41, textHex: 0xCFFFCF, font: .mono),
 
-        // Neon.
-        case .neon:
-            return ThemePalette(
-                pillBgHex: 0x0A0E27, accentHex: 0x00E5FF,
-                textHex: 0xE0F7FA, missHex: 0xFF00AA, font: .mono)
-        case .cyber:
-            return ThemePalette(
-                pillBgHex: 0x001A1F, accentHex: 0x00FFCC,
-                textHex: 0xCCFFF7, missHex: 0xFF1493, font: .mono)
-        case .vapor:
-            return ThemePalette(
-                pillBgHex: 0x1A0E2E, accentHex: 0xFF6EC7,
-                textHex: 0xF7D7FF, missHex: 0xFFD700, font: .mono)
+        // Neon — vivid electric on hue-tinted near-black; custom miss color.
+        .neon:       ThemePalette(pillBgHex: 0x0A0E27, accentHex: 0x00E5FF, textHex: 0xE0F7FA, missHex: 0xFF00AA, font: .mono),
+        .cyber:      ThemePalette(pillBgHex: 0x001A1F, accentHex: 0x00FFCC, textHex: 0xCCFFF7, missHex: 0xFF1493, font: .mono),
+        .vapor:      ThemePalette(pillBgHex: 0x1A0E2E, accentHex: 0xFF6EC7, textHex: 0xF7D7FF, missHex: 0xFFD700, font: .mono),
 
         // Light — text flips dark because bg is light.
-        case .cute:
-            return ThemePalette(
-                pillBgHex: 0xFFE4F0, accentHex: 0xFF85B3,
-                textHex: 0x4A1F38, missHex: 0xD63384,
-                pillBgAlpha: 0.85, font: .rounded)
-        case .kawaii:
-            return ThemePalette(
-                pillBgHex: 0xF3E5F5, accentHex: 0x9B6BFF,
-                textHex: 0x311B47, missHex: 0xFF5C8A,
-                pillBgAlpha: 0.85, font: .rounded)
-        case .paper:
-            return ThemePalette(
-                pillBgHex: 0xFAFAFA, accentHex: 0x3366FF,
-                textHex: 0x1A1A1A, missHex: 0xDC2626,
-                pillBgAlpha: 0.90, font: .system)
+        .cute:       ThemePalette(pillBgHex: 0xFFE4F0, accentHex: 0xFF85B3, textHex: 0x4A1F38, missHex: 0xD63384, pillBgAlpha: 0.85, font: .rounded),
+        .kawaii:     ThemePalette(pillBgHex: 0xF3E5F5, accentHex: 0x9B6BFF, textHex: 0x311B47, missHex: 0xFF5C8A, pillBgAlpha: 0.85, font: .rounded),
+        .paper:      ThemePalette(pillBgHex: 0xFAFAFA, accentHex: 0x3366FF, textHex: 0x1A1A1A, missHex: 0xDC2626, pillBgAlpha: 0.90, font: .system),
 
         // Monochrome.
-        case .monoLight:
-            return ThemePalette(
-                pillBgHex: 0xFFFFFF, accentHex: 0x000000,
-                textHex: 0x000000, missHex: 0xCC0000,
-                pillBgAlpha: 0.92, font: .mono)
-        case .monoDark:
-            return ThemePalette(
-                pillBgHex: 0x000000, accentHex: 0xFFFFFF,
-                textHex: 0xFFFFFF, missHex: 0xFF3344,
-                pillBgAlpha: 0.92, font: .mono)
-        case .monotone:
-            return ThemePalette(
-                pillBgHex: 0x2A2A2A, accentHex: 0xB0B0B0,
-                textHex: 0xE6E6E6, missHex: 0xE07070,
-                pillBgAlpha: 0.55, font: .system)
+        .monoLight:  ThemePalette(pillBgHex: 0xFFFFFF, accentHex: 0x000000, textHex: 0x000000, missHex: 0xCC0000, pillBgAlpha: 0.92, font: .mono),
+        .monoDark:   ThemePalette(pillBgHex: 0x000000, accentHex: 0xFFFFFF, textHex: 0xFFFFFF, missHex: 0xFF3344, pillBgAlpha: 0.92, font: .mono),
+        .monotone:   ThemePalette(pillBgHex: 0x2A2A2A, accentHex: 0xB0B0B0, textHex: 0xE6E6E6, missHex: 0xE07070, pillBgAlpha: 0.55, font: .system),
+    ]
 
-        // `.random` is resolved above; `resolvingRandom()` never
-        // returns `.random` itself, so this case is unreachable.
-        case .random:
-            return ThemePalette(pillBgHex: 0x000000, accentHex: 0,
-                                font: .system)
-        }
+    /// Sentinel palette for `.system` — `accentHex == 0` tells the
+    /// Adapter to substitute `NSColor.controlAccentColor` so the
+    /// daemon picks up the user's live macOS accent + light/dark.
+    public static let systemPalette = ThemePalette(
+        pillBgHex: 0x000000, accentHex: 0,
+        textHex: 0xFFFFFF, missHex: 0xEF4444,
+        pillBgAlpha: 0.30, font: .system)
+
+    /// Resolve this theme into a backend-neutral palette. `.system`
+    /// returns the sentinel `systemPalette`; `.random` resolves to a
+    /// concrete case first; everything else is a dict lookup.
+    public func palette() -> ThemePalette {
+        let resolved = self.resolvingRandom()
+        if resolved == .system { return Theme.systemPalette }
+        return Theme.builtinPalettes[resolved] ?? Theme.systemPalette
     }
 }
 

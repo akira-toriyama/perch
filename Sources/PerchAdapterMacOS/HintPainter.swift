@@ -182,9 +182,9 @@ final class HintPainter: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let cfg = config else { return }
         let palette = Self.resolvePalette(cfg: cfg)
-        let label = Self.labelFont(palette.font, size: cfg.overlayFontSize)
+        let label = Self.labelFont(palette.font, size: cfg.overlay.fontSize)
 
-        let frosted = cfg.overlayBlurEnabled
+        let frosted = cfg.overlay.blurEnabled
         let pillBgIdle = Self.color(
             hex: palette.pillBgHex,
             alpha: frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
@@ -288,7 +288,7 @@ final class HintPainter: NSView {
                     path.lineWidth = 2
                     path.stroke()
                     NSGraphicsContext.restoreGraphicsState()
-                } else if state == .idle, cfg.borderEffect != .off {
+                } else if state == .idle, cfg.border.effect != .off {
                     // Neon border preset — replaces the default
                     // accent hairline for non-matched idle pills.
                     // Uses the configured width + optional glow,
@@ -364,7 +364,7 @@ final class HintPainter: NSView {
             // held. The glyph confirms the action that will fire
             // on resolve so the user doesn't have to remember the
             // Cmd/Shift/Alt → action mapping.
-            if cfg.showModifierBadge, !modifierFlags.isEmpty {
+            if cfg.overlay.showModifierBadge, !modifierFlags.isEmpty {
                 drawModifierBadge(
                     rect: p.rect,
                     flags: modifierFlags,
@@ -471,8 +471,8 @@ final class HintPainter: NSView {
     // MARK: - Neon border
 
     /// Stroke the pill border with the configured neon preset.
-    /// Uses `cfg.borderWidth` + an optional NSShadow glow when
-    /// `cfg.borderGlow` is true. The base color comes from the
+    /// Uses `cfg.border.width` + an optional NSShadow glow when
+    /// `cfg.border.glow` is true. The base color comes from the
     /// `BorderEffect` palette (or `palette.accentColor` if the
     /// effect somehow lacks a hex), then rotated by
     /// `borderHueOffset` so a cycle period rotates the hue.
@@ -481,7 +481,7 @@ final class HintPainter: NSView {
         cfg: PerchConfig,
         palette: ResolvedPalette
     ) {
-        let baseHex = cfg.borderEffect.baseHex ?? 0xFFFFFF
+        let baseHex = cfg.border.effect.baseHex ?? 0xFFFFFF
         var color = Self.color(hex: baseHex, alpha: 1)
         // Rotate hue around the wheel. For `.rainbow` the base is
         // white so saturation jumps from 0 to 1 — produce a
@@ -491,14 +491,14 @@ final class HintPainter: NSView {
             color = Self.rotateHue(color, by: borderHueOffset)
         }
         NSGraphicsContext.saveGraphicsState()
-        if cfg.borderGlow {
+        if cfg.border.glow {
             let glow = NSShadow()
             glow.shadowColor = color.withAlphaComponent(0.7)
             glow.shadowBlurRadius = 6
             glow.set()
         }
         color.withAlphaComponent(0.95).setStroke()
-        path.lineWidth = CGFloat(cfg.borderWidth)
+        path.lineWidth = CGFloat(cfg.border.width)
         path.stroke()
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -580,7 +580,7 @@ final class HintPainter: NSView {
     static func shapeFor(
         cfg: PerchConfig, hint: Hint, rect: CGRect
     ) -> PillGeometry {
-        switch cfg.pillShape {
+        switch cfg.overlay.pillShape {
         case .pill:
             return PillGeometry(
                 path: NSBezierPath(
@@ -656,7 +656,7 @@ final class HintPainter: NSView {
     /// Module-internal so OverlayCanvas's particle driver can read
     /// the accent color for tinting bursts.
     static func resolvePalette(cfg: PerchConfig) -> ResolvedPalette {
-        let raw = cfg.overlayTheme.palette()
+        let raw = cfg.overlay.theme.palette()
         // `.system` palette uses `accentHex == 0` as a sentinel — fall
         // back to NSColor.controlAccentColor so light/dark + the user's
         // chosen macOS accent are honored.
@@ -669,10 +669,10 @@ final class HintPainter: NSView {
         // a theme body (nord pill colors / rounded font) with a
         // personal highlight.
         let accent: NSColor
-        if cfg.overlayAccent == "system" {
+        if cfg.overlay.accent == "system" {
             accent = themeAccent
         } else {
-            accent = parseAccent(cfg.overlayAccent) ?? themeAccent
+            accent = parseAccent(cfg.overlay.accent) ?? themeAccent
         }
         return ResolvedPalette(
             pillBgHex: raw.pillBgHex,

@@ -130,8 +130,8 @@ public final class GridMode {
         self.sound = sound
         self.onExit = onExit
         self.onReenter = onReenter
-        self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
-        self.peekKeyCode = Self.resolvePeekKeyCode(config.overlayPeekKey)
+        self.cancelKeyCode = Self.resolveCancelKeyCode(config.hotkey.cancel)
+        self.peekKeyCode = Self.resolvePeekKeyCode(config.overlay.peekKey)
 
         let frame = OverlayCoords.unionFrame()
         let p = NSPanel(
@@ -235,9 +235,9 @@ public final class GridMode {
     /// 3-level drill is `3×3×3` rather than `12×8×12×8×12×8`.
     private var cellsCount: (cols: Int, rows: Int) {
         if maxDepth > 1 {
-            return (config.gridRecursiveCols, config.gridRecursiveRows)
+            return (config.grid.recursiveCols, config.grid.recursiveRows)
         }
-        return (config.gridCols, config.gridRows)
+        return (config.grid.cols, config.grid.rows)
     }
 
     public func stop() {
@@ -266,11 +266,11 @@ public final class GridMode {
             unionFrame: currentFrame, cols: cols, rows: rows)
         hints = Labeler.assign(
             elements: cells,
-            alphabet: config.alphabet,
+            alphabet: config.labels.alphabet,
             // Center-priority makes intuitive sense here too — the
             // closest-to-current-frame-center cell gets the
             // shortest / easiest label.
-            prioritiseCenter: config.prioritiseCenter,
+            prioritiseCenter: config.labels.prioritiseCenter,
             screenSize: currentFrame.size)
         typed = ""
     }

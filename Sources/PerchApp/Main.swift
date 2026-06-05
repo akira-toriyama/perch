@@ -163,16 +163,16 @@ enum PerchApp {
             // `[behavior."<bundle>"]` sections parsed — issue #37's
             // acceptance criterion. Empty for the common case so we
             // don't noise up the line; surfaces only when configured.
-            let perApp = cfg.perApp.isEmpty
+            let perApp = cfg.behavior.perApp.isEmpty
                 ? ""
-                : ", \(cfg.perApp.count) per-app override(s)"
-            let synonyms = cfg.searchSynonyms.isEmpty
+                : ", \(cfg.behavior.perApp.count) per-app override(s)"
+            let synonyms = cfg.search.synonyms.isEmpty
                 ? ""
-                : ", \(cfg.searchSynonyms.count) synonym group(s)"
+                : ", \(cfg.search.synonyms.count) synonym group(s)"
             FileHandle.standardError.write(Data((
-                "perch: loaded hotkey=\(human(cfg.hotkey)), "
-                + "alphabet=\"\(cfg.alphabet)\", "
-                + "\(cfg.roles.count) role(s)\(perApp)\(synonyms)\n"
+                "perch: loaded hotkey=\(human(cfg.hotkey.active)), "
+                + "alphabet=\"\(cfg.labels.alphabet)\", "
+                + "\(cfg.behavior.roles.count) role(s)\(perApp)\(synonyms)\n"
             ).utf8))
             exit(0)
         }
@@ -210,7 +210,7 @@ enum PerchApp {
         let controller = Controller(config: cfg)
         controller.start()
 
-        Log.line("perch: server running, hotkey=\(human(cfg.hotkey))")
+        Log.line("perch: server running, hotkey=\(human(cfg.hotkey.active))")
         app.run()
         exit(0)
     }
@@ -246,8 +246,8 @@ enum PerchApp {
         let cfg = PerchConfig.load()
         print(line(fileExists, "Config:",
                    fileExists
-                     ? "\(PerchConfig.path) — hotkey=\(human(cfg.hotkey)), "
-                       + "\(cfg.roles.count) role(s)"
+                     ? "\(PerchConfig.path) — hotkey=\(human(cfg.hotkey.active)), "
+                       + "\(cfg.behavior.roles.count) role(s)"
                      : "no file at \(PerchConfig.path) — using built-in "
                        + "defaults (curl the template)"))
 
@@ -255,20 +255,20 @@ enum PerchApp {
         print(line(running, "Daemon:",
                    running ? "running" : "not running — start with `perch`"))
 
-        print(info("Hotkey:", human(cfg.hotkey)))
-        print(info("Cancel key:", "\"\(cfg.cancelKey)\""))
+        print(info("Hotkey:", human(cfg.hotkey.active)))
+        print(info("Cancel key:", "\"\(cfg.hotkey.cancel)\""))
         print(info("Alphabet:",
-                   "\"\(cfg.alphabet)\" (\(cfg.alphabet.count) chars)"))
-        if !cfg.excludeApps.isEmpty {
+                   "\"\(cfg.labels.alphabet)\" (\(cfg.labels.alphabet.count) chars)"))
+        if !cfg.behavior.excludeApps.isEmpty {
             print(info("Excludes:",
-                       cfg.excludeApps.joined(separator: ", ")))
+                       cfg.behavior.excludeApps.joined(separator: ", ")))
         }
         // List per-app overrides (#37) when configured — the
         // single most actionable triage line for "why does perch
         // behave differently in Chrome vs Slack?".
-        if !cfg.perApp.isEmpty {
+        if !cfg.behavior.perApp.isEmpty {
             print(info("Per-app:",
-                       cfg.perApp.keys.sorted().joined(separator: ", ")))
+                       cfg.behavior.perApp.keys.sorted().joined(separator: ", ")))
         }
 
         // Screen layout — a frequent cause of "why are the pills

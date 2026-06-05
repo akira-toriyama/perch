@@ -35,8 +35,8 @@ import Vision
 public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     // Whole config snapshot. Used as the source-of-truth for both
-    // the global `[behavior]` knobs (via `config.roles` / `config.webRoles`
-    // / `config.minSize` / `config.excludeApps`) and per-app override
+    // the global `[behavior]` knobs (via `config.behavior.roles` / `config.behavior.webRoles`
+    // / `config.behavior.minSize` / `config.behavior.excludeApps`) and per-app override
     // resolution at enumerate-time (`config.effectiveX(for:)`).
     //
     // Held as a single value rather than destructured Sets so updateConfig
@@ -298,17 +298,17 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // `effectiveX(for:)` (typo-tolerance preserved). The policy
         // IS the resolved state for this enumeration; no instance
         // state is mutated mid-walk.
-        let effRoles = config.effectiveRoles(for: root.bundleID)
+        let effRoles = config.behavior.effectiveRoles(for: root.bundleID)
         let effMinSize = CGFloat(
-            config.effectiveMinSize(for: root.bundleID))
-        if config.perApp[root.bundleID] != nil {
+            config.behavior.effectiveMinSize(for: root.bundleID))
+        if config.behavior.perApp[root.bundleID] != nil {
             Log.debug("ax: per-app override \(root.bundleID) "
                       + "roles=\(effRoles.count) "
                       + "min-size=\(Int(effMinSize))")
         }
         let policy = WalkPolicy(
             nativeRoles: Set(effRoles),
-            webRoles: Set(config.webRoles),
+            webRoles: Set(config.behavior.webRoles),
             minWidth: effMinSize,
             minHeight: effMinSize,
             requirePress: true)
@@ -329,8 +329,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let policy = WalkPolicy(
             nativeRoles: Self.regionalRoles,
             webRoles: Self.regionalRoles,
-            minWidth: CGFloat(config.regionalMinWidth),
-            minHeight: CGFloat(config.regionalMinHeight),
+            minWidth: CGFloat(config.regional.minWidth),
+            minHeight: CGFloat(config.regional.minHeight),
             requirePress: false)
         return runWalk(window: root.window, policy: policy,
                        label: "region", bundleID: root.bundleID,
@@ -367,7 +367,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             Log.debug("ax: no frontmost app")
             return []
         }
-        if config.excludeApps.contains(bundleID) {
+        if config.behavior.excludeApps.contains(bundleID) {
             Log.debug("ax: excluded app \(bundleID)")
             return []
         }
@@ -475,7 +475,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             guard app.activationPolicy == .regular,
                   let bundleID = app.bundleIdentifier
             else { continue }
-            if config.excludeApps.contains(bundleID) { continue }
+            if config.behavior.excludeApps.contains(bundleID) { continue }
             let pid = app.processIdentifier
             let appName = app.localizedName ?? bundleID
 
@@ -673,7 +673,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             Log.debug("ax: no frontmost app")
             return nil
         }
-        if config.excludeApps.contains(bundleID) {
+        if config.behavior.excludeApps.contains(bundleID) {
             Log.debug("ax: excluded app \(bundleID)")
             return nil
         }
