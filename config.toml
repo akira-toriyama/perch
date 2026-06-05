@@ -496,9 +496,15 @@ rows = 8
 
 # Recursive grid (`perch --rgrid`, M4-β) drills into the picked
 # cell up to `max-depth` levels before clicking. 1 collapses to
-# regular `--grid` (click on first label). 3 is the sweet spot
-# for 4K — three subdivisions land inside ~5px. Clamped to 1..5;
-# above 5 the cells are sub-pixel and the labels become unreadable.
+# regular `--grid` (click on first label).
+#
+# With the default 3×3 `recursive-cols/rows`:
+#   depth 3 → 27 cells per axis (~80px terminal on 4K)
+#   depth 5 → 243 cells per axis (~9px terminal on 4K — pixel-tier)
+#   depth 6 → 729 cells per axis (sub-pixel on 4K)
+#
+# Clamped 1..10. The ceiling exists because 3^10 = 59,049 already
+# exceeds the alphabet length AND is sub-pixel on any display.
 max-depth = 3
 
 # Density used by `--rgrid` at EVERY drill level. Distinct from
