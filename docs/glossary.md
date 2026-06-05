@@ -185,6 +185,110 @@ UI フィードバック。
 - 駆動: `flashThenCancel` in `OverlayWindow`
 - **Don't call it:** error flash, red flash, エラーフラッシュ
 
+### theme palette
+[[pill]] の bg / accent / text / miss flash 色 + フォント種別を 1 タプルで
+表現するパレット (`ThemePalette`)。21 ビルトイン + ユーザー定義
+(`[overlay.theme.<name>]`) に対応。facet の `[overlay] theme` 語彙互換。
+- 場所: [`Sources/PerchCore/Theme.swift`](../Sources/PerchCore/Theme.swift)
+- 設定: `[overlay].theme`
+- **Don't call it:** colorway, skin, color theme
+
+### pill shape
+[[pill]] の body geometry プリセット — pill / square / circle /
+underline / tag。theme パレット (色) とは直交する knob。
+- 設定: `[overlay].pill-shape`
+- 解決: `HintPainter.shapeFor(cfg:hint:rect:)`
+- **Don't call it:** pill geometry, hint shape
+
+### appear effect
+overlay 出現時のアニメーション (none / pop / cascade / fade-in / drop-in
+/ bloom / random)。`pop` は 150ms scale-in (旧 [[scale-in animation]])。
+cascade は per-pill 時間差を加算してウェーブ感を出す。
+- 設定: `[overlay.effect].appear`
+- 駆動: `OverlayCanvas.currentAppearState`
+- **Don't call it:** intro animation, entry animation
+
+### match effect
+hint resolve 時に勝者 pill に流れるアニメーション。none / fade / explode
+/ drop / rise / slide-left / slide-right / vibrate / fireworks /
+confetti / random。AXPress と並列で発火するのでクリック遅延無し。
+- 設定: `[overlay.effect].match`
+- 駆動: `OverlayCanvas.animateMatch`
+- **Don't call it:** resolve animation, click effect
+
+### unmatch effect
+[[miss flash]] の上に重ねるアニメ (shake / vibrate / fade / drop / 等)。
+赤フラッシュ window を共有しつつモーションで「ブー！」感を強化する。
+- 設定: `[overlay.effect].unmatch`
+- 駆動: `OverlayCanvas.animateUnmatch`
+- **Don't call it:** miss animation, error effect
+
+### narrow effect
+typed prefix の絞り込みで消える pill ごとに走る "ghost" アニメーション。
+fireworks / confetti は負荷の都合で fade に自動降格。
+- 設定: `[overlay.effect].narrow`
+- 駆動: `GhostDriver` ([`Sources/PerchAdapterMacOS/GhostDriver.swift`](../Sources/PerchAdapterMacOS/GhostDriver.swift))
+- **Don't call it:** filter animation, exit effect
+
+### effect intensity
+全演出系の **振幅 倍率** スケーラ (subtle 0.6× / normal 1.0× / bold 1.6×
+/ wild 2.5×)。duration ではなく explode の拡大率 / shake の振れ幅 /
+particle の速度に効く。wand 互換語彙。
+- 設定: `[overlay.effect].intensity`
+
+### duration scale
+全演出の **時間** 倍率 (0.1..5.0)。screencast 用は 2.5+、snappy 派は
+0.5 以下。赤フラッシュ window も連動。
+- 設定: `[overlay.effect].duration-scale`
+
+### border cycle
+[[pill]] 周囲のネオン ボーダーが色相を周期回転するエフェクト。facet の
+`[border]` 移植。30Hz tick で hue を回し続ける。
+- 設定: `[overlay.border]` (effect / glow / width / cycle-seconds)
+- 駆動: `OverlayCanvas.startBorderCycle`
+- **Don't call it:** rainbow border, hue rotation
+
+### modifier badge
+hint mode 中、修飾キー押下時に各 pill の右上隅に⌃⌥⇧⌘グリフ (+ オプションで
+"Copy" / "Right" / "Focus" / "Chain" のアクション動詞) を描画する補助 UI。
+- 設定: `[overlay].show-modifier-badge` (off / glyph / action)
+- 駆動: `HintPainter.drawModifierBadge` + `KeyTap.onFlagsChanged`
+- **Don't call it:** modifier glyph, action label
+
+### ParticleDriver
+fireworks / confetti エフェクトを担当する独立 `@MainActor` クラス。
+emitter 点リストを受け取り 60Hz で粒子の (x, y, vx, vy, alpha) を進める。
+- 場所: [`Sources/PerchAdapterMacOS/ParticleDriver.swift`](../Sources/PerchAdapterMacOS/ParticleDriver.swift)
+- **Don't call it:** particle system, fireworks renderer
+
+### GhostDriver
+narrow エフェクトの ghost pill 群を担当する独立クラス。複数 spawn を
+同時管理し、各 ghost が duration 経過で list から外れる。
+- 場所: [`Sources/PerchAdapterMacOS/GhostDriver.swift`](../Sources/PerchAdapterMacOS/GhostDriver.swift)
+- **Don't call it:** ghost manager, exit driver
+
+### SoundPlayer
+match / unmatch / activate の音声フィードバック担当。macOS システム
+サウンド名 (`NSSound(named:)`) と ファイルパス (`~/foo.mp3` 等、
+tilde 展開) 両対応。
+- 場所: [`Sources/PerchAdapterMacOS/SoundPlayer.swift`](../Sources/PerchAdapterMacOS/SoundPlayer.swift)
+- 設定: `[overlay.sound]`
+- **Don't call it:** audio feedback, sound effects manager
+
+### ConfigWatcher
+`~/.config/perch/config.toml` の保存検知 → `Controller.reload(cause: "fs")`
+を発火する `DispatchSourceFileSystemObject` ベースの watcher。150ms
+debounce + editor rename 対応の fd 再オープン。
+- 場所: [`Sources/PerchApp/ConfigWatcher.swift`](../Sources/PerchApp/ConfigWatcher.swift)
+- **Don't call it:** auto-reloader, file monitor
+
+### PillPlacement
+`OverlayCanvas` の pill アンカー位置切替 enum — `.elementTopLeft`
+(hint mode 既定) / `.elementCenter` (grid mode)。同一 canvas を異なる
+モードから流用するための seam。
+- 場所: [`Sources/PerchAdapterMacOS/OverlayCanvas.swift`](../Sources/PerchAdapterMacOS/OverlayCanvas.swift)
+- **Don't call it:** pill anchor, label placement
+
 ---
 
 ## AX walk

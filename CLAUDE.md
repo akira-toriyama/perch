@@ -195,13 +195,30 @@ frontmost app's focused window**. The seam is captured at
   switch to `NSWindow` "to enable proper key handling" — it
   breaks the press dispatch.
 - **Two-layer canvas**:
-  [`OverlayCanvas`](Sources/PerchAdapterMacOS/OverlayWindow.swift)
+  [`OverlayCanvas`](Sources/PerchAdapterMacOS/OverlayCanvas.swift)
   holds an `NSVisualEffectView` (`.hudWindow`, `.behindWindow`)
   at the bottom and an `HintPainter` on top. The blur layer's
   `CAShapeLayer` mask is rebuilt every layout pass to a path
   covering only the current pill rects — so the frost is bound
   to the pills, not the whole screen. Ported wholesale from
   stroke's `GestureOverlay` two-layer pattern.
+- **`OverlayCanvas` is the shared visual surface** for hint mode
+  AND grid mode (PR #87). `PillPlacement` (`.elementTopLeft` vs
+  `.elementCenter`) is the only behavioural split — hint pills
+  anchor at element top-left, grid pills at cell midpoint. New
+  modes that need the same theme / pill-shape / appear / match /
+  unmatch / narrow / border / sound surface should instantiate
+  `OverlayCanvas(placement:)` rather than rolling their own NSView.
+  `SearchMode` is the deliberate hold-out — its query-strip +
+  digit-prefixed-label layout doesn't fit the per-element pill
+  model, so it keeps its own `SearchCanvas` and only borrows the
+  theme palette / font / sound from the shared layer.
+- **Effect drivers** (`ParticleDriver`, `GhostDriver`) live in
+  their own files since PR #90 and accept a `HintPainter` at init
+  for output. The OverlayCanvas only delegates — drivers own the
+  simulation state and tick loop. Add new particle-style effects
+  by extending `ParticleDriver` or creating a sibling, not by
+  growing OverlayCanvas.
 - **Pill style**: 10pt corner radius via
   `NSBezierPath(roundedRect:xRadius:yRadius:)` (not layer-level
   `cornerRadius`, which clips poorly under HiDPI scaling). 1pt
