@@ -113,7 +113,7 @@ theme = "system"
 accent = "system"
 
 # ---- Custom themes -----------------------------------------------
-# Define your own palettes inline. Each `[overlay.theme.<name>]`
+# Define your own palettes inline. Each `[overlay.themes.<name>]`
 # section becomes a selectable theme — just set `theme = "<name>"`
 # above. Resolution order:
 #   1. Custom palette here (if `theme` matches a section name)
@@ -125,7 +125,7 @@ accent = "system"
 # `presentation`, etc.
 #
 # Example (commented — uncomment + edit + set `theme = "my-theme"`):
-# [overlay.theme.my-theme]
+# [overlay.themes.my-theme]
 # pill-bg       = "#1a1a1a"     # body fill
 # accent        = "#ff8800"     # border / matched glow / prefix
 # text          = "#ffffff"     # unrolled label color

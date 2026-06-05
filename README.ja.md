@@ -150,10 +150,10 @@ match-effect = "none"            # Figma 内では派手な演出を抑制
 - **Adaptive**: `system`（既定 — macOS アクセント + ライト/ダーク追従）
 - **Special**: `random`（`--reload` ごとにランダム）
 
-自分でも定義可能（`[overlay.theme.<name>]`）:
+自分でも定義可能（`[overlay.themes.<name>]`）:
 
 ```toml
-[overlay.theme.my-theme]
+[overlay.themes.my-theme]
 pill-bg = "#1a1a1a"
 accent  = "#ff8800"
 text    = "#ffffff"
