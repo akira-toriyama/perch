@@ -89,6 +89,8 @@ accent = "system"                # accent for matched pill / typed prefix
 font-size = 14                   # 8..32 — monospaced semibold
 blur-enabled = true              # frosted-glass background per pill
 anim-enabled = true              # 150ms scale-in + 200ms red miss-flash
+peek-key = "space"               # hold to temporarily hide the overlay
+                                 # ("" disables; hint mode only)
 
 [behavior]
 auto-click-on-unique = true      # fire as soon as one candidate remains

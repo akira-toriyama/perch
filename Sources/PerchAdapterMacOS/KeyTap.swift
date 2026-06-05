@@ -30,14 +30,25 @@ public final class KeyTap: @unchecked Sendable {
     /// let modifier-held events through so the user can still
     /// Cmd-Q / Cmd-Tab while the overlay is up.
     fileprivate let onKeyDown: @Sendable (CGKeyCode, CGEventFlags, String) -> Bool
+    /// Optional keyUp callback. When non-nil, the tap also
+    /// subscribes to keyUp events and forwards them here. Return
+    /// `true` to swallow (matches keyDown semantics — used by the
+    /// hold-to-peek path so an unmatched keyUp doesn't leak into
+    /// the focused field). Default behaviour without this callback
+    /// is unchanged: keyUp events flow straight to the underlying
+    /// app — that's what the other modes (scroll / search / grid)
+    /// want.
+    fileprivate let onKeyUp: (@Sendable (CGKeyCode) -> Bool)?
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
     public init(
-        onKeyDown: @escaping @Sendable (CGKeyCode, CGEventFlags, String) -> Bool
+        onKeyDown: @escaping @Sendable (CGKeyCode, CGEventFlags, String) -> Bool,
+        onKeyUp: (@Sendable (CGKeyCode) -> Bool)? = nil
     ) {
         self.onKeyDown = onKeyDown
+        self.onKeyUp = onKeyUp
     }
 
     deinit { uninstall() }
@@ -49,8 +60,14 @@ public final class KeyTap: @unchecked Sendable {
     public func install() -> Bool {
         guard tap == nil else { return true }
 
-        let mask: CGEventMask
+        // Subscribe to keyUp only when the caller wants it — the
+        // other modes (scroll / search / grid / drag / nudge) don't,
+        // and a no-op subscription is wasted dispatch.
+        var mask: CGEventMask
             = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        if onKeyUp != nil {
+            mask |= CGEventMask(1 << CGEventType.keyUp.rawValue)
+        }
         let userInfo = Unmanaged.passUnretained(self).toOpaque()
 
         guard let port = CGEvent.tapCreate(
@@ -91,6 +108,17 @@ public final class KeyTap: @unchecked Sendable {
                         utf16CodeUnits: buf, count: length).lowercased()
                     if kt.onKeyDown(kc, flags, str) {
                         return nil           // swallow
+                    }
+                }
+                if type == .keyUp {
+                    let kt = Unmanaged<KeyTap>
+                        .fromOpaque(userInfo).takeUnretainedValue()
+                    if let cb = kt.onKeyUp {
+                        let kc = CGKeyCode(
+                            event.getIntegerValueField(.keyboardEventKeycode))
+                        if cb(kc) {
+                            return nil           // swallow
+                        }
                     }
                 }
                 return Unmanaged.passUnretained(event)

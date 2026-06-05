@@ -78,6 +78,13 @@ public struct PerchConfig: Sendable {
     /// the annotation clutters.
     public let overlayShowShortcuts: Bool
 
+    /// Hold-to-peek key: while held, the overlay temporarily hides
+    /// so the user can see the UI underneath the hint pills. Release
+    /// to restore. Single key, no modifiers (e.g. `"space"`, `"tab"`).
+    /// Empty disables the feature. Default `"space"`. Unknown names
+    /// silently fall back to disabled per typo-tolerance.
+    public let overlayPeekKey: String
+
     // MARK: - [behavior]
 
     public let autoClickOnUnique: Bool
@@ -217,6 +224,7 @@ public struct PerchConfig: Sendable {
         overlayBlurEnabled: true,
         overlayAnimEnabled: true,
         overlayShowShortcuts: true,
+        overlayPeekKey: "space",
         autoClickOnUnique: true,
         roles: defaultRoles,
         excludeApps: [],
@@ -307,6 +315,13 @@ public struct PerchConfig: Sendable {
         let blur = doc["overlay"]?["blur-enabled"]?.asBool ?? true
         let anim = doc["overlay"]?["anim-enabled"]?.asBool ?? true
         let showShortcuts = doc["overlay"]?["show-shortcuts"]?.asBool ?? true
+        // Peek key: trim + lowercase, empty = disabled. Unknown
+        // names also resolve to disabled at adapter load time
+        // (HotkeyMonitor.keyCode(for:) returns nil) — same
+        // typo-tolerance as the cancel key.
+        let peekKey = (doc["overlay"]?["peek-key"]?.asString)
+            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+            ?? "space"
 
         let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
@@ -433,6 +448,7 @@ public struct PerchConfig: Sendable {
             overlayBlurEnabled: blur,
             overlayAnimEnabled: anim,
             overlayShowShortcuts: showShortcuts,
+            overlayPeekKey: peekKey,
             autoClickOnUnique: autoClick,
             roles: roles,
             excludeApps: excludes,
