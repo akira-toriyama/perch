@@ -58,6 +58,7 @@ public final class SearchMode {
     private let config: PerchConfig
     private let enumerator: (AXUIElementSource) -> [UIElement]
     private let renderMode: SearchRenderMode
+    private let sound: SoundPlayer?
     private let onResolve: (UIElement, HintAction) -> Void
     private let onExit: () -> Void
 
@@ -65,6 +66,11 @@ public final class SearchMode {
     private let canvas: SearchCanvas
     private var keyTap: KeyTap?
     private var cancelKeyCode: CGKeyCode = 53        // Esc
+    // Note: hold-to-peek is intentionally not wired here. Search
+    // modes treat every printable character (including space) as a
+    // query char, so a "press to peek" interaction would conflict
+    // with typing a query that contains a space. Hint / grid modes
+    // (where peek makes sense) wire it in their own KeyTap handlers.
 
     /// Cached enumeration — captured once on entry so per-keystroke
     /// filtering doesn't re-walk the AX tree (slow on big apps,
@@ -78,6 +84,7 @@ public final class SearchMode {
         source: AXUIElementSource,
         config: PerchConfig,
         renderMode: SearchRenderMode = .pillsOverElements,
+        sound: SoundPlayer? = nil,
         enumerator: @escaping (AXUIElementSource) -> [UIElement]
             = { $0.enumerate() },
         onResolve: @escaping (UIElement, HintAction) -> Void,
@@ -86,6 +93,7 @@ public final class SearchMode {
         self.source = source
         self.config = config
         self.renderMode = renderMode
+        self.sound = sound
         self.enumerator = enumerator
         self.onResolve = onResolve
         self.onExit = onExit
@@ -128,6 +136,7 @@ public final class SearchMode {
         canvas.primaryHeight = OverlayCoords.primaryHeight()
         recompute()
         panel.orderFrontRegardless()
+        sound?.playActivate()
 
         let tap = KeyTap { [weak self] kc, flags, char in
             guard let self else { return false }
@@ -218,6 +227,7 @@ public final class SearchMode {
         else if flags.contains(.maskAlternate)   { action = .focus }
         else if flags.contains(.maskShift)       { action = .rightClick }
         else { action = .press }
+        sound?.playMatch()
         stop()
         onResolve(element, action)
     }
@@ -296,16 +306,22 @@ private final class SearchCanvas: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let accent = SearchCanvas.accent(config.overlay.accent)
-        let font = NSFont.monospacedSystemFont(
-            ofSize: CGFloat(config.overlay.fontSize), weight: .semibold)
-        let small = NSFont.monospacedSystemFont(
-            ofSize: CGFloat(config.overlay.fontSize) - 1, weight: .regular)
+        // Share the hint-mode palette + font + pill-shape resolution
+        // so a user's `[overlay].theme = "dracula"` paints search /
+        // menu / windows / emoji pills with the same identity.
+        // Accent override (`[overlay].accent = "#XXXXXX"`) wins via
+        // `HintPainter.resolvePalette`.
+        let palette = HintPainter.resolvePalette(cfg: config)
+        let accent = palette.accentColor
+        let font = HintPainter.labelFont(
+            palette.font, size: config.overlay.fontSize)
+        let small = HintPainter.labelFont(
+            palette.font, size: config.overlay.fontSize - 1)
 
         // 1) Query strip at top centre.
         let label = "🔍  " + (query.isEmpty ? "search…" : query)
         let attr = NSAttributedString(string: label, attributes: [
-            .font: font, .foregroundColor: NSColor.white])
+            .font: font, .foregroundColor: palette.textColor])
         let textSize = attr.size()
         let stripW = ceil(textSize.width) + 28
         let stripH = ceil(font.boundingRectForFont.height) + 18
@@ -315,7 +331,11 @@ private final class SearchCanvas: NSView {
             x: stripX, y: stripY, width: stripW, height: stripH)
         let stripPath = NSBezierPath(
             roundedRect: stripRect, xRadius: 12, yRadius: 12)
-        NSColor.black.withAlphaComponent(0.7).setFill()
+        // Strip body uses the theme's pill bg (less opaque so the
+        // user can still see what's behind), border in accent.
+        HintPainter.color(hex: palette.pillBgHex,
+                          alpha: min(palette.pillBgAlpha + 0.4, 1))
+            .setFill()
         stripPath.fill()
         accent.withAlphaComponent(0.9).setStroke()
         stripPath.lineWidth = 2
@@ -327,11 +347,13 @@ private final class SearchCanvas: NSView {
         // 2) Match pills — placement depends on `renderMode`.
         switch renderMode {
         case .pillsOverElements:
-            drawMatchPillsOverFrames(font: font, small: small,
-                                     accent: accent)
+            drawMatchPillsOverFrames(
+                font: font, small: small,
+                accent: accent, textColor: palette.textColor)
         case .verticalList:
             drawMatchListBelowStrip(
-                font: font, small: small, accent: accent,
+                font: font, small: small,
+                accent: accent, textColor: palette.textColor,
                 listOriginY: stripY + stripH + 10)
         }
     }
@@ -344,13 +366,14 @@ private final class SearchCanvas: NSView {
     /// annotation is omitted here — the menu mode's vertical list
     /// is the only renderer that surfaces shortcuts (issue #58).
     private func drawMatchPillsOverFrames(
-        font: NSFont, small: NSFont, accent: NSColor
+        font: NSFont, small: NSFont,
+        accent: NSColor, textColor: NSColor
     ) {
         for (i, e) in matches.enumerated() {
             let parts = pillTextParts(
                 digit: i + 1, element: e,
                 font: font, small: small,
-                showShortcut: false)
+                showShortcut: false, textColor: textColor)
             let tSize = parts.label.size()
             let w = ceil(tSize.width) + 20
             let h = ceil(font.boundingRectForFont.height) + 14
@@ -386,7 +409,8 @@ private final class SearchCanvas: NSView {
     /// idle / opt-out / fall-through cases render exactly as they
     /// did pre-#58.
     private func drawMatchListBelowStrip(
-        font: NSFont, small: NSFont, accent: NSColor,
+        font: NSFont, small: NSFont,
+        accent: NSColor, textColor: NSColor,
         listOriginY: CGFloat
     ) {
         guard !matches.isEmpty else { return }
@@ -395,7 +419,8 @@ private final class SearchCanvas: NSView {
             pillTextParts(
                 digit: i + 1, element: e,
                 font: font, small: small,
-                showShortcut: showShortcuts)
+                showShortcut: showShortcuts,
+                textColor: textColor)
         }
         let h = ceil(font.boundingRectForFont.height) + 14
         let gap: CGFloat = 6
@@ -441,19 +466,20 @@ private final class SearchCanvas: NSView {
     private func pillTextParts(
         digit: Int, element: UIElement,
         font: NSFont, small: NSFont,
-        showShortcut: Bool
+        showShortcut: Bool,
+        textColor: NSColor
     ) -> (label: NSAttributedString,
           shortcut: NSAttributedString?) {
         let digitAttr = NSAttributedString(
             string: "\(digit)",
             attributes: [.font: font,
-                         .foregroundColor: NSColor.white])
+                         .foregroundColor: textColor])
         let titleAttr = NSAttributedString(
             string: " " + (element.label.isEmpty
                             ? element.role.lowercased()
                             : element.label).prefix(64).description,
             attributes: [.font: small,
-                         .foregroundColor: NSColor.white])
+                         .foregroundColor: textColor])
         let label = NSMutableAttributedString()
         label.append(digitAttr)
         label.append(titleAttr)
@@ -464,7 +490,7 @@ private final class SearchCanvas: NSView {
                 string: s,
                 attributes: [
                     .font: small,
-                    .foregroundColor: NSColor.white
+                    .foregroundColor: textColor
                         .withAlphaComponent(0.65),
                 ])
         }
