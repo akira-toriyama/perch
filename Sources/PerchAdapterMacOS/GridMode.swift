@@ -65,9 +65,15 @@ public final class GridMode {
     private let onReenter: () -> Void
 
     private let panel: NSPanel
-    private let canvas: GridCanvas
+    private let canvas: OverlayCanvas
+    private let sound: SoundPlayer?
     private var keyTap: KeyTap?
     private var cancelKeyCode: CGKeyCode = 53        // Esc
+    /// Hold-to-peek key code. While held, the panel orderOuts so the
+    /// user can see the UI underneath the labeled grid; release
+    /// restores. Same UX as hint mode's peek. nil → feature disabled.
+    private var peekKeyCode: CGKeyCode?
+    private var peeking = false
 
     /// The labeled hints (one per cell) for the **current** grid
     /// pass. Rebuilt on each drill so labels track the smaller
@@ -113,6 +119,7 @@ public final class GridMode {
         config: PerchConfig,
         maxDepth: Int = 1,
         initialFrame: CGRect? = nil,
+        sound: SoundPlayer? = nil,
         onResolve: @escaping () -> Void = {},
         onExit: @escaping () -> Void,
         onReenter: @escaping () -> Void = {}
@@ -120,9 +127,11 @@ public final class GridMode {
         self.config = config
         self.maxDepth = max(1, min(maxDepth, 5))
         self.initialFrame = initialFrame
+        self.sound = sound
         self.onExit = onExit
         self.onReenter = onReenter
         self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
+        self.peekKeyCode = Self.resolvePeekKeyCode(config.overlayPeekKey)
 
         let frame = OverlayCoords.unionFrame()
         let p = NSPanel(
@@ -140,10 +149,19 @@ public final class GridMode {
             .canJoinAllSpaces, .stationary, .ignoresCycle,
             .fullScreenAuxiliary,
         ]
-        let cv = GridCanvas(
+        // Use the shared OverlayCanvas — grid pills sit at cell
+        // centers (`.elementCenter`) and pick up every visual
+        // effect (theme / appear / match / unmatch / narrow /
+        // border / pill-shape / modifier-badge) that hint mode
+        // uses. The only behaviour split is the dispatch path
+        // (synthetic CGEvent click vs AXPress) which lives in
+        // GridMode, not the canvas.
+        let cv = OverlayCanvas(
             frame: NSRect(origin: .zero, size: frame.size),
-            config: config)
+            config: config,
+            placement: .elementCenter)
         cv.unionFrame = frame
+        cv.primaryHeight = OverlayCoords.primaryHeight()
         p.contentView = cv
         self.panel = p
         self.canvas = cv
@@ -169,15 +187,35 @@ public final class GridMode {
         panel.setFrame(union, display: false)
         canvas.frame = NSRect(origin: .zero, size: union.size)
         canvas.unionFrame = union
+        canvas.primaryHeight = OverlayCoords.primaryHeight()
+        // Force fresh appear-effect on entry — `present()` checks
+        // `pills.isEmpty` for the entrance trigger.
+        canvas.clear()
         canvas.present(hints: hints, typed: typed)
+        canvas.startBorderCycle()
         panel.orderFrontRegardless()
+        sound?.playActivate()
 
-        let tap = KeyTap { [weak self] kc, flags, char in
-            guard let self else { return false }
-            return MainActor.assumeIsolated {
-                self.handle(kc: kc, flags: flags, char: char)
+        let tap = KeyTap(
+            onKeyDown: { [weak self] kc, flags, char in
+                guard let self else { return false }
+                return MainActor.assumeIsolated {
+                    self.handle(kc: kc, flags: flags, char: char)
+                }
+            },
+            onKeyUp: { [weak self] kc in
+                guard let self else { return false }
+                return MainActor.assumeIsolated {
+                    self.handleKeyUp(kc: kc)
+                }
+            },
+            onFlagsChanged: { [weak self] flags in
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    self.canvas.setModifierFlags(flags)
+                }
             }
-        }
+        )
         guard tap.install() else {
             Log.line("grid: keytap install failed — bailing")
             panel.orderOut(nil)
@@ -185,19 +223,33 @@ public final class GridMode {
             return false
         }
         keyTap = tap
+        let (cols, rows) = cellsCount
         Log.line("grid: mode entered "
-                 + "(\(config.gridCols)×\(config.gridRows) cells, "
-                 + "maxDepth=\(maxDepth))")
+                 + "(\(cols)×\(rows) cells, maxDepth=\(maxDepth))")
         return true
+    }
+
+    /// `(cols, rows)` to subdivide with. `--grid` (maxDepth == 1)
+    /// uses `gridCols × gridRows`; `--rgrid` (maxDepth > 1) uses
+    /// `gridRecursiveCols × gridRecursiveRows` at every level so a
+    /// 3-level drill is `3×3×3` rather than `12×8×12×8×12×8`.
+    private var cellsCount: (cols: Int, rows: Int) {
+        if maxDepth > 1 {
+            return (config.gridRecursiveCols, config.gridRecursiveRows)
+        }
+        return (config.gridCols, config.gridRows)
     }
 
     public func stop() {
         keyTap?.uninstall()
         keyTap = nil
+        canvas.stopBorderCycle()
+        canvas.clear()
         panel.orderOut(nil)
         hints = []
         typed = ""
         depth = 1
+        peeking = false
         frameStack.removeAll(keepingCapacity: false)
         currentFrame = .zero
         Log.line("grid: mode exited")
@@ -209,10 +261,9 @@ public final class GridMode {
     /// level (so 12×8 cells per level × 3 levels of subdivision
     /// = 288 effective addressable points).
     private func rebuildHints() {
+        let (cols, rows) = cellsCount
         let cells = Self.buildCells(
-            unionFrame: currentFrame,
-            cols: config.gridCols,
-            rows: config.gridRows)
+            unionFrame: currentFrame, cols: cols, rows: rows)
         hints = Labeler.assign(
             elements: cells,
             alphabet: config.alphabet,
@@ -236,6 +287,22 @@ public final class GridMode {
             onExit()
             return true
         }
+
+        // Hold-to-peek: bare press orderOuts the panel so the user
+        // can see the UI underneath the grid cells; keyUp restores.
+        // Modifier-held space is reserved for the existing
+        // "click center at current depth" action (handled below),
+        // so peek only fires when no modifiers are held.
+        let bare = !flags.contains(.maskCommand)
+            && !flags.contains(.maskAlternate)
+            && !flags.contains(.maskShift)
+        if let peekKC = peekKeyCode, kc == peekKC, bare {
+            if !peeking {
+                peeking = true
+                panel.orderOut(nil)
+            }
+            return true
+        }
         // Ctrl is reserved for the user's own system shortcuts
         // (Ctrl-C etc.). Exit + let through. Cmd / Alt / Shift are
         // repurposed as action mods, so they DON'T cancel.
@@ -244,11 +311,14 @@ public final class GridMode {
             onExit()
             return false
         }
-        // Space / Return — terminal click at center of the current
-        // frame (M4-β). Lets the user say "good enough, click here"
-        // at any depth without finishing the recursion. Action mods
-        // apply (Shift → right click, Cmd → warp only, …).
-        if kc == 49 || kc == 36 || kc == 76 {       // Space, Return, KeypadEnter
+        // Return / KeypadEnter — terminal click at center of the
+        // current frame (M4-β). Lets the user say "good enough,
+        // click here" at any depth without finishing the recursion.
+        // Action mods apply (Shift → right click, Cmd → warp only,
+        // …). Space was an alias historically — it now drives
+        // hold-to-peek (handled above) for consistency with hint
+        // mode's `[overlay].peek-key`.
+        if kc == 36 || kc == 76 {       // Return, KeypadEnter
             fireAtCenter(of: currentFrame,
                          label: "center@depth=\(depth)",
                          flags: flags)
@@ -319,6 +389,10 @@ public final class GridMode {
             currentFrame = hint.element.frame
             depth += 1
             rebuildHints()
+            // Clear first so the appear-effect fires fresh on each
+            // drill — without `clear()`, `present()` sees the
+            // previous pill set and skips the entrance animation.
+            canvas.clear()
             canvas.present(hints: hints, typed: typed)
             Log.line("grid: drill to depth=\(depth) "
                      + "frame=\(OverlayCoords.rectString(currentFrame))")
@@ -357,6 +431,7 @@ public final class GridMode {
         else if shift             { action = .rightClick }
         else                      { action = .leftClick }
 
+        sound?.playMatch()
         let center = CGPoint(x: rect.midX, y: rect.midY)
         dispatch(action: action, at: center, label: label)
 
@@ -467,108 +542,36 @@ public final class GridMode {
         }
         return 53
     }
+
+    /// Empty / unknown name → peek disabled (nil). Mirrors the
+    /// `OverlayWindow.resolvePeekKeyCode` behaviour: silent fall-
+    /// back per typo-tolerance.
+    private static func resolvePeekKeyCode(_ name: String) -> CGKeyCode? {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if let kc = HotkeyMonitor.keyCode(for: trimmed) {
+            return CGKeyCode(kc)
+        }
+        return nil
+    }
+
+    /// keyUp from the CGEventTap. Only one peek-shaped concern:
+    /// when the user releases the peek key, restore the panel.
+    /// Swallow the keyUp in that case so an unmatched keyUp doesn't
+    /// leak into the focused app (whose keyDown was also swallowed).
+    private func handleKeyUp(kc: CGKeyCode) -> Bool {
+        if peeking, let peekKC = peekKeyCode, kc == peekKC {
+            peeking = false
+            panel.orderFrontRegardless()
+            return true
+        }
+        return false
+    }
 }
 
-// MARK: - GridCanvas (NSView)
-
-/// Renders the labeled grid. Each cell is drawn with a small pill
-/// at its center (showing the assigned key sequence). The cell
-/// rectangles themselves are NOT drawn — drawing grid lines makes
-/// the whole screen unusable visually. The pill alone is enough
-/// signal for the user to pick.
-///
-/// Re-uses the same `HintPainter` from hint mode for the actual
-/// pill drawing — same accent / blur / animation knobs, same
-/// visual language. This is what makes grid mode feel like an
-/// extension of hint mode rather than a separate tool.
-@MainActor
-private final class GridCanvas: NSView {
-
-    var unionFrame: CGRect = .zero
-    private let config: PerchConfig
-    private var hints: [Hint] = []
-    private var typed: String = ""
-
-    init(frame frameRect: NSRect, config: PerchConfig) {
-        self.config = config
-        super.init(frame: frameRect)
-        wantsLayer = true
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    override var isFlipped: Bool { true }
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    func present(hints: [Hint], typed: String) {
-        self.hints = hints
-        self.typed = typed
-        needsDisplay = true
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let accent = Self.accent(config.overlayAccent)
-        let font = NSFont.monospacedSystemFont(
-            ofSize: CGFloat(config.overlayFontSize),
-            weight: .semibold)
-
-        for hint in hints {
-            // Cell center → canvas-local coords. The hint frame
-            // came from `buildCells` which used CG global coords,
-            // so re-use the same conversion the OverlayCanvas does.
-            let cgCenter = CGPoint(
-                x: hint.element.frame.midX,
-                y: hint.element.frame.midY)
-            let local = OverlayCoords.canvasLocal(
-                cg: cgCenter,
-                unionFrame: unionFrame,
-                primaryHeight: OverlayCoords.primaryHeight())
-
-            let label = hint.keys
-            let highlighted = !typed.isEmpty
-                && label.hasPrefix(typed)
-            let textColor = NSColor.white
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: font,
-                .foregroundColor: textColor,
-            ]
-            let attr = NSAttributedString(string: label, attributes: attrs)
-            let tSize = attr.size()
-            let pillW = ceil(tSize.width) + 18
-            let pillH = ceil(font.boundingRectForFont.height) + 12
-            let r = CGRect(
-                x: local.x - pillW / 2,
-                y: local.y - pillH / 2,
-                width: pillW, height: pillH)
-            let path = NSBezierPath(
-                roundedRect: r, xRadius: 10, yRadius: 10)
-            (highlighted
-             ? accent.withAlphaComponent(0.95)
-             : NSColor.black.withAlphaComponent(0.78)).setFill()
-            path.fill()
-            (highlighted
-             ? NSColor.white.withAlphaComponent(0.95)
-             : accent.withAlphaComponent(0.7)).setStroke()
-            path.lineWidth = highlighted ? 2 : 1
-            path.stroke()
-            attr.draw(at: NSPoint(
-                x: r.origin.x + (pillW - tSize.width) / 2,
-                y: r.origin.y + (pillH - tSize.height) / 2 - 1))
-        }
-    }
-
-    private static func accent(_ s: String) -> NSColor {
-        if s == "system" { return .controlAccentColor }
-        var t = s
-        if t.hasPrefix("#") { t.removeFirst() }
-        guard t.count == 6, let v = UInt32(t, radix: 16) else {
-            return .controlAccentColor
-        }
-        return NSColor(
-            srgbRed: CGFloat((v >> 16) & 0xFF) / 255,
-            green:    CGFloat((v >> 8) & 0xFF) / 255,
-            blue:     CGFloat(v & 0xFF) / 255,
-            alpha: 1)
-    }
-}
+// Note: `GridCanvas` (a separate NSView for grid pill rendering)
+// was retired when GridMode adopted `OverlayCanvas` directly —
+// theme palette, pill shape, appear / match / unmatch / narrow
+// effects, border cycle, and modifier badge now flow through the
+// same canvas hint mode uses. See `OverlayCanvas(placement:
+// .elementCenter)` in `init` above.
