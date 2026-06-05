@@ -288,6 +288,7 @@ final class Controller {
             config: config,
             maxDepth: config.gridMaxDepth,
             initialFrame: f,
+            sound: sound,
             onExit: { [weak self] in
                 Task { @MainActor [weak self] in self?.grid = nil }
             },
@@ -406,6 +407,7 @@ final class Controller {
         let gm = GridMode(
             config: config,
             maxDepth: maxDepth,
+            sound: sound,
             onExit: { [weak self] in
                 Task { @MainActor [weak self] in self?.grid = nil }
             },

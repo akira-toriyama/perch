@@ -501,6 +501,16 @@ rows = 8
 # above 5 the cells are sub-pixel and the labels become unreadable.
 max-depth = 3
 
+# Density used by `--rgrid` at EVERY drill level. Distinct from
+# `cols`/`rows` (which are the single-pass `--grid` density)
+# because the recursive case wants FEWER cells per step so each
+# pick is a single-letter label (no 2-letter `aa`/`ab` chains).
+# Default 3×3 → at depth 3 you address 27 effective spots with
+# 9 keystrokes max; way under the alphabet length. Both clamp to
+# 2..32.
+recursive-cols = 3
+recursive-rows = 3
+
 # Nested grid threshold (`,g` chord, M5+). After a hint resolve,
 # `,g` instead of clicking subdivides the picked element with a
 # grid scoped to its frame. Elements smaller than `nest-min-size`

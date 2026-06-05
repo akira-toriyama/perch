@@ -18,6 +18,16 @@ import CoreGraphics
 import Foundation
 import PerchCore
 
+/// Where the pill anchors relative to its `hint.element.frame`.
+/// Hint mode anchors at the element's top-left (so the label sits
+/// over the clickable target's corner — Vimium convention); grid
+/// mode anchors at the frame's center (the cell mid-point) because
+/// the frame is the cell rect, not a clickable target.
+enum PillPlacement {
+    case elementTopLeft
+    case elementCenter
+}
+
 @MainActor
 final class OverlayCanvas: NSView {
 
@@ -33,6 +43,7 @@ final class OverlayCanvas: NSView {
     var primaryHeight: CGFloat = 0
 
     private var config: PerchConfig
+    private let placement: PillPlacement
     private var pills: [PillLayout] = []
     private var typed: String = ""
     private var state: VisualState = .idle
@@ -46,8 +57,13 @@ final class OverlayCanvas: NSView {
     /// `OverlayWindow` tears the canvas down.
     enum VisualState { case idle, miss }
 
-    init(frame frameRect: NSRect, config: PerchConfig) {
+    init(
+        frame frameRect: NSRect,
+        config: PerchConfig,
+        placement: PillPlacement = .elementTopLeft
+    ) {
         self.config = config
+        self.placement = placement
         // Blur subview is the bottom layer. Mask is rebuilt each
         // layout pass to match the current pill rects so only those
         // areas frost; the rest of the canvas stays transparent.
@@ -881,11 +897,31 @@ final class OverlayCanvas: NSView {
         let w = ceil(textW) + Self.pillPadX * 2
         let h = ceil(font.boundingRectForFont.height) + Self.pillPadY * 2
 
+        // Anchor point in CG coords (top-left for hint mode, center
+        // for grid mode). The canvasLocal conversion is symmetric;
+        // grid mode then shifts the pill origin back by half its
+        // size so the pill is centered on the cell midpoint.
+        let cgAnchor: CGPoint
+        switch placement {
+        case .elementTopLeft:
+            cgAnchor = hint.element.frame.origin
+        case .elementCenter:
+            cgAnchor = CGPoint(
+                x: hint.element.frame.midX,
+                y: hint.element.frame.midY)
+        }
         let local = OverlayCoords.canvasLocal(
-            cg: hint.element.frame.origin,
+            cg: cgAnchor,
             unionFrame: unionFrame,
             primaryHeight: primaryHeight)
-        return CGRect(x: local.x, y: local.y, width: w, height: h)
+        switch placement {
+        case .elementTopLeft:
+            return CGRect(x: local.x, y: local.y, width: w, height: h)
+        case .elementCenter:
+            return CGRect(
+                x: local.x - w / 2, y: local.y - h / 2,
+                width: w, height: h)
+        }
     }
 
     /// Rebuild the blur mask path (so frost shows only behind pills)

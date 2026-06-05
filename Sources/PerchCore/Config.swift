@@ -266,6 +266,20 @@ public struct PerchConfig: Sendable {
     /// Rows in the `--grid` overlay. See `gridCols`.
     public let gridRows: Int
 
+    /// Columns used by `--rgrid` (M4-β recursive grid) at EVERY
+    /// drill level — each level subdivides the picked cell into
+    /// `recursive-cols × recursive-rows`. Distinct from `gridCols`
+    /// (which is the single-pass `--grid` density) because the
+    /// recursive case wants a smaller grid per drill so the user
+    /// can pick with fewer eye saccades. Default 3 — `3 × 3 × 3 = 27`
+    /// cells of effective addressable space at depth 3, well under
+    /// the alphabet length, so every cell gets a single-letter label.
+    /// Clamped `2..32` per typo-tolerance.
+    public let gridRecursiveCols: Int
+
+    /// Rows used by `--rgrid` at each drill. See `gridRecursiveCols`.
+    public let gridRecursiveRows: Int
+
     /// Threshold for `,g` chord (issue #74 / M5+) — only elements
     /// at least this size on BOTH axes nest into a sub-grid. For
     /// anything smaller, the chord falls through to AXPress
@@ -374,6 +388,8 @@ public struct PerchConfig: Sendable {
         regionalMinHeight: 100,
         gridCols: 12,
         gridRows: 8,
+        gridRecursiveCols: 3,
+        gridRecursiveRows: 3,
         gridNestMinSize: 100,
         gridMaxDepth: 3,
         chordLeader: "",
@@ -594,6 +610,16 @@ public struct PerchConfig: Sendable {
             guard let raw = doc["grid"]?["rows"]?.asInt else { return 8 }
             return raw >= 2 && raw <= 32 ? raw : 8
         }()
+        let gridRCols: Int = {
+            guard let raw = doc["grid"]?["recursive-cols"]?.asInt
+            else { return 3 }
+            return raw >= 2 && raw <= 32 ? raw : 3
+        }()
+        let gridRRows: Int = {
+            guard let raw = doc["grid"]?["recursive-rows"]?.asInt
+            else { return 3 }
+            return raw >= 2 && raw <= 32 ? raw : 3
+        }()
         let gridMaxDepth: Int = {
             guard let raw = doc["grid"]?["max-depth"]?.asInt
             else { return 3 }
@@ -681,6 +707,8 @@ public struct PerchConfig: Sendable {
             regionalMinHeight: regionalMinH,
             gridCols: gridCols,
             gridRows: gridRows,
+            gridRecursiveCols: gridRCols,
+            gridRecursiveRows: gridRRows,
             gridNestMinSize: gridNestMinSize,
             gridMaxDepth: gridMaxDepth,
             chordLeader: chordLeader,
