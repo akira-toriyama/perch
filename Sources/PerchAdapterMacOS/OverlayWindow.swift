@@ -44,6 +44,13 @@ public final class OverlayWindow {
     private let canvas: OverlayCanvas
     private var keyTap: KeyTap?
     private var cancelKeyCode: CGKeyCode = 53        // Esc by default
+    /// Hold-to-peek key (nil = disabled). While held, the panel is
+    /// orderOut'd so the user can see the UI underneath the pills;
+    /// the KeyTap stays installed so the keyUp restores the panel.
+    /// `peeking` guards against repeated keyDown events from key
+    /// auto-repeat firing redundant orderOut calls.
+    private var peekKeyCode: CGKeyCode?
+    private var peeking = false
     private var hints: [Hint] = []
     private var typed = ""
     private var onResolve: ((Hint, HintAction) -> Void)?
@@ -136,11 +143,13 @@ public final class OverlayWindow {
         self.panel = p
         self.canvas = cv
         self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
+        self.peekKeyCode = Self.resolvePeekKeyCode(config.overlayPeekKey)
     }
 
     public func updateConfig(_ cfg: PerchConfig) {
         self.config = cfg
         self.cancelKeyCode = Self.resolveCancelKeyCode(cfg.cancelKey)
+        self.peekKeyCode = Self.resolvePeekKeyCode(cfg.overlayPeekKey)
         canvas.updateConfig(cfg)
     }
 
@@ -187,13 +196,21 @@ public final class OverlayWindow {
         // loop source we register on the main loop). We mark
         // @MainActor unconditionally inside `handleKeyDown` for
         // clarity.
-        let tap = KeyTap { [weak self] keyCode, flags, str in
-            guard let self else { return false }
-            return MainActor.assumeIsolated {
-                self.handleTapKeyDown(
-                    keyCode: keyCode, flags: flags, char: str)
+        let tap = KeyTap(
+            onKeyDown: { [weak self] keyCode, flags, str in
+                guard let self else { return false }
+                return MainActor.assumeIsolated {
+                    self.handleTapKeyDown(
+                        keyCode: keyCode, flags: flags, char: str)
+                }
+            },
+            onKeyUp: { [weak self] keyCode in
+                guard let self else { return false }
+                return MainActor.assumeIsolated {
+                    self.handleTapKeyUp(keyCode: keyCode)
+                }
             }
-        }
+        )
         guard tap.install() else {
             Log.line("overlay: keytap install failed — "
                      + "cancelling activation")
@@ -215,6 +232,7 @@ public final class OverlayWindow {
         canvas.clear()
         hints = []
         typed = ""
+        peeking = false
         onResolve = nil
         onCancel = nil
     }
@@ -245,6 +263,25 @@ public final class OverlayWindow {
             let cb = onCancel
             hide()
             cb?()
+            return true
+        }
+
+        // Hold-to-peek (#NN): while the peek key is held, orderOut
+        // the panel so the user can see the UI underneath. The
+        // KeyTap stays installed; the keyUp callback restores the
+        // panel. `peeking` short-circuits the repeat-keyDown
+        // dispatched by macOS key auto-repeat. Bare press only —
+        // a modifier-held press is left to the action-mode branch
+        // below so peek doesn't shadow Cmd-Tab / Cmd-Q.
+        if let peekKC = peekKeyCode,
+           keyCode == peekKC,
+           !flags.contains(.maskCommand),
+           !flags.contains(.maskAlternate),
+           !flags.contains(.maskShift) {
+            if !peeking {
+                peeking = true
+                panel.orderOut(nil)
+            }
             return true
         }
 
@@ -496,5 +533,34 @@ public final class OverlayWindow {
         }
         Log.line("overlay: unknown cancel key \"\(name)\" — using esc")
         return 53        // kVK_Escape
+    }
+
+    /// Translate the configured peek-key name into a CGKeyCode.
+    /// Empty string OR unknown name resolves to `nil` (feature
+    /// disabled) — unlike `resolveCancelKeyCode` we don't fall
+    /// back to a default key, because a peek key the user didn't
+    /// ask for is more surprising than no peek.
+    private static func resolvePeekKeyCode(_ name: String) -> CGKeyCode? {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if let kc = HotkeyMonitor.keyCode(for: trimmed) {
+            return CGKeyCode(kc)
+        }
+        Log.line("overlay: unknown peek key \"\(name)\" — disabled")
+        return nil
+    }
+
+    /// keyUp from the CGEventTap. Only one peek-shaped concern
+    /// today: when the user releases the peek key, restore the
+    /// panel. We swallow the keyUp in that case so an unmatched
+    /// keyUp doesn't reach the focused app (its keyDown was also
+    /// swallowed). Other keyUps flow through.
+    private func handleTapKeyUp(keyCode: CGKeyCode) -> Bool {
+        if peeking, let peekKC = peekKeyCode, keyCode == peekKC {
+            peeking = false
+            panel.orderFrontRegardless()
+            return true
+        }
+        return false
     }
 }

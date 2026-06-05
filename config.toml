@@ -82,6 +82,14 @@ anim-enabled = true
 # hint, or for screenshot / demo work where the annotation clutters.
 show-shortcuts = true
 
+# Hold-to-peek key — while held during hint mode, the overlay
+# temporarily hides so you can see the UI underneath. Release to
+# restore the pills. Single key, no modifiers (e.g. "space", "tab").
+# Empty disables the feature; unknown names silently disable per
+# typo-tolerance. Only applies to hint mode (`--activate` /
+# `--regional`); search / menu / grid modes are unaffected.
+peek-key = "space"
+
 
 # ---- Behaviour ---------------------------------------------------
 [behavior]
