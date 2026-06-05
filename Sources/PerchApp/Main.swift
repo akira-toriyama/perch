@@ -75,6 +75,13 @@ enum PerchApp {
                                       B, `d` again to release (mouseUp).
                                       Esc is a safety release. For UI
                                       drag-and-drop (resize, reorder).
+          perch --vision              enter Vision-OCR hint mode —
+                                      Apple Vision text recognition on
+                                      the main display, each visible
+                                      word becomes a hint. Requires
+                                      Screen Recording grant. Use when
+                                      grid is too coarse (Figma layer
+                                      panel, web canvas text, etc.).
           perch --cancel              dismiss the overlay if showing
           perch --reload              re-read ~/.config/perch/config.toml
           perch --status              print active hotkey, alphabet, last event
@@ -135,7 +142,7 @@ enum PerchApp {
             "--dump-ax", "--dump-ax-tree", "--dump-regions",
             "--activate", "--cancel", "--scroll", "--search",
             "--regional", "--menu", "--windows", "--emoji",
-            "--grid", "--rgrid", "--nudge", "--drag",
+            "--grid", "--rgrid", "--nudge", "--drag", "--vision",
             "--reload", "--quit", "--status",
         ]
         for a in argv where !recognised.contains(a) {
@@ -183,6 +190,7 @@ enum PerchApp {
         if argv.contains("--rgrid")    { runClient(cmd: "rgrid") }
         if argv.contains("--nudge")    { runClient(cmd: "nudge") }
         if argv.contains("--drag")     { runClient(cmd: "drag") }
+        if argv.contains("--vision")   { runClient(cmd: "vision") }
         if argv.contains("--cancel")   { runClient(cmd: "cancel") }
         if argv.contains("--reload")   { runClient(cmd: "reload") }
         if argv.contains("--quit")     { runClient(cmd: "quit") }

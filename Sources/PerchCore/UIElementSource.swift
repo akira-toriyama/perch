@@ -44,6 +44,22 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// the no-op.
     func enumerateMenu() -> [UIElement]
 
+    /// Issue #73 (M5) — OCR / Vision-based hint enumerator. Reads
+    /// the focused screen via `CGDisplayCreateImage` + Apple's
+    /// `Vision.framework` `VNRecognizeTextRequest`, emits one
+    /// `UIElement` per recognized text region. AX-blind territory
+    /// (Figma canvas, image labels, web `<canvas>` text) becomes
+    /// pickable.
+    ///
+    /// Dispatch is synthetic mouse click at the recognized
+    /// centroid (no AX target — same path as `--grid`). The
+    /// adapter encodes the centroid in the id so dispatch can
+    /// click without a side-table lookup. Returns `[]` from the
+    /// default implementation; the real impl is on
+    /// `AXUIElementSource`, requires the Screen Recording TCC
+    /// grant on first call.
+    func enumerateVision() -> [UIElement]
+
     /// Enumerate the curated emoji picker entries (issue #55).
     /// Each entry is one `UIElement` with role `"Emoji"`, label
     /// set to the entry's search keywords (so `SearchFilter` can
@@ -114,4 +130,9 @@ public extension UIElementSource {
     /// `EmojiTable` only on the real adapter; tests inherit
     /// the no-op.
     func enumerateEmoji() -> [UIElement] { [] }
+
+    /// Default: vision OCR opts in only on the real adapter.
+    /// Synthetic tests don't capture a screen, so they inherit
+    /// the no-op.
+    func enumerateVision() -> [UIElement] { [] }
 }

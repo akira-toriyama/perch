@@ -30,6 +30,7 @@ import AVFoundation
 import CoreGraphics
 import Foundation
 import PerchCore
+import Vision
 
 public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
@@ -548,6 +549,109 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         return out
     }
 
+    /// Issue #73 (M5) — OCR / Vision-based hint enumerator. The
+    /// final AX-bypass layer: when even grid isn't enough because
+    /// the user wants the **specific text region** they're looking
+    /// at (Figma layer name, web `<canvas>` label, image text),
+    /// Vision.framework's `VNRecognizeTextRequest` runs OCR on the
+    /// main display capture and emits one `UIElement` per
+    /// recognized region.
+    ///
+    /// Coords pipeline (the easy one to get wrong):
+    ///   1. `CGDisplayCreateImage(mainDisplay)` → image in PIXEL
+    ///      coords (3840×2160 on a 4K @ 2x backing scale).
+    ///   2. Vision returns observation `boundingBox` in NORMALISED
+    ///      bottom-left origin (0..1 in each axis, y-up).
+    ///   3. Multiply by image pixel size, flip Y so the box is
+    ///      top-left origin.
+    ///   4. Divide by `screen.backingScaleFactor` to land in CG
+    ///      global POINT coords (the same space OverlayWindow
+    ///      paints in and `CGEvent.mouseEvent` clicks in).
+    /// Dropping any of these conversions makes pills land in the
+    /// wrong place.
+    ///
+    /// Each result's id encodes the click centroid directly —
+    /// `"vision:<x>:<y>"` in CG global point coords. Dispatch
+    /// decodes the id and clicks without a side-table lookup;
+    /// the same pattern emoji uses (#55).
+    ///
+    /// **Screen Recording TCC grant** is required on first call.
+    /// `CGDisplayCreateImage` returns nil without the grant —
+    /// we log + return empty so the controller can dismiss the
+    /// overlay silently rather than crashing.
+    ///
+    /// **Latency**: `.fast` recognition level ranges 100-400ms
+    /// on Apple Silicon for a typical 4K screen. That's slow vs
+    /// the AX walk (<30ms) but acceptable for the fallback use
+    /// case the user invoked explicitly via `--vision`.
+    public func enumerateVision() -> [UIElement] {
+        liveById.removeAll(keepingCapacity: true)
+        customLabelById.removeAll(keepingCapacity: true)
+        nextSeq = 0
+
+        guard let screen = NSScreen.main else {
+            Log.line("vision: no main screen")
+            return []
+        }
+        let displayID = CGMainDisplayID()
+        guard let image = CGDisplayCreateImage(displayID) else {
+            Log.line("vision: CGDisplayCreateImage failed — "
+                     + "Screen Recording grant likely missing "
+                     + "(System Settings → Privacy & Security → "
+                     + "Screen Recording → enable perch)")
+            return []
+        }
+
+        let req = VNRecognizeTextRequest()
+        req.recognitionLevel = .fast
+        let handler = VNImageRequestHandler(
+            cgImage: image, options: [:])
+        do {
+            try handler.perform([req])
+        } catch {
+            Log.line("vision: handler.perform failed (\(error))")
+            return []
+        }
+        guard let observations = req.results else { return [] }
+
+        let imageW = CGFloat(image.width)
+        let imageH = CGFloat(image.height)
+        let scale = screen.backingScaleFactor
+
+        var out: [UIElement] = []
+        for obs in observations {
+            guard let top = obs.topCandidates(1).first else { continue }
+            let text = top.string.trimmingCharacters(
+                in: .whitespacesAndNewlines)
+            if text.isEmpty { continue }
+
+            // boundingBox: bottom-left origin, 0..1 normalized.
+            let bb = obs.boundingBox
+            let pxX = bb.minX * imageW
+            let pxYBottomUp = bb.minY * imageH
+            let pxW = bb.width * imageW
+            let pxH = bb.height * imageH
+            // Flip Y to top-left origin in pixel space.
+            let pxYTopDown = imageH - (pxYBottomUp + pxH)
+
+            // Pixel → point (CG global, point-space) via the
+            // backing-scale divide.
+            let frame = CGRect(
+                x: pxX / scale, y: pxYTopDown / scale,
+                width: pxW / scale, height: pxH / scale)
+            let cx = Int(frame.midX)
+            let cy = Int(frame.midY)
+
+            nextSeq += 1
+            let id = "vision:\(cx):\(cy)"
+            out.append(UIElement(
+                id: id, role: "VisionText",
+                label: text, frame: frame))
+        }
+        Log.line("vision: \(out.count) text region(s)")
+        return out
+    }
+
     // MARK: - Shared walk setup
 
     /// Reset per-enumeration state + resolve frontmost / wake gate
@@ -705,6 +809,13 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         // emoji rows.
         if let glyph = emojiGlyph(fromId: id) {
             return dispatchEmoji(glyph, action: action, id: id)
+        }
+        // Vision dispatch (#73 / M5): id encodes the click
+        // centroid in CG global coords. Same "no liveById entry"
+        // shape as emoji.
+        if let pt = visionPoint(fromId: id) {
+            return dispatchVisionClick(at: pt, action: action,
+                                       id: id)
         }
         guard let elt = liveById[id] else {
             Log.line("dispatch: no live element for id=\(id)")
@@ -1088,6 +1199,152 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         guard id.hasPrefix(prefix) else { return nil }
         let glyph = String(id.dropFirst(prefix.count))
         return glyph.isEmpty ? nil : glyph
+    }
+
+    /// Vision picker (#73 / M5) id encoding: `"vision:<x>:<y>"`.
+    /// Returns the click centroid in CG global coords; nil for
+    /// any other shape. Parsing fails-closed — anything that
+    /// doesn't split cleanly into 3 parts (`vision`, x, y) of
+    /// integer x / y returns nil, and the caller falls through.
+    private func visionPoint(fromId id: String) -> CGPoint? {
+        let parts = id.split(separator: ":", maxSplits: 2,
+                             omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0] == "vision",
+              let x = Int(parts[1]), let y = Int(parts[2])
+        else { return nil }
+        return CGPoint(x: x, y: y)
+    }
+
+    /// Click at the centroid carried in a `vision:<x>:<y>` id.
+    /// Mirrors the action mapping the grid mode uses:
+    ///   .press / .pressContinuous  → left click
+    ///   .rightClick                → right click
+    ///   .copyTitle                 → copy the recognised text
+    ///                                 (NOT click — useful "copy
+    ///                                 the price I'm looking at"
+    ///                                 ergonomic)
+    ///   .focus                     → warp only (no click)
+    ///   everything else            → unsupported, log + false
+    /// `.copyTitle` is the only non-click branch — it needs the
+    /// original recognised text. That's stored in the matching
+    /// `UIElement.label`, but `act(...)` only receives the id;
+    /// so we surface a `customLabelById` entry at enumerate time
+    /// when the consumer says it'll need the text post-resolve.
+    /// For v1 we don't populate that — `.copyTitle` on a vision
+    /// id falls back to logging "no text cached" + returning
+    /// false. Real implementation lands when the use case shows up.
+    private func dispatchVisionClick(
+        at point: CGPoint, action: HintAction, id: String
+    ) -> Bool {
+        switch action {
+        case .press, .pressContinuous:
+            return synthClick(at: point, button: .left,
+                              flags: [], id: id, tag: "vision-click")
+        case .rightClick:
+            return synthClick(at: point, button: .right,
+                              flags: [], id: id, tag: "vision-right")
+        case .focus:
+            // "warp only" — useful before --drag picks up.
+            _ = CGWarpMouseCursorPosition(point)
+            Log.line("dispatch: vision warp-only @ "
+                     + "(\(Int(point.x)),\(Int(point.y))) → id=\(id)")
+            return true
+        case .copyTitle:
+            // No cached text for v1 — see doc above.
+            Log.line("dispatch: vision copyTitle "
+                     + "(no cached text yet) → id=\(id)")
+            return false
+        case .synthCmdClick:
+            return synthClick(at: point, button: .left,
+                              flags: .maskCommand,
+                              id: id, tag: "vision-cmd-click")
+        case .synthShiftClick:
+            return synthClick(at: point, button: .left,
+                              flags: .maskShift,
+                              id: id, tag: "vision-shift-click")
+        case .doubleClick:
+            return synthMultiClick(at: point, count: 2,
+                                   id: id, tag: "vision-double")
+        case .tripleClick:
+            return synthMultiClick(at: point, count: 3,
+                                   id: id, tag: "vision-triple")
+        case .revealInFinder, .speakTitle, .copyURL:
+            // .copyURL not meaningful for OCR text (we don't have
+            // a URL attribute, just the recognised string).
+            // .revealInFinder / .speakTitle require source data
+            // (file URL / spoken text) we don't carry on vision
+            // hits — return false rather than guessing.
+            Log.line("dispatch: vision unsupported action "
+                     + "\(action.rawValue) → id=\(id)")
+            return false
+        }
+    }
+
+    /// Generalised "synthesise one click at point" used by vision
+    /// dispatch. Same pattern as `dispatchSynthClick(...)` (#70)
+    /// but parameterised on button + flags + point (rather than
+    /// reading the position from an AXUIElement).
+    private func synthClick(
+        at point: CGPoint, button: CGMouseButton,
+        flags: CGEventFlags, id: String, tag: String
+    ) -> Bool {
+        _ = CGWarpMouseCursorPosition(point)
+        let down: CGEventType =
+            (button == .right) ? .rightMouseDown : .leftMouseDown
+        let up: CGEventType =
+            (button == .right) ? .rightMouseUp : .leftMouseUp
+        guard let src = CGEventSource(stateID: .hidSystemState),
+              let d = CGEvent(
+                mouseEventSource: src, mouseType: down,
+                mouseCursorPosition: point, mouseButton: button),
+              let u = CGEvent(
+                mouseEventSource: src, mouseType: up,
+                mouseCursorPosition: point, mouseButton: button)
+        else {
+            Log.line("dispatch: \(tag) CGEvent create failed → id=\(id)")
+            return false
+        }
+        if !flags.isEmpty {
+            d.flags = flags
+            u.flags = flags
+        }
+        d.post(tap: .cghidEventTap)
+        u.post(tap: .cghidEventTap)
+        Log.line("dispatch: \(tag) ok @ "
+                 + "(\(Int(point.x)),\(Int(point.y))) → id=\(id)")
+        return true
+    }
+
+    /// Coord-based multi-click for vision (no AXUIElement). Same
+    /// `kCGMouseEventClickState` 1/2/3 sequence as
+    /// `dispatchMultiClick(_:count:...)` (#72).
+    private func synthMultiClick(
+        at point: CGPoint, count: Int,
+        id: String, tag: String
+    ) -> Bool {
+        guard count >= 1 else { return false }
+        _ = CGWarpMouseCursorPosition(point)
+        guard let src = CGEventSource(stateID: .hidSystemState) else {
+            return false
+        }
+        for i in 1...count {
+            guard let d = CGEvent(
+                mouseEventSource: src, mouseType: .leftMouseDown,
+                mouseCursorPosition: point, mouseButton: .left),
+                  let u = CGEvent(
+                    mouseEventSource: src, mouseType: .leftMouseUp,
+                    mouseCursorPosition: point, mouseButton: .left)
+            else { continue }
+            d.setIntegerValueField(.mouseEventClickState,
+                                   value: Int64(i))
+            u.setIntegerValueField(.mouseEventClickState,
+                                   value: Int64(i))
+            d.post(tap: .cghidEventTap)
+            u.post(tap: .cghidEventTap)
+        }
+        Log.line("dispatch: \(tag) ok @ "
+                 + "(\(Int(point.x)),\(Int(point.y))) → id=\(id)")
+        return true
     }
 
     /// Type / copy the emoji glyph. `.press` and `.pressContinuous`

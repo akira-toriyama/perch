@@ -117,7 +117,8 @@ watches the file for changes when running as a daemon).
 | `--rgrid` | client | enter recursive grid — each label drills into the chosen cell up to `[grid].max-depth` levels (default 3, ≈ pixel precision on 4K). `space` clicks at current cell center; `Backspace` pops one level |
 | `--nudge` | client | enter arrow-nudge cursor mode — arrows move cursor 1/10/100/edge px (modifier-stepped), `space` clicks + exits. The last-mile precision after `--grid` or `--rgrid` |
 | `--drag` | client | enter keyboard drag — nudge to A, press `d` to grab (mouseDown), nudge to B, press `d` again to release (mouseUp). For drag-and-drop, splitter resize, reorder, etc. |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge / drag) |
+| `--vision` | client | enter Vision-OCR hint mode — Apple Vision text recognition on the main display, every visible word becomes a hint. Requires the Screen Recording grant. Use when AX is blind AND grid is too coarse (Figma layer panel labels, web canvas text). |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge / drag / vision) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -290,6 +291,37 @@ drag-to-select-text, NSSplitView drag, drag-to-reorder lists.
 Pre-position the cursor with `--grid` / `--rgrid` for a coarse
 jump, then `--drag` to perform the actual operation; nudging
 inside drag mode tunes the start / end points.
+
+### Vision-OCR hint mode
+
+`perch --vision` is the **last AX-bypass layer**, complementing
+`--grid`. Where grid picks coordinates by labelled cells, vision
+picks by **what the text says**: Apple Vision recognises every
+visible string on the main display, perch labels each, and a
+label pick warps the cursor + clicks at the recognised centroid.
+
+Use when:
+
+- Figma layer panel labels (AX is opaque)
+- Web `<canvas>` text (Slides, Maps, in-browser editors)
+- Image text in a PDF / screenshot viewer
+- Game UIs / non-AppKit chrome
+
+Requires the **Screen Recording grant**: System Settings →
+Privacy & Security → Screen Recording → enable perch. Without
+it `CGDisplayCreateImage` returns nil and the overlay dismisses
+silently. First invocation prompts.
+
+**Latency**: 100-400ms per invocation on Apple Silicon (one
+screen capture + one Vision request, no per-keystroke
+re-capture). Slow compared to hint mode (<30ms) but acceptable
+for the deliberate fallback.
+
+For v1, the dispatch supports left / right click, Cmd-click,
+Shift-click, double / triple click via the same chord verbs
+hint mode uses. `.copyTitle` / `.revealInFinder` /
+`.speakTitle` are deferred — vision has no AX target so URL /
+file / spoken-text source data isn't available.
 
 ### Window switcher
 
