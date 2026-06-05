@@ -44,6 +44,22 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// the no-op.
     func enumerateMenu() -> [UIElement]
 
+    /// Enumerate every window across every running app (issue #54).
+    /// Each window becomes one `UIElement` with role `"Window"`,
+    /// label `"<App> — <Window Title>"` (`(min)` suffix for
+    /// minimised windows), and a `.zero` frame — windows ship with
+    /// no on-screen frame for the picker, so consumers render
+    /// matches in a vertical list like `enumerateMenu()`.
+    ///
+    /// `.press` against a window-role element should raise the
+    /// window AND activate its owning app (instead of firing the
+    /// usual `kAXPressAction`); adapters that override
+    /// `enumerateWindows()` must also handle that dispatch.
+    ///
+    /// Returns `[]` from the default implementation. Synthetic
+    /// adapters used by tests don't model the system window list.
+    func enumerateWindows() -> [UIElement]
+
     /// Perform `action` against the element identified by `id`.
     /// The id was produced by the most recent `enumerate()` call;
     /// live AX handles are kept adapter-side. Returns `false`
@@ -71,4 +87,10 @@ public extension UIElementSource {
     /// modelled menu bar returns `[]` — Controller dismisses the
     /// menu overlay silently.
     func enumerateMenu() -> [UIElement] { [] }
+
+    /// Default: window-switcher mode opts in. Sources that don't
+    /// model the system window list (synthetic test adapters,
+    /// future backends) inherit the no-op so the Controller
+    /// dismisses the picker silently rather than crashing.
+    func enumerateWindows() -> [UIElement] { [] }
 }
