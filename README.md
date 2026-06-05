@@ -112,7 +112,8 @@ watches the file for changes when running as a daemon).
 | `--regional` | client | enter regional mode — label large containers (article / pane / image) instead of every clickable leaf |
 | `--menu` | client | enter menu-search mode — fuzzy-match every menu bar item (deep / hidden commands incl.); pick with `1-9` |
 | `--windows` | client | enter cross-app window switcher — fuzzy-match every window across every running app; `1-9` raises the window and activates its owning app |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows) |
+| `--emoji` | client | enter emoji picker — fuzzy-match a curated emoji table by name; `1-9` types the glyph at the caret (Unicode injection — no pasteboard write) |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -207,6 +208,28 @@ list as `--menu`. Press a digit:
 Where `Cmd+Tab` shows one tile per app and Mission Control needs
 visual scanning, `--windows` lets you reach any specific window
 by name in one keystroke + digit.
+
+### Emoji picker
+
+`perch --emoji` enters a `--search` variant whose target set is
+a **curated emoji name table** (≈250 entries: faces, hands,
+hearts, animals, food, weather, common symbols). Type the
+name; matches render in the same Spotlight-style vertical
+list as `--menu`. Press a digit:
+
+- `1` types that emoji at the focused field's caret. Dispatch
+  uses `CGEvent.keyboardSetUnicodeString` (same approach the
+  macOS built-in picker uses), so perch **never writes to the
+  pasteboard** — your clipboard history stays clean.
+- `Cmd-1` copies the glyph to the pasteboard instead (your
+  explicit ask).
+- `Cmd+Shift-1` types + re-enters the picker (insert several
+  emoji in a row without re-pressing the flag).
+
+The table is intentionally curated — the long tail of CLDR
+(≈3700 entries) is rarely typed by name; niche emoji are
+easier to reach via the system picker (`Ctrl+Cmd+Space`).
+File an issue to add an entry you typed and didn't find.
 
 ### Regional mode
 

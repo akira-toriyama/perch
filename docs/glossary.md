@@ -234,6 +234,19 @@ visible でないコマンド（Safari の `Develop > Empty Caches` 等）に ke
 で到達できる。エントリは `perch --menu`（CLI only）。
 - **Don't call it:** menu launcher, command palette, コマンドパレット
 
+### EmojiPicker (emoji picker)
+issue #55。`SearchMode` の派生で、enumerator が
+`UIElementSource.enumerateEmoji()` （curated `EmojiTable.entries` を
+`UIElement` 化、id は `"emoji:<glyph>"`）。レンダリングは
+`.verticalList`。発火は **`CGEvent.keyboardSetUnicodeString` で
+focus を奪わず caret に Unicode 直接注入**（adapter 側で
+`emoji:` prefix を見て分岐）— **pasteboard を一切触らない**。
+`.copyTitle` のみグリフを pasteboard へ。テーブルは ≈250 件の
+厳選セット（全 CLDR ≈3700 件は long-tail のためカバーしない —
+ニッチな絵文字は OS 標準ピッカーに譲る）。エントリは
+`perch --emoji`（CLI only）。
+- **Don't call it:** emoji typer, emoji search, 絵文字検索（一般名は可）
+
 ### WindowSwitcher (cross-app window switcher)
 issue #54。`SearchMode` の派生で、enumerator が
 `UIElementSource.enumerateWindows()` （全 running app の全 window）。
