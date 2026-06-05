@@ -906,6 +906,17 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         case .tripleClick:
             return dispatchMultiClick(elt, count: 3,
                                       id: id, tag: "triple-click")
+        case .nestedGrid:
+            // M5+ (#74) — Controller-level routing. The chord
+            // arrives here so the switch stays exhaustive, but
+            // the actual grid entry is wired in
+            // `Controller.runHintFlow`'s onResolve (where it has
+            // access to `enterNestedGridMode`). Return true so
+            // the dispatch log records a clean "ok" rather than
+            // the no-live-element fallback. AXUIElementSource
+            // doesn't own GridMode — that's a Controller resource.
+            Log.line("dispatch: nestedGrid (Controller routes) → id=\(id)")
+            return true
         case .speakTitle:
             // Chord `,s` (#57). Speak the element's title /
             // composed label via AVSpeechSynthesizer. Same label
@@ -1268,12 +1279,16 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         case .tripleClick:
             return synthMultiClick(at: point, count: 3,
                                    id: id, tag: "vision-triple")
-        case .revealInFinder, .speakTitle, .copyURL:
+        case .revealInFinder, .speakTitle, .copyURL, .nestedGrid:
             // .copyURL not meaningful for OCR text (we don't have
             // a URL attribute, just the recognised string).
             // .revealInFinder / .speakTitle require source data
             // (file URL / spoken text) we don't carry on vision
-            // hits — return false rather than guessing.
+            // hits. .nestedGrid would be meaningful (OCR boxes
+            // can be large) but the Controller routes that case
+            // before dispatch reaches here for AX hits — same
+            // routing should land in vision flow if needed
+            // later; deferred for v1.
             Log.line("dispatch: vision unsupported action "
                      + "\(action.rawValue) → id=\(id)")
             return false
@@ -1370,7 +1385,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return true
         case .rightClick, .focus, .revealInFinder, .speakTitle,
              .synthCmdClick, .synthShiftClick,
-             .doubleClick, .tripleClick:
+             .doubleClick, .tripleClick, .nestedGrid:
             Log.line("dispatch: emoji unsupported action "
                      + "\(action.rawValue) → \(id)")
             return false

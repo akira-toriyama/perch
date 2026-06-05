@@ -102,15 +102,24 @@ public final class GridMode {
         case leftClickContinuous     // re-enter after click
     }
 
+    /// Optional starting frame — when set, the grid subdivides
+    /// this rect instead of the full screen union. Used by M5+
+    /// nested grid (#74) so a `,g` chord on a hint can drill
+    /// into the picked element's bounds. nil → screen-union as
+    /// usual.
+    private let initialFrame: CGRect?
+
     public init(
         config: PerchConfig,
         maxDepth: Int = 1,
+        initialFrame: CGRect? = nil,
         onResolve: @escaping () -> Void = {},
         onExit: @escaping () -> Void,
         onReenter: @escaping () -> Void = {}
     ) {
         self.config = config
         self.maxDepth = max(1, min(maxDepth, 5))
+        self.initialFrame = initialFrame
         self.onExit = onExit
         self.onReenter = onReenter
         self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
@@ -149,7 +158,12 @@ public final class GridMode {
         let union = OverlayCoords.unionFrame()
         depth = 1
         frameStack = []
-        currentFrame = union
+        // Nested-grid (#74): start subdividing the picked
+        // element's frame rather than the full screen. The panel
+        // still covers the union (so labels render correctly
+        // relative to global screen coords); only the
+        // cell-generation rect differs.
+        currentFrame = initialFrame ?? union
         rebuildHints()
 
         panel.setFrame(union, display: false)

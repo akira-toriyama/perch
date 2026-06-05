@@ -222,6 +222,14 @@ rows = 8
 # above 5 the cells are sub-pixel and the labels become unreadable.
 max-depth = 3
 
+# Nested grid threshold (`,g` chord, M5+). After a hint resolve,
+# `,g` instead of clicking subdivides the picked element with a
+# grid scoped to its frame. Elements smaller than `nest-min-size`
+# on EITHER axis fall back to a regular AXPress (subdividing a
+# button-sized element with another grid is meaningless). Clamped
+# to 1..1000.
+nest-min-size = 100
+
 
 # ---- Regional hint mode ------------------------------------------
 # Entered via `perch --regional`. Labels large containers (article

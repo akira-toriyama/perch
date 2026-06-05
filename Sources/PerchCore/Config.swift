@@ -137,6 +137,15 @@ public struct PerchConfig: Sendable {
     /// Rows in the `--grid` overlay. See `gridCols`.
     public let gridRows: Int
 
+    /// Threshold for `,g` chord (issue #74 / M5+) — only elements
+    /// at least this size on BOTH axes nest into a sub-grid. For
+    /// anything smaller, the chord falls through to AXPress
+    /// because subdividing a button-sized element with another
+    /// grid is meaningless. Default 100×100 (catches textareas /
+    /// frames / scroll regions, excludes most buttons /
+    /// menuitems). Clamped to `1..1000` per typo-tolerance.
+    public let gridNestMinSize: Double
+
     /// Max subdivision depth for `--rgrid` (issue #67 / M4-β).
     /// Default 3 — `cols × rows × depth` cells of effective
     /// addressable points: 12×8×3 = 288 levels, each level
@@ -218,6 +227,7 @@ public struct PerchConfig: Sendable {
         regionalMinHeight: 100,
         gridCols: 12,
         gridRows: 8,
+        gridNestMinSize: 100,
         gridMaxDepth: 3,
         chordLeader: "",
         chordTimeoutMs: 600,
@@ -369,6 +379,11 @@ public struct PerchConfig: Sendable {
             else { return 3 }
             return raw >= 1 && raw <= 5 ? raw : 3
         }()
+        let gridNestMinSize: Double = {
+            guard let raw = doc["grid"]?["nest-min-size"]?.asDouble
+            else { return 100 }
+            return raw >= 1 && raw <= 1000 ? raw : 100
+        }()
 
         // Chord-suffix knobs (#57). Leader is normalised to a
         // single lowercased character; empty (the default) means
@@ -428,6 +443,7 @@ public struct PerchConfig: Sendable {
             regionalMinHeight: regionalMinH,
             gridCols: gridCols,
             gridRows: gridRows,
+            gridNestMinSize: gridNestMinSize,
             gridMaxDepth: gridMaxDepth,
             chordLeader: chordLeader,
             chordTimeoutMs: chordTimeoutMs,
