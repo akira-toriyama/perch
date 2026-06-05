@@ -125,7 +125,7 @@ public final class GridMode {
         onReenter: @escaping () -> Void = {}
     ) {
         self.config = config
-        self.maxDepth = max(1, min(maxDepth, 5))
+        self.maxDepth = max(1, min(maxDepth, 10))
         self.initialFrame = initialFrame
         self.sound = sound
         self.onExit = onExit

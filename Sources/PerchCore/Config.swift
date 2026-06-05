@@ -290,12 +290,12 @@ public struct PerchConfig: Sendable {
     public let gridNestMinSize: Double
 
     /// Max subdivision depth for `--rgrid` (issue #67 / M4-β).
-    /// Default 3 — `cols × rows × depth` cells of effective
-    /// addressable points: 12×8×3 = 288 levels, each level
-    /// halving the cell size, so 3 drills on a 4K screen lands
-    /// inside a ~5px region. Clamped to `1..5`; depth=1
-    /// degenerates to `--grid` (single level), depth=5 hits
-    /// sub-pixel territory long before becoming useful.
+    /// Default 3 — with the new 3×3 `recursive-cols/rows` default
+    /// (PR #87), depth 3 = 27 cells per axis, ~80px terminal cell
+    /// on 4K. Bump to 5-6 for pixel precision; the ceiling is 10
+    /// (3^10 = 59,000 cells per axis is sub-pixel on any display
+    /// + exceeds the alphabet length anyway). depth=1 degenerates
+    /// to `--grid` (single level).
     public let gridMaxDepth: Int
 
     // MARK: - [chord]
@@ -623,7 +623,13 @@ public struct PerchConfig: Sendable {
         let gridMaxDepth: Int = {
             guard let raw = doc["grid"]?["max-depth"]?.asInt
             else { return 3 }
-            return raw >= 1 && raw <= 5 ? raw : 3
+            // Ceiling 10 is calibrated for 3×3 recursive grid: 3^10
+            // ≈ 59000 divisions, well below the alphabet limit AND
+            // sub-pixel on any current display, so anything above
+            // is wasted. Old ceiling 5 was right when --rgrid
+            // defaulted to 12×8 (12^5 = 248832 cells per axis);
+            // the post-PR #87 3×3 default needs more headroom.
+            return raw >= 1 && raw <= 10 ? raw : 3
         }()
         let gridNestMinSize: Double = {
             guard let raw = doc["grid"]?["nest-min-size"]?.asDouble
