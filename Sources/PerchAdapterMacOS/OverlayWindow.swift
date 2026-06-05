@@ -343,26 +343,55 @@ public final class OverlayWindow {
     /// is the modifier-less default `.press`, defer the dispatch
     /// into the chord wait state; otherwise the existing snappy
     /// path runs unchanged.
+    ///
+    /// When `[overlay.effect].match != "none"` AND animations are
+    /// enabled overall, the winning pill plays its match animation
+    /// while AXPress fires in parallel — the user sees the visual
+    /// ack riding on top of an already-firing click rather than
+    /// after-it.
     private func deliverResolve(hint: Hint, action: HintAction) {
         if action == .press, !config.chordLeader.isEmpty {
             enterChordWait(hint: hint)
             return
         }
         let cb = onResolve
+        // Match-effect path: dispatch AXPress synchronously (so the
+        // app reacts immediately — the user's perceived click
+        // latency is what they care about) but DON'T tear down the
+        // overlay until the animation completes. The KeyTap stays
+        // installed until hide() so the user can't snag stray keys.
+        if config.overlayAnimEnabled, config.matchEffect != .none {
+            cb?(hint, action)
+            self.onResolve = nil
+            canvas.animateMatch(
+                winning: hint,
+                kind: config.matchEffect,
+                intensity: config.effectIntensity
+            ) { [weak self] in
+                self?.hide()
+            }
+            return
+        }
         hide()
         cb?(hint, action)
     }
 
-    /// Park the resolved hint, orderOut the panel (the user knows
-    /// their pick was accepted — the pill goes away), keep the
-    /// KeyTap installed so we can catch the chord suffix, and
-    /// install a timeout. On timeout we fire `.press` as if no
-    /// chord arrived.
+    /// Park the resolved hint, keep ONLY the winning pill visible
+    /// (every other pill clears) so the user has a clear "you picked
+    /// this — waiting for chord" cue, install a timeout, and keep
+    /// the KeyTap installed so we can catch the chord suffix. On
+    /// timeout we fire `.press` as if no chord arrived; if a chord
+    /// arrives, the winning pill is the target of the match
+    /// animation. Before issue #NN we orderOut + cleared here,
+    /// which silently bypassed every match-effect when chord mode
+    /// was on — now the pill stays as the animation anchor.
     private func enterChordWait(hint: Hint) {
         pendingResolve = (hint, .press)
         chordPhase = .waitingForLeader
-        panel.orderOut(nil)
-        canvas.clear()
+        // Show only the winning pill with its full label "typed"
+        // (so the matched/glow border lights up). The other pills
+        // vanish so the user's eye is locked to the pick.
+        canvas.present(hints: [hint], typed: hint.keys)
         Log.line("overlay: chord wait → \(hint.keys)")
         scheduleChordTimeout()
     }
@@ -427,8 +456,14 @@ public final class OverlayWindow {
 
     /// Fire the pending resolve with either `chordAction` (when set)
     /// or the original `.press` action. Either way: clear chord
-    /// state, hide the overlay, and hand control back to the
-    /// Controller's `onResolve` callback.
+    /// state, run the optional match-effect animation, hide the
+    /// overlay, and hand control back to the Controller's
+    /// `onResolve` callback.
+    ///
+    /// The animation branch mirrors `deliverResolve`'s — AXPress
+    /// fires in parallel so the click isn't delayed. Without this
+    /// the chord path silently dropped every match-effect because
+    /// `enterChordWait` already had the panel half-torn-down.
     private func finalizeChord(with chordAction: HintAction?) {
         cancelChordTimer()
         guard let (hint, base) = pendingResolve else {
@@ -441,6 +476,18 @@ public final class OverlayWindow {
         Log.line("overlay: chord finalize \(action.rawValue) "
                  + "→ \(hint.keys)")
         let cb = onResolve
+        if config.overlayAnimEnabled, config.matchEffect != .none {
+            cb?(hint, action)
+            self.onResolve = nil
+            canvas.animateMatch(
+                winning: hint,
+                kind: config.matchEffect,
+                intensity: config.effectIntensity
+            ) { [weak self] in
+                self?.hide()
+            }
+            return
+        }
         hide()
         cb?(hint, action)
     }
@@ -482,6 +529,12 @@ public final class OverlayWindow {
     /// dismiss + onCancel. Animations off ⇒ same effect, just
     /// immediate. Keeping `typed` populated during the flash lets
     /// the user see which letter went unmatched.
+    ///
+    /// `[overlay.effect].unmatch` layers an additional motion
+    /// (`shake` / `fade`) on top of the red flash; `none` keeps the
+    /// historical "hold for 200ms then dismiss" behavior. The
+    /// completion handler gates the hide() so the pills don't
+    /// vanish mid-animation.
     private func flashThenCancel() {
         let cb = onCancel
         guard config.overlayAnimEnabled else {
@@ -490,7 +543,10 @@ public final class OverlayWindow {
             return
         }
         canvas.flashMiss(typed: typed)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+        canvas.animateUnmatch(
+            kind: config.unmatchEffect,
+            intensity: config.effectIntensity
+        ) { [weak self] in
             self?.hide()
             cb?()
         }

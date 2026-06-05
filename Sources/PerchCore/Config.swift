@@ -54,7 +54,27 @@ public struct PerchConfig: Sendable {
     /// hint border, and the glow. `"system"` resolves to the user's
     /// macOS accent colour (`NSColor.controlAccentColor`); a `#rrggbb`
     /// literal overrides. Same colour vocabulary as stroke's overlay.
+    ///
+    /// When `overlayTheme != .system` AND `overlayTheme != .random`,
+    /// the theme palette's accent takes precedence. Users who want
+    /// the theme's body colors but a different accent (e.g. nord's
+    /// frost-blue pills with a hot-pink highlight) set both knobs.
     public let overlayAccent: String
+
+    /// Pill color palette + typography preset — picks pill background
+    /// tint, accent (border/matched-glow/typed-prefix), text color,
+    /// miss-flash color, and font family in one knob. Mirrors facet's
+    /// `[overlay] theme` vocabulary so users carrying a facet config
+    /// see the same names. Default `.system` keeps the historical
+    /// adaptive look (NSColor.controlAccentColor, dark pill tint).
+    public let overlayTheme: Theme
+
+    /// Geometric preset for the pill body. `.pill` (default) is the
+    /// historical 10pt rounded rect; alternates let users dial
+    /// density (`.square` is denser, `.underline` removes the body
+    /// entirely for minimalists). Orthogonal to `overlayTheme` —
+    /// the palette + the shape combine freely.
+    public let pillShape: PillShape
 
     public let overlayFontSize: Double
 
@@ -84,6 +104,47 @@ public struct PerchConfig: Sendable {
     /// Empty disables the feature. Default `"space"`. Unknown names
     /// silently fall back to disabled per typo-tolerance.
     public let overlayPeekKey: String
+
+    /// What perch does to the WINNING pill at hint-resolve time.
+    /// Ports wand's `[gesture.effect] match` vocabulary, scoped to
+    /// perch's single-pill resolve. Default `.none` keeps the snappy
+    /// "pill vanishes the instant AXPress fires" UX; `.fade` /
+    /// `.explode` decorate the moment for screencasts or first-time
+    /// users. Non-winning pills always dismiss immediately.
+    public let matchEffect: MatchEffect
+
+    /// What perch does on a missed keypress / non-letter input.
+    /// The existing 200ms red-flash is the baseline; this knob
+    /// layers ADDITIONAL motion (`.shake`) or replaces the hold
+    /// with a fade (`.fade`). Off (`.none`) → historical red-flash
+    /// behavior.
+    public let unmatchEffect: UnmatchEffect
+
+    /// What perch does to pills that get FILTERED OUT mid-typing
+    /// (the user typed `a` while `aa, ab, ac, xx` were on screen —
+    /// `xx` disappears because its label doesn't start with the
+    /// typed prefix). Off (`.none`) → instant removal (the
+    /// historical behavior). Uses the same kind vocabulary as
+    /// `matchEffect` since the underlying problem is the same:
+    /// "this pill is going away, give it a visual exit".
+    public let narrowEffect: MatchEffect
+
+    /// Magnitude scaler for `matchEffect` / `unmatchEffect` /
+    /// `narrowEffect`. Ports wand's `intensity` vocabulary verbatim.
+    /// Affects spatial dimension (explode scale, shake amplitude)
+    /// but not duration — that's `effectDurationScale` below.
+    public let effectIntensity: EffectIntensity
+
+    /// Multiplier on every animation duration (match / unmatch /
+    /// narrow). 1.0 = the calibrated baseline (120-220ms depending
+    /// on kind). 2.0 doubles every duration so the user can
+    /// actually SEE the effect; 0.5 halves for the snappy crowd.
+    /// Clamped to 0.1..5.0 per typo-tolerance.
+    ///
+    /// Unmatch's underlying red-flash window stretches with the
+    /// same scale — without that, a 0.5× scale would tear the
+    /// flash down before the animation peaks.
+    public let effectDurationScale: Double
 
     // MARK: - [behavior]
 
@@ -220,11 +281,18 @@ public struct PerchConfig: Sendable {
         alphabet: defaultAlphabet,
         prioritiseCenter: true,
         overlayAccent: "system",
+        overlayTheme: .system,
+        pillShape: .pill,
         overlayFontSize: 15,
         overlayBlurEnabled: true,
         overlayAnimEnabled: true,
         overlayShowShortcuts: true,
         overlayPeekKey: "space",
+        matchEffect: .none,
+        unmatchEffect: .none,
+        narrowEffect: .none,
+        effectIntensity: .normal,
+        effectDurationScale: 1.0,
         autoClickOnUnique: true,
         roles: defaultRoles,
         excludeApps: [],
@@ -309,6 +377,14 @@ public struct PerchConfig: Sendable {
         // falls back to "system" so a typo never erases the accent.
         let accent = (doc["overlay"]?["accent"]?.asString)
             .flatMap(sanitiseAccent) ?? "system"
+        // Theme palette — unknown names clamp to `.system` per
+        // typo-tolerance. `.random` is resolved once at parse time
+        // so the chosen palette stays stable for the daemon's life
+        // (each `--reload` rolls fresh).
+        let theme = (doc["overlay"]?["theme"]?.asString)
+            .flatMap(Theme.parse)?.resolvingRandom() ?? .system
+        let shape = (doc["overlay"]?["pill-shape"]?.asString)
+            .flatMap(PillShape.parse) ?? .pill
         let size = (doc["overlay"]?["font-size"]?.asDouble).map {
             min(max($0, 8), 32)
         } ?? 15
@@ -322,6 +398,29 @@ public struct PerchConfig: Sendable {
         let peekKey = (doc["overlay"]?["peek-key"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             ?? "space"
+
+        // [overlay.effect] — wand-style match / unmatch / intensity.
+        // Same flat-key shape as [behavior.web]: TOML's dotted-table
+        // header lands as a single `"overlay.effect"` key in our
+        // hand-rolled parser. Unknown kinds clamp per typo-tolerance.
+        let effSection = doc["overlay.effect"]
+        let matchEff = (effSection?["match"]?.asString)
+            .flatMap(MatchEffect.parse) ?? .none
+        let unmatchEff = (effSection?["unmatch"]?.asString)
+            .flatMap(UnmatchEffect.parse) ?? .none
+        let narrowEff = (effSection?["narrow"]?.asString)
+            .flatMap(MatchEffect.parse) ?? .none
+        let intensity = (effSection?["intensity"]?.asString)
+            .flatMap(EffectIntensity.parse) ?? .normal
+        // duration-scale clamp 0.1..5.0 per typo-tolerance: values
+        // outside that range fall back to 1.0 (the baseline) so a
+        // misconfigured user never gets stuck with a 30-second
+        // fade or a 1ms invisible flash.
+        let durScale: Double = {
+            guard let raw = effSection?["duration-scale"]?.asDouble
+            else { return 1.0 }
+            return raw >= 0.1 && raw <= 5.0 ? raw : 1.0
+        }()
 
         let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
@@ -444,11 +543,18 @@ public struct PerchConfig: Sendable {
             alphabet: alphabet,
             prioritiseCenter: priority,
             overlayAccent: accent,
+            overlayTheme: theme,
+            pillShape: shape,
             overlayFontSize: size,
             overlayBlurEnabled: blur,
             overlayAnimEnabled: anim,
             overlayShowShortcuts: showShortcuts,
             overlayPeekKey: peekKey,
+            matchEffect: matchEff,
+            unmatchEffect: unmatchEff,
+            narrowEffect: narrowEff,
+            effectIntensity: intensity,
+            effectDurationScale: durScale,
             autoClickOnUnique: autoClick,
             roles: roles,
             excludeApps: excludes,
