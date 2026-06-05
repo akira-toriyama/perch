@@ -197,18 +197,23 @@ final class HintPainter: NSView {
             NSGraphicsContext.saveGraphicsState()
 
             // Compose three sources of motion on each pill:
-            //   - `scale`: the appear scale-in (all pills, identity 1.0)
+            //   - per-pill appear state (scale/dx/dy/alpha) from
+            //     `[overlay.effect].appear` — cascade staggers each
+            //     pill independently, the others apply uniformly
             //   - winning-pill match-effect (`matchScale` + `matchDx/Dy`)
             //   - all-pill offset (shake / vibrate / drop / rise / slide)
-            // The winning pill stacks BOTH match-anim and the all-pill
-            // offset is suppressed for it (unmatch + match don't fire
-            // at the same time, so this only matters in theory).
+            // The winning pill stacks match-anim with its appear state;
+            // the all-pill offset path is suppressed for the winner
+            // (unmatch + match don't fire at the same time so this
+            // mostly matters in theory).
             let isWinning = (matchWinningKeys == p.hint.keys)
-            let composedScale: CGFloat = isWinning ? scale * matchScale : scale
+            let composedScale: CGFloat = isWinning
+                ? p.appearScale * matchScale
+                : p.appearScale
             let composedDx: CGFloat =
-                isWinning ? matchDx : offsetDx
+                isWinning ? p.appearDx + matchDx : p.appearDx + offsetDx
             let composedDy: CGFloat =
-                isWinning ? matchDy : offsetDy
+                isWinning ? p.appearDy + matchDy : p.appearDy + offsetDy
             if composedScale != 1 || composedDx != 0 || composedDy != 0 {
                 let cx = p.rect.midX, cy = p.rect.midY
                 let tx = NSAffineTransform()
@@ -219,15 +224,17 @@ final class HintPainter: NSView {
                 tx.concat()
             }
 
-            // Alpha gate. Three sources stack:
+            // Alpha gate. Four sources stack:
+            //   - per-pill appear alpha (`p.appearAlpha`, fade-in /
+            //     cascade / bloom / drop-in chain)
             //   - winning-only match fade (`matchOpacity`)
             //   - all-pill alpha (`pillsAlpha`, drives unmatch.fade
             //     + the off-screen-translation effects)
             //   - the implicit 1.0 baseline for non-winning pills
-            //     during match (so the user sees the unaffected
-            //     pills clearly while the winner animates)
-            let pillAlpha: CGFloat =
-                isWinning ? matchOpacity : pillsAlpha
+            //     during match
+            let pillAlpha: CGFloat = isWinning
+                ? p.appearAlpha * matchOpacity
+                : p.appearAlpha * pillsAlpha
             if pillAlpha < 1, let ctx = NSGraphicsContext.current {
                 ctx.cgContext.setAlpha(pillAlpha)
                 ctx.cgContext.beginTransparencyLayer(auxiliaryInfo: nil)

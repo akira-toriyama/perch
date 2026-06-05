@@ -389,6 +389,49 @@ public enum UnmatchEffect: String, Sendable, CaseIterable {
     }
 }
 
+/// Entrance animation for the hint pills — symmetric with
+/// `MatchEffect` / `UnmatchEffect` / `narrowEffect`, but fires
+/// when the overlay APPEARS rather than disappears. The kind
+/// vocabulary intentionally mirrors the exit-side kinds so users
+/// can pair them ("rises in on entry, drops out on resolve").
+///
+/// `intensity` (see `EffectIntensity`) multiplies spatial dimension.
+/// `effectDurationScale` lengthens the entrance window; cascade
+/// uses the duration as the PER-PILL window — total time is
+/// `duration + perPillDelay * pillCount`.
+public enum AppearEffect: String, Sendable, CaseIterable {
+    /// No appear animation — pills paint at full size, no delay.
+    case none
+    /// 150ms scale-in 0.85 → 1.0 ease-out cubic — the historical
+    /// perch default. Stays as the new default because it's the
+    /// subtle option that doesn't shock the user on every activate.
+    case pop
+    /// Pills appear one after another with a small stagger,
+    /// painting from top-left to bottom-right.
+    case cascade
+    /// Alpha 0 → 1 over the duration, no scale.
+    case fadeIn = "fade-in"
+    /// Pills appear from above, falling into their target rect.
+    case dropIn = "drop-in"
+    /// 0.4 → 1.0 scale + 0 → 1 alpha — like `explode` in reverse.
+    case bloom
+    /// Pick a random non-`none` non-`random` kind each activation.
+    case random
+
+    public static func parse(_ s: String) -> AppearEffect? {
+        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
+        return AppearEffect(rawValue: t)
+    }
+
+    public func resolvingRandom() -> AppearEffect {
+        guard self == .random else { return self }
+        let pool = AppearEffect.allCases.filter {
+            $0 != .random && $0 != .none
+        }
+        return pool.randomElement() ?? .pop
+    }
+}
+
 /// Neon border preset for the pill perimeter — ports facet's
 /// `[border]` vocabulary onto perch's pill geometry. Layered on
 /// top of the theme palette; the theme picks pill body colors,

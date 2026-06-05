@@ -113,6 +113,12 @@ public struct PerchConfig: Sendable {
     /// clean — same UX as before this knob existed.
     public let showModifierBadge: Bool
 
+    /// What pills do as the overlay APPEARS — symmetric with
+    /// `matchEffect` / `unmatchEffect` / `narrowEffect`. Default
+    /// `.pop` is the historical 150ms scale-in. Use `.none` to
+    /// suppress entrance animation entirely.
+    public let appearEffect: AppearEffect
+
     /// What perch does to the WINNING pill at hint-resolve time.
     /// Ports wand's `[gesture.effect] match` vocabulary, scoped to
     /// perch's single-pill resolve. Default `.none` keeps the snappy
@@ -322,6 +328,7 @@ public struct PerchConfig: Sendable {
         overlayShowShortcuts: true,
         overlayPeekKey: "space",
         showModifierBadge: false,
+        appearEffect: .pop,
         matchEffect: .none,
         unmatchEffect: .none,
         narrowEffect: .none,
@@ -462,6 +469,8 @@ public struct PerchConfig: Sendable {
         // header lands as a single `"overlay.effect"` key in our
         // hand-rolled parser. Unknown kinds clamp per typo-tolerance.
         let effSection = doc["overlay.effect"]
+        let appearEff = (effSection?["appear"]?.asString)
+            .flatMap(AppearEffect.parse)?.resolvingRandom() ?? .pop
         let matchEff = (effSection?["match"]?.asString)
             .flatMap(MatchEffect.parse) ?? .none
         let unmatchEff = (effSection?["unmatch"]?.asString)
@@ -609,6 +618,7 @@ public struct PerchConfig: Sendable {
             overlayShowShortcuts: showShortcuts,
             overlayPeekKey: peekKey,
             showModifierBadge: showBadge,
+            appearEffect: appearEff,
             matchEffect: matchEff,
             unmatchEffect: unmatchEff,
             narrowEffect: narrowEff,

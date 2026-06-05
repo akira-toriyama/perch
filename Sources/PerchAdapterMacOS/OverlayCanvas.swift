@@ -136,13 +136,25 @@ final class OverlayCanvas: NSView {
 
         self.typed = typed
         self.state = .idle
-        pills = hints.map { h in
-            PillLayout(
+        let kind = config.overlayAnimEnabled
+            ? config.appearEffect.resolvingRandom() : .none
+        pills = hints.enumerated().map { idx, h in
+            // Cascade staggers entrance by pill index — 30ms per
+            // pill is enough to read as "wave" without the last
+            // pill arriving long after the user starts typing.
+            // The scale is the per-pill duration AFTER the user's
+            // `effectDurationScale`, so a 2× duration scale gives a
+            // 2× cascade spread too.
+            let perPillStagger: TimeInterval = 0.03 * config.effectDurationScale
+            let delay: TimeInterval =
+                kind == .cascade ? perPillStagger * TimeInterval(idx) : 0
+            return PillLayout(
                 hint: h,
                 rect: pillRect(for: h),
-                matched: !typed.isEmpty && h.keys.hasPrefix(typed))
+                matched: !typed.isEmpty && h.keys.hasPrefix(typed),
+                appearDelay: delay)
         }
-        if firstFrame, config.overlayAnimEnabled {
+        if firstFrame, config.overlayAnimEnabled, kind != .none {
             appearedAt = CACurrentMediaTime()
         }
         layoutPills()
@@ -878,18 +890,36 @@ final class OverlayCanvas: NSView {
 
     /// Rebuild the blur mask path (so frost shows only behind pills)
     /// and refresh the painter. Called from `present`, `flashMiss`,
-    /// and from itself while the scale-in animation runs.
+    /// and from itself while the entrance animation runs.
+    ///
+    /// Per-pill appear state is computed here and stored back into
+    /// `pills` so the painter consumes the same numbers the mask
+    /// transform uses — frost stays welded to each pill regardless
+    /// of which `appearEffect` is active.
     ///
     /// Coordinate-system note: `pill.rect` is in canvas's flipped
     /// (top-left origin) coords. The blurView's `CAShapeLayer` mask
     /// uses Y-up from bottom-left because `NSVisualEffectView` is
-    /// not flipped. Flip Y explicitly here when crossing into the
-    /// mask layer's coord system — skipping this surfaces as empty
+    /// not flipped. Flip Y explicitly when crossing into the mask
+    /// layer's coord system — skipping this surfaces as empty
     /// pill-shaped frost rectangles mirrored to the bottom of the
-    /// canvas (PR #16). Same constraint applies to anything else
-    /// added to the mask layer in the future.
+    /// canvas (PR #16).
     private func layoutPills() {
-        let scale = currentScale()
+        // Compute per-pill appear state for this tick.
+        let kind = config.overlayAnimEnabled
+            ? config.appearEffect.resolvingRandom() : .none
+        let now = CACurrentMediaTime()
+        var anyInFlight = false
+        for i in pills.indices {
+            let state = currentAppearState(
+                kind: kind, pill: pills[i], now: now)
+            pills[i].appearScale = state.scale
+            pills[i].appearDx = state.dx
+            pills[i].appearDy = state.dy
+            pills[i].appearAlpha = state.alpha
+            if state.inFlight { anyInFlight = true }
+        }
+
         let canvasH = bounds.height
         if let mask = blurView.layer?.mask as? CAShapeLayer {
             let path = CGMutablePath()
@@ -899,7 +929,15 @@ final class OverlayCanvas: NSView {
                     y: canvasH - p.rect.maxY,
                     width: p.rect.width,
                     height: p.rect.height)
-                let t = transform(for: unflipped, scale: scale)
+                // Mask transform respects per-pill scale + offset
+                // so the frost moves in lockstep — without this,
+                // a cascading pill paints its label inside an
+                // empty frost rect at the final position.
+                let t = transform(
+                    for: unflipped,
+                    scale: p.appearScale,
+                    dx: p.appearDx,
+                    dy: -p.appearDy)   // mask is Y-up
                 path.addRoundedRect(
                     in: unflipped,
                     cornerWidth: Self.cornerRadius,
@@ -908,11 +946,14 @@ final class OverlayCanvas: NSView {
             }
             mask.path = path
         }
+        // `scale` arg is the BACKWARD-COMPAT global scalar — kept
+        // 1.0 because per-pill state is now in PillLayout. The
+        // painter respects PillLayout.appearScale + the global
+        // scale below for its own per-pill compose math.
         painter.update(
-            pills: pills, typed: typed, state: state, scale: scale)
+            pills: pills, typed: typed, state: state, scale: 1.0)
 
-        // Schedule the next frame if we're still mid-scale-in.
-        if scale < 1.0 {
+        if anyInFlight {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 60) {
                 [weak self] in
                 MainActor.assumeIsolated { self?.layoutPills() }
@@ -920,32 +961,87 @@ final class OverlayCanvas: NSView {
         }
     }
 
-    /// Current scale factor for the appear animation. Returns 1.0
-    /// when animation is off or finished.
-    private func currentScale() -> CGFloat {
-        guard let t0 = appearedAt, config.overlayAnimEnabled else { return 1 }
-        let elapsed = CACurrentMediaTime() - t0
-        if elapsed >= Self.scaleInDuration { return 1 }
-        let p = elapsed / Self.scaleInDuration
-        let eased = 1 - pow(1 - p, 3)    // ease-out cubic
-        return 0.85 + 0.15 * CGFloat(eased)
+    /// One pill's appear state at `now` — `(scale, dx, dy, alpha)`
+    /// + `inFlight` flag telling `layoutPills` whether to schedule
+    /// the next tick.
+    private func currentAppearState(
+        kind: AppearEffect,
+        pill: PillLayout,
+        now: TimeInterval
+    ) -> (scale: CGFloat, dx: CGFloat, dy: CGFloat,
+          alpha: CGFloat, inFlight: Bool) {
+        guard let t0 = appearedAt, kind != .none else {
+            return (1, 0, 0, 1, false)
+        }
+        let perPillDuration: TimeInterval = 0.15 * config.effectDurationScale
+        let local = now - t0 - pill.appearDelay
+        if local < 0 {
+            // This cascading pill hasn't started yet — paint
+            // hidden at the bloom-style scale so the entrance
+            // reads as "arriving" rather than popping.
+            return (0.4, 0, 0, 0, true)
+        }
+        let p = min(local / perPillDuration, 1)
+        let eased = 1 - pow(1 - p, 3)
+        let e = CGFloat(eased)
+        let i = config.effectIntensity.scale
+        let done = local >= perPillDuration
+        switch kind {
+        case .none, .random:
+            return (1, 0, 0, 1, false)
+        case .pop:
+            // Historical scale-in 0.85 → 1.0.
+            return (0.85 + 0.15 * e, 0, 0, 1, !done)
+        case .cascade:
+            // Per-pill bloom + fade-in chain. Each pill blooms
+            // from 0.6 → 1.0 with alpha 0 → 1.
+            return (0.6 + 0.4 * e, 0, 0, e, !done)
+        case .fadeIn:
+            return (1, 0, 0, e, !done)
+        case .dropIn:
+            // Pills fall from -40pt above to 0; alpha eases in.
+            let dy = -40 * i * (1 - e)
+            return (1, 0, dy, e, !done)
+        case .bloom:
+            // 0.4 → 1.0 scale + 0 → 1 alpha — explode in reverse.
+            return (0.4 + 0.6 * e, 0, 0, e, !done)
+        }
     }
 
-    /// Build the per-pill scale transform (about the pill's centre)
-    /// so the mask scales identically to the painter's content.
-    private func transform(for rect: CGRect, scale: CGFloat) -> CGAffineTransform {
+    /// Build the per-pill mask transform (about the pill's centre)
+    /// — composes scale + translate so the frost mask follows
+    /// the same transform the painter uses for the pill body.
+    private func transform(
+        for rect: CGRect, scale: CGFloat, dx: CGFloat, dy: CGFloat
+    ) -> CGAffineTransform {
         let cx = rect.midX, cy = rect.midY
-        return CGAffineTransform(translationX: cx, y: cy)
+        return CGAffineTransform(translationX: dx, y: dy)
+            .translatedBy(x: cx, y: cy)
             .scaledBy(x: scale, y: scale)
             .translatedBy(x: -cx, y: -cy)
     }
 
-    /// Per-pill geometry + state. Recomputed every `present`.
+    /// Per-pill geometry + state. Recomputed every `present`. The
+    /// appear-effect channel (scale/dx/dy/alpha) is per-pill so
+    /// `.cascade` can stagger each pill independently — global
+    /// scale-in (`.pop`) sets every pill to the same value each
+    /// tick, but the storage shape is shared.
     /// `internal` rather than `fileprivate` so `HintPainter` (in
     /// its own file) can read the array via `update(pills:…)`.
     struct PillLayout {
         let hint: Hint
         let rect: CGRect
         var matched: Bool   // typed prefix matches this label
+        /// Start offset (seconds) for this pill's appear animation
+        /// inside the overall entrance window. `.cascade` uses a
+        /// non-zero offset proportional to pill index; the other
+        /// kinds leave it 0 so all pills animate in lockstep.
+        var appearDelay: TimeInterval = 0
+        /// Live appear-state — driven by `layoutPills` each tick
+        /// while the entrance window is active.
+        var appearScale: CGFloat = 1
+        var appearDx: CGFloat = 0
+        var appearDy: CGFloat = 0
+        var appearAlpha: CGFloat = 1
     }
 }
