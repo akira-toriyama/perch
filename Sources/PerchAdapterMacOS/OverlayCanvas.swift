@@ -84,7 +84,7 @@ final class OverlayCanvas: NSView {
 
         super.init(frame: frameRect)
         wantsLayer = true
-        if config.overlayBlurEnabled {
+        if config.overlay.blurEnabled {
             addSubview(blur)
         }
         addSubview(painter)
@@ -107,12 +107,12 @@ final class OverlayCanvas: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     func updateConfig(_ cfg: PerchConfig) {
-        let wasBlur = config.overlayBlurEnabled
+        let wasBlur = config.overlay.blurEnabled
         config = cfg
         painter.updateConfig(cfg)
         // Toggle blur subview in place when the knob flips.
-        if cfg.overlayBlurEnabled != wasBlur {
-            if cfg.overlayBlurEnabled {
+        if cfg.overlay.blurEnabled != wasBlur {
+            if cfg.overlay.blurEnabled {
                 if blurView.superview == nil {
                     blurView.frame = bounds
                     addSubview(blurView, positioned: .below, relativeTo: painter)
@@ -142,8 +142,8 @@ final class OverlayCanvas: NSView {
         // saves the allocation + set build on the common path.
         var eliminated: [(Hint, CGRect)] = []
         if !firstFrame,
-           config.overlayAnimEnabled,
-           config.narrowEffect != .none {
+           config.overlay.animEnabled,
+           config.effect.narrow != .none {
             let newKeys = Set(hints.map { $0.keys })
             for old in pills where !newKeys.contains(old.hint.keys) {
                 eliminated.append((old.hint, old.rect))
@@ -152,8 +152,8 @@ final class OverlayCanvas: NSView {
 
         self.typed = typed
         self.state = .idle
-        let kind = config.overlayAnimEnabled
-            ? config.appearEffect.resolvingRandom() : .none
+        let kind = config.overlay.animEnabled
+            ? config.effect.appear.resolvingRandom() : .none
         pills = hints.enumerated().map { idx, h in
             // Cascade staggers entrance by pill index — 30ms per
             // pill is enough to read as "wave" without the last
@@ -161,7 +161,7 @@ final class OverlayCanvas: NSView {
             // The scale is the per-pill duration AFTER the user's
             // `effectDurationScale`, so a 2× duration scale gives a
             // 2× cascade spread too.
-            let perPillStagger: TimeInterval = 0.03 * config.effectDurationScale
+            let perPillStagger: TimeInterval = 0.03 * config.effect.durationScale
             let delay: TimeInterval =
                 kind == .cascade ? perPillStagger * TimeInterval(idx) : 0
             return PillLayout(
@@ -170,7 +170,7 @@ final class OverlayCanvas: NSView {
                 matched: !typed.isEmpty && h.keys.hasPrefix(typed),
                 appearDelay: delay)
         }
-        if firstFrame, config.overlayAnimEnabled, kind != .none {
+        if firstFrame, config.overlay.animEnabled, kind != .none {
             appearedAt = CACurrentMediaTime()
         }
         layoutPills()
@@ -204,7 +204,7 @@ final class OverlayCanvas: NSView {
     /// here so a single config knob controls the whole effect
     /// system's tempo.
     private func scaled(_ base: TimeInterval) -> TimeInterval {
-        base * config.effectDurationScale
+        base * config.effect.durationScale
     }
 
     /// Run the configured `[overlay.effect].unmatch` motion over
@@ -583,7 +583,7 @@ final class OverlayCanvas: NSView {
     /// so typing the same letter twice can show two different
     /// effects, matching the `match.random` UX.
     private func spawnGhosts(_ eliminated: [(Hint, CGRect)]) {
-        let resolved = config.narrowEffect.resolvingRandom()
+        let resolved = config.effect.narrow.resolvingRandom()
         guard resolved != .none else { return }
         let now = CACurrentMediaTime()
         // Particle effects (fireworks / confetti) on every
@@ -598,7 +598,7 @@ final class OverlayCanvas: NSView {
         for (h, r) in eliminated {
             liveGhosts.append(LiveGhost(
                 hint: h, baseRect: r, kind: safe,
-                intensity: config.effectIntensity,
+                intensity: config.effect.intensity,
                 start: now, duration: scaled(0.18)))
         }
         publishGhosts()
@@ -832,8 +832,8 @@ final class OverlayCanvas: NSView {
     /// enough for a slow rotation, half the cost of 60Hz) and stops
     /// when `stopBorderCycle` is called or the overlay hides.
     func startBorderCycle() {
-        guard config.borderEffect != .off,
-              config.borderCycleSeconds > 0,
+        guard config.border.effect != .off,
+              config.border.cycleSeconds > 0,
               !borderCycleActive else { return }
         borderCycleActive = true
         borderCycleStart = CACurrentMediaTime()
@@ -851,7 +851,7 @@ final class OverlayCanvas: NSView {
     private func tickBorderCycle() {
         guard borderCycleActive else { return }
         let elapsed = CACurrentMediaTime() - borderCycleStart
-        let period = max(0.1, config.borderCycleSeconds)
+        let period = max(0.1, config.border.cycleSeconds)
         let progress = (elapsed.truncatingRemainder(dividingBy: period)) / period
         painter.setBorderHueOffset(CGFloat(progress))
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 30) {
@@ -890,7 +890,7 @@ final class OverlayCanvas: NSView {
     /// AppKit clips it naturally — far better than displacing.
     private func pillRect(for hint: Hint) -> CGRect {
         let font = HintPainter.labelFont(
-            config.overlayTheme.palette().font, size: config.overlayFontSize)
+            config.overlay.theme.palette().font, size: config.overlay.fontSize)
         let label = hint.keys.uppercased()
         let textW = (label as NSString).size(
             withAttributes: [.font: font]).width
@@ -942,8 +942,8 @@ final class OverlayCanvas: NSView {
     /// canvas (PR #16).
     private func layoutPills() {
         // Compute per-pill appear state for this tick.
-        let kind = config.overlayAnimEnabled
-            ? config.appearEffect.resolvingRandom() : .none
+        let kind = config.overlay.animEnabled
+            ? config.effect.appear.resolvingRandom() : .none
         let now = CACurrentMediaTime()
         var anyInFlight = false
         for i in pills.indices {
@@ -1009,7 +1009,7 @@ final class OverlayCanvas: NSView {
         guard let t0 = appearedAt, kind != .none else {
             return (1, 0, 0, 1, false)
         }
-        let perPillDuration: TimeInterval = 0.15 * config.effectDurationScale
+        let perPillDuration: TimeInterval = 0.15 * config.effect.durationScale
         let local = now - t0 - pill.appearDelay
         if local < 0 {
             // This cascading pill hasn't started yet — paint
@@ -1020,7 +1020,7 @@ final class OverlayCanvas: NSView {
         let p = min(local / perPillDuration, 1)
         let eased = 1 - pow(1 - p, 3)
         let e = CGFloat(eased)
-        let i = config.effectIntensity.scale
+        let i = config.effect.intensity.scale
         let done = local >= perPillDuration
         switch kind {
         case .none, .random:

@@ -103,7 +103,7 @@ final class Controller {
         let monitor = HotkeyMonitor { [weak self] in
             Task { @MainActor in self?.activate() }
         }
-        monitor.install(combo: config.hotkey)
+        monitor.install(combo: config.hotkey.active)
         self.hotkey = monitor
         installControlObserver()
         installAppActivationObserver()
@@ -133,13 +133,13 @@ final class Controller {
     func reload(cause: String) {
         Log.line("config: reloading (\(cause))")
         let new = PerchConfig.load()
-        let hotkeyChanged = new.hotkey != config.hotkey
+        let hotkeyChanged = new.hotkey.active != config.hotkey.active
         config = new
         source.updateConfig(new)
         overlay.updateConfig(new)
         sound.updateConfig(new)
         if hotkeyChanged {
-            hotkey?.install(combo: new.hotkey)
+            hotkey?.install(combo: new.hotkey.active)
         }
         writeStatus(reason: "reload")
     }
@@ -189,7 +189,7 @@ final class Controller {
             return
         }
         cancel()                            // tear down any other mode
-        let sm = ScrollMode(cancelKey: config.cancelKey) { [weak self] in
+        let sm = ScrollMode(cancelKey: config.hotkey.cancel) { [weak self] in
             Task { @MainActor [weak self] in self?.scroll = nil }
         }
         if sm.start() {
@@ -275,7 +275,7 @@ final class Controller {
     /// another grid is meaningless.
     private func enterNestedGridFor(hint: Hint) {
         let f = hint.element.frame
-        let threshold = CGFloat(config.gridNestMinSize)
+        let threshold = CGFloat(config.grid.nestMinSize)
         if f.width < threshold || f.height < threshold {
             Log.line("controller: nestedGrid → too small "
                      + "(\(Int(f.width))×\(Int(f.height))) "
@@ -286,7 +286,7 @@ final class Controller {
         cancel()
         let gm = GridMode(
             config: config,
-            maxDepth: config.gridMaxDepth,
+            maxDepth: config.grid.maxDepth,
             initialFrame: f,
             sound: sound,
             onExit: { [weak self] in
@@ -347,7 +347,7 @@ final class Controller {
         }
         cancel()
         let dm = DragMode(
-            cancelKey: config.cancelKey,
+            cancelKey: config.hotkey.cancel,
             onExit: { [weak self] in
                 Task { @MainActor [weak self] in self?.drag = nil }
             })
@@ -368,7 +368,7 @@ final class Controller {
         }
         cancel()
         let nm = NudgeMode(
-            cancelKey: config.cancelKey,
+            cancelKey: config.hotkey.cancel,
             onExit: { [weak self] in
                 Task { @MainActor [weak self] in self?.nudge = nil }
             })
@@ -387,7 +387,7 @@ final class Controller {
     /// on a 4K screen lands inside a ~5px region.
     func enterRecursiveGridMode() {
         startGridSession(
-            maxDepth: config.gridMaxDepth,
+            maxDepth: config.grid.maxDepth,
             statusReason: "rgrid",
             reenter: { [weak self] in self?.enterRecursiveGridMode() })
     }
@@ -569,8 +569,8 @@ final class Controller {
         let screen = NSScreen.main?.frame.size ?? .zero
         let hints = Labeler.assign(
             elements: elements,
-            alphabet: config.alphabet,
-            prioritiseCenter: config.prioritiseCenter,
+            alphabet: config.labels.alphabet,
+            prioritiseCenter: config.labels.prioritiseCenter,
             screenSize: screen)
         activeMode = mode
         Log.line("\(modeLabel): \(hints.count) hint(s)")
@@ -736,10 +736,10 @@ final class Controller {
                 + discovered.joined(separator: ", ") + "\n"
         let text = """
         perch: running
-        hotkey: \(human(config.hotkey))
-        alphabet: \(config.alphabet)
-        roles: \(config.roles.count)
-        excludes: \(config.excludeApps.count)
+        hotkey: \(human(config.hotkey.active))
+        alphabet: \(config.labels.alphabet)
+        roles: \(config.behavior.roles.count)
+        excludes: \(config.behavior.excludeApps.count)
         \(discoveredLine)last: \(reason) @ \(Date())
         """
         try? text.write(

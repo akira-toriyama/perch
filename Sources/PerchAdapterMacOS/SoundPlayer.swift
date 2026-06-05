@@ -35,10 +35,10 @@ public final class SoundPlayer {
     /// `Controller.reload` so a fresh `match-sound = "~/new.mp3"`
     /// takes effect at the next hint resolve.
     public func updateConfig(_ cfg: PerchConfig) {
-        match = Self.load(cfg.matchSound, role: "match")
-        unmatch = Self.load(cfg.unmatchSound, role: "unmatch")
-        activate = Self.load(cfg.activateSound, role: "activate")
-        volume = max(0, min(1, Float(cfg.soundVolume)))
+        match = Self.load(cfg.sound.match, role: "match")
+        unmatch = Self.load(cfg.sound.unmatch, role: "unmatch")
+        activate = Self.load(cfg.sound.activate, role: "activate")
+        volume = max(0, min(1, Float(cfg.sound.volume)))
         match?.volume = volume
         unmatch?.volume = volume
         activate?.volume = volume

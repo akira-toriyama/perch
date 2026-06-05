@@ -5,13 +5,13 @@ final class ConfigTests: XCTestCase {
 
     func testDefaultsWhenFileMissing() {
         let cfg = PerchConfig.parse("")
-        XCTAssertEqual(cfg.hotkey, PerchConfig.defaultHotkey)
-        XCTAssertEqual(cfg.cancelKey, PerchConfig.defaultCancelKey)
-        XCTAssertEqual(cfg.alphabet, PerchConfig.defaultAlphabet)
-        XCTAssertEqual(cfg.overlayAccent, "system")
-        XCTAssertTrue(cfg.overlayBlurEnabled)
-        XCTAssertTrue(cfg.overlayAnimEnabled)
-        XCTAssertTrue(cfg.autoClickOnUnique)
+        XCTAssertEqual(cfg.hotkey.active, PerchConfig.defaultHotkey)
+        XCTAssertEqual(cfg.hotkey.cancel, PerchConfig.defaultCancelKey)
+        XCTAssertEqual(cfg.labels.alphabet, PerchConfig.defaultAlphabet)
+        XCTAssertEqual(cfg.overlay.accent, "system")
+        XCTAssertTrue(cfg.overlay.blurEnabled)
+        XCTAssertTrue(cfg.overlay.animEnabled)
+        XCTAssertTrue(cfg.behavior.autoClickOnUnique)
     }
 
     func testCancelKeyParsing() {
@@ -19,10 +19,10 @@ final class ConfigTests: XCTestCase {
         [hotkey]
         cancel = "q"
         """
-        XCTAssertEqual(PerchConfig.parse(src).cancelKey, "q")
+        XCTAssertEqual(PerchConfig.parse(src).hotkey.cancel, "q")
         // Empty / whitespace falls back to default.
         XCTAssertEqual(
-            PerchConfig.parse("[hotkey]\ncancel = \"  \"").cancelKey,
+            PerchConfig.parse("[hotkey]\ncancel = \"  \"").hotkey.cancel,
             PerchConfig.defaultCancelKey)
     }
 
@@ -46,21 +46,21 @@ final class ConfigTests: XCTestCase {
         accent = "not-a-color"
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertEqual(cfg.overlayFontSize, 32)         // clamped to max
-        XCTAssertEqual(cfg.overlayAccent, "system")     // bad → default
+        XCTAssertEqual(cfg.overlay.fontSize, 32)         // clamped to max
+        XCTAssertEqual(cfg.overlay.accent, "system")     // bad → default
     }
 
     func testAccentParsing() {
         XCTAssertEqual(
             PerchConfig.parse("[overlay]\naccent = \"#3b82f6\"")
-                .overlayAccent, "#3b82f6")
+                .overlay.accent, "#3b82f6")
         // Case-insensitive + system alias.
         XCTAssertEqual(
             PerchConfig.parse("[overlay]\naccent = \"System\"")
-                .overlayAccent, "system")
+                .overlay.accent, "system")
         XCTAssertEqual(
             PerchConfig.parse("[overlay]\naccent = \"accent\"")
-                .overlayAccent, "system")
+                .overlay.accent, "system")
     }
 
     /// Alphabet duplicates and non-letters are silently dropped.
@@ -70,7 +70,7 @@ final class ConfigTests: XCTestCase {
         alphabet = "aaa BCB-12"
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertEqual(cfg.alphabet, "abc")
+        XCTAssertEqual(cfg.labels.alphabet, "abc")
     }
 
     func testRoleArrayParses() {
@@ -80,8 +80,8 @@ final class ConfigTests: XCTestCase {
         exclude-apps = ["com.evil.app"]
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertEqual(cfg.roles, ["Button", "Link"])
-        XCTAssertEqual(cfg.excludeApps, ["com.evil.app"])
+        XCTAssertEqual(cfg.behavior.roles, ["Button", "Link"])
+        XCTAssertEqual(cfg.behavior.excludeApps, ["com.evil.app"])
     }
 
     /// Hotkey strings that `HotkeyCombo.parse` rejects (unknown
@@ -105,7 +105,7 @@ final class ConfigTests: XCTestCase {
         for s in bads {
             let cfg = PerchConfig.parse("[hotkey]\nactive = \"\(s)\"")
             XCTAssertEqual(
-                cfg.hotkey, PerchConfig.defaultHotkey,
+                cfg.hotkey.active, PerchConfig.defaultHotkey,
                 "expected default for invalid hotkey \"\(s)\"")
         }
     }
@@ -115,11 +115,11 @@ final class ConfigTests: XCTestCase {
     /// pixel-or-the-screen.
     func testFontSizeClampsBothEnds() {
         let lo = PerchConfig.parse("[overlay]\nfont-size = -10")
-        XCTAssertEqual(lo.overlayFontSize, 8)
+        XCTAssertEqual(lo.overlay.fontSize, 8)
         let hi = PerchConfig.parse("[overlay]\nfont-size = 9999")
-        XCTAssertEqual(hi.overlayFontSize, 32)
+        XCTAssertEqual(hi.overlay.fontSize, 32)
         let zero = PerchConfig.parse("[overlay]\nfont-size = 0")
-        XCTAssertEqual(zero.overlayFontSize, 8)
+        XCTAssertEqual(zero.overlay.fontSize, 8)
     }
 
     /// Empty / whitespace-only alphabet falls back to the default.
@@ -127,9 +127,9 @@ final class ConfigTests: XCTestCase {
     /// that would silently disable hint mode.
     func testEmptyAlphabetFallsBackToDefault() {
         let cfg = PerchConfig.parse("[labels]\nalphabet = \"\"")
-        XCTAssertEqual(cfg.alphabet, PerchConfig.defaultAlphabet)
+        XCTAssertEqual(cfg.labels.alphabet, PerchConfig.defaultAlphabet)
         let ws = PerchConfig.parse("[labels]\nalphabet = \"   \"")
-        XCTAssertEqual(ws.alphabet, PerchConfig.defaultAlphabet)
+        XCTAssertEqual(ws.labels.alphabet, PerchConfig.defaultAlphabet)
     }
 
     /// `prioritise-center` is a boolean knob; non-bool input
@@ -137,7 +137,7 @@ final class ConfigTests: XCTestCase {
     /// than silently flip to false.
     func testPrioritiseCenterDefaultsTrue() {
         let cfg = PerchConfig.parse("")
-        XCTAssertTrue(cfg.prioritiseCenter)
+        XCTAssertTrue(cfg.labels.prioritiseCenter)
     }
 
     /// Section re-open is part of the TOML 1.0 grammar (`[a]` …
@@ -154,10 +154,10 @@ final class ConfigTests: XCTestCase {
         cancel = "q"
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertEqual(cfg.hotkey,
+        XCTAssertEqual(cfg.hotkey.active,
                        HotkeyCombo(modifiers: .ctrl, key: "space"))
-        XCTAssertEqual(cfg.cancelKey, "q")
-        XCTAssertEqual(cfg.overlayAccent, "#ff0000")
+        XCTAssertEqual(cfg.hotkey.cancel, "q")
+        XCTAssertEqual(cfg.overlay.accent, "#ff0000")
     }
 
     // MARK: - Per-app overrides (#37)
@@ -182,18 +182,18 @@ final class ConfigTests: XCTestCase {
         auto-click-on-unique = false
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertEqual(cfg.roles, ["Button", "Link"])
-        XCTAssertEqual(cfg.minSize, 6)
-        XCTAssertTrue(cfg.autoClickOnUnique)
+        XCTAssertEqual(cfg.behavior.roles, ["Button", "Link"])
+        XCTAssertEqual(cfg.behavior.minSize, 6)
+        XCTAssertTrue(cfg.behavior.autoClickOnUnique)
 
-        XCTAssertEqual(cfg.perApp.count, 2)
-        let chrome = cfg.perApp["com.google.Chrome"]
+        XCTAssertEqual(cfg.behavior.perApp.count, 2)
+        let chrome = cfg.behavior.perApp["com.google.Chrome"]
         XCTAssertNotNil(chrome)
         XCTAssertNil(chrome?.roles)
         XCTAssertEqual(chrome?.minSize, 20)
         XCTAssertNil(chrome?.autoClickOnUnique)
 
-        let word = cfg.perApp["com.microsoft.Word"]
+        let word = cfg.behavior.perApp["com.microsoft.Word"]
         XCTAssertEqual(word?.roles, ["Button", "MenuItem"])
         XCTAssertNil(word?.minSize)
         XCTAssertEqual(word?.autoClickOnUnique, false)
@@ -220,25 +220,25 @@ final class ConfigTests: XCTestCase {
         let cfg = PerchConfig.parse(src)
 
         // Chrome: min-size overridden, roles + auto-click inherited.
-        XCTAssertEqual(cfg.effectiveMinSize(for: "com.google.Chrome"), 20)
-        XCTAssertEqual(cfg.effectiveRoles(for: "com.google.Chrome"),
+        XCTAssertEqual(cfg.behavior.effectiveMinSize(for: "com.google.Chrome"), 20)
+        XCTAssertEqual(cfg.behavior.effectiveRoles(for: "com.google.Chrome"),
                        ["Button", "Link"])
         XCTAssertTrue(
-            cfg.effectiveAutoClickOnUnique(for: "com.google.Chrome"))
+            cfg.behavior.effectiveAutoClickOnUnique(for: "com.google.Chrome"))
 
         // Word: auto-click overridden, others inherited.
         XCTAssertFalse(
-            cfg.effectiveAutoClickOnUnique(for: "com.microsoft.Word"))
-        XCTAssertEqual(cfg.effectiveMinSize(for: "com.microsoft.Word"), 6)
+            cfg.behavior.effectiveAutoClickOnUnique(for: "com.microsoft.Word"))
+        XCTAssertEqual(cfg.behavior.effectiveMinSize(for: "com.microsoft.Word"), 6)
 
         // Unknown bundle id → globals across the board.
-        XCTAssertEqual(cfg.effectiveMinSize(for: "com.unknown.App"), 6)
-        XCTAssertEqual(cfg.effectiveRoles(for: "com.unknown.App"),
+        XCTAssertEqual(cfg.behavior.effectiveMinSize(for: "com.unknown.App"), 6)
+        XCTAssertEqual(cfg.behavior.effectiveRoles(for: "com.unknown.App"),
                        ["Button", "Link"])
-        XCTAssertTrue(cfg.effectiveAutoClickOnUnique(for: "com.unknown.App"))
+        XCTAssertTrue(cfg.behavior.effectiveAutoClickOnUnique(for: "com.unknown.App"))
 
         // nil bundle id (no frontmost app) → globals.
-        XCTAssertEqual(cfg.effectiveMinSize(for: nil), 6)
+        XCTAssertEqual(cfg.behavior.effectiveMinSize(for: nil), 6)
     }
 
     /// Negative `min-size` in an override clamps to 0 (same policy
@@ -252,7 +252,7 @@ final class ConfigTests: XCTestCase {
         not-a-real-key = true
         """
         let cfg = PerchConfig.parse(src)
-        let o = cfg.perApp["com.foo.Bar"]
+        let o = cfg.behavior.perApp["com.foo.Bar"]
         XCTAssertEqual(o?.minSize, 0)
     }
 
@@ -264,7 +264,7 @@ final class ConfigTests: XCTestCase {
         [behavior."com.foo.Bar"]
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertTrue(cfg.perApp.isEmpty)
+        XCTAssertTrue(cfg.behavior.perApp.isEmpty)
     }
 
     // MARK: - [regional] frame floor (#34 follow-up)
@@ -274,16 +274,16 @@ final class ConfigTests: XCTestCase {
     /// at walk time. Defaults to 200×100; explicit values override.
     func testRegionalMinSizeKnobsParse() {
         let cfg = PerchConfig.parse("")
-        XCTAssertEqual(cfg.regionalMinWidth, 200)
-        XCTAssertEqual(cfg.regionalMinHeight, 100)
+        XCTAssertEqual(cfg.regional.minWidth, 200)
+        XCTAssertEqual(cfg.regional.minHeight, 100)
 
         let custom = PerchConfig.parse("""
         [regional]
         min-width = 320
         min-height = 180
         """)
-        XCTAssertEqual(custom.regionalMinWidth, 320)
-        XCTAssertEqual(custom.regionalMinHeight, 180)
+        XCTAssertEqual(custom.regional.minWidth, 320)
+        XCTAssertEqual(custom.regional.minHeight, 180)
     }
 
     /// Negative values clamp to 0 (typo-tolerance); the unset axis
@@ -293,8 +293,8 @@ final class ConfigTests: XCTestCase {
         [regional]
         min-width = -50
         """)
-        XCTAssertEqual(cfg.regionalMinWidth, 0)
-        XCTAssertEqual(cfg.regionalMinHeight, 100)
+        XCTAssertEqual(cfg.regional.minWidth, 0)
+        XCTAssertEqual(cfg.regional.minHeight, 100)
     }
 
     // MARK: - [search.synonyms] (#53)
@@ -310,9 +310,9 @@ final class ConfigTests: XCTestCase {
         delete = ["remove", "trash", "rm"]
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertEqual(cfg.searchSynonyms["close"],
+        XCTAssertEqual(cfg.search.synonyms["close"],
                        ["shut", "quit", "kill"])
-        XCTAssertEqual(cfg.searchSynonyms["delete"],
+        XCTAssertEqual(cfg.search.synonyms["delete"],
                        ["remove", "trash", "rm"])
     }
 
@@ -326,15 +326,15 @@ final class ConfigTests: XCTestCase {
         wrong = "string-not-array"
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertEqual(cfg.searchSynonyms.keys.sorted(), ["ok"])
-        XCTAssertEqual(cfg.searchSynonyms["ok"], ["alright"])
+        XCTAssertEqual(cfg.search.synonyms.keys.sorted(), ["ok"])
+        XCTAssertEqual(cfg.search.synonyms["ok"], ["alright"])
     }
 
     /// No `[search.synonyms]` section → empty dictionary so the
     /// ranker stays in pure-fuzzy mode (no behaviour change for
     /// users who haven't opted in).
     func testSearchSynonymsDefaultsEmpty() {
-        XCTAssertTrue(PerchConfig.parse("").searchSynonyms.isEmpty)
+        XCTAssertTrue(PerchConfig.parse("").search.synonyms.isEmpty)
     }
 
     /// Hotkey combos can include multiple modifiers, in any order,

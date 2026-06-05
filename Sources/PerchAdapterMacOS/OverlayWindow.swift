@@ -65,7 +65,7 @@ public final class OverlayWindow {
     private var activeBundleID: String?
 
     /// Chord-suffix state machine (issue #57). Only active when
-    /// `config.chordLeader` is non-empty AND a bare-resolve fired
+    /// `config.chord.leader` is non-empty AND a bare-resolve fired
     /// (no Cmd / Shift / Alt held). Otherwise the existing snappy
     /// resolve path is unchanged.
     private enum ChordPhase {
@@ -144,14 +144,14 @@ public final class OverlayWindow {
         p.contentView = cv
         self.panel = p
         self.canvas = cv
-        self.cancelKeyCode = Self.resolveCancelKeyCode(config.cancelKey)
-        self.peekKeyCode = Self.resolvePeekKeyCode(config.overlayPeekKey)
+        self.cancelKeyCode = Self.resolveCancelKeyCode(config.hotkey.cancel)
+        self.peekKeyCode = Self.resolvePeekKeyCode(config.overlay.peekKey)
     }
 
     public func updateConfig(_ cfg: PerchConfig) {
         self.config = cfg
-        self.cancelKeyCode = Self.resolveCancelKeyCode(cfg.cancelKey)
-        self.peekKeyCode = Self.resolvePeekKeyCode(cfg.overlayPeekKey)
+        self.cancelKeyCode = Self.resolveCancelKeyCode(cfg.hotkey.cancel)
+        self.peekKeyCode = Self.resolvePeekKeyCode(cfg.overlay.peekKey)
         canvas.updateConfig(cfg)
     }
 
@@ -338,7 +338,7 @@ public final class OverlayWindow {
         }
         // Auto-click on unique candidate (configurable, resolved
         // per-app via `[behavior."<bundle-id>"]`).
-        if config.effectiveAutoClickOnUnique(for: activeBundleID),
+        if config.behavior.effectiveAutoClickOnUnique(for: activeBundleID),
            surviving.count == 1 {
             deliverResolve(hint: surviving[0], action: action)
             return true
@@ -364,7 +364,7 @@ public final class OverlayWindow {
     /// ack riding on top of an already-firing click rather than
     /// after-it.
     private func deliverResolve(hint: Hint, action: HintAction) {
-        if action == .press, !config.chordLeader.isEmpty {
+        if action == .press, !config.chord.leader.isEmpty {
             enterChordWait(hint: hint)
             return
         }
@@ -375,13 +375,13 @@ public final class OverlayWindow {
         // latency is what they care about) but DON'T tear down the
         // overlay until the animation completes. The KeyTap stays
         // installed until hide() so the user can't snag stray keys.
-        if config.overlayAnimEnabled, config.matchEffect != .none {
+        if config.overlay.animEnabled, config.effect.match != .none {
             cb?(hint, action)
             self.onResolve = nil
             canvas.animateMatch(
                 winning: hint,
-                kind: config.matchEffect,
-                intensity: config.effectIntensity
+                kind: config.effect.match,
+                intensity: config.effect.intensity
             ) { [weak self] in
                 self?.hide()
             }
@@ -447,7 +447,7 @@ public final class OverlayWindow {
             return false
         case .waitingForLeader:
             if let ch = char.first,
-               String(ch).lowercased() == config.chordLeader {
+               String(ch).lowercased() == config.chord.leader {
                 chordPhase = .waitingForChord
                 scheduleChordTimeout()
                 return true
@@ -492,13 +492,13 @@ public final class OverlayWindow {
                  + "→ \(hint.keys)")
         sound?.playMatch()
         let cb = onResolve
-        if config.overlayAnimEnabled, config.matchEffect != .none {
+        if config.overlay.animEnabled, config.effect.match != .none {
             cb?(hint, action)
             self.onResolve = nil
             canvas.animateMatch(
                 winning: hint,
-                kind: config.matchEffect,
-                intensity: config.effectIntensity
+                kind: config.effect.match,
+                intensity: config.effect.intensity
             ) { [weak self] in
                 self?.hide()
             }
@@ -531,7 +531,7 @@ public final class OverlayWindow {
             }
         }
         chordTimer = work
-        let secs = max(0.05, config.chordTimeoutMs / 1000)
+        let secs = max(0.05, config.chord.timeoutMs / 1000)
         DispatchQueue.main.asyncAfter(
             deadline: .now() + secs, execute: work)
     }
@@ -554,15 +554,15 @@ public final class OverlayWindow {
     private func flashThenCancel() {
         sound?.playUnmatch()
         let cb = onCancel
-        guard config.overlayAnimEnabled else {
+        guard config.overlay.animEnabled else {
             hide()
             cb?()
             return
         }
         canvas.flashMiss(typed: typed)
         canvas.animateUnmatch(
-            kind: config.unmatchEffect,
-            intensity: config.effectIntensity
+            kind: config.effect.unmatch,
+            intensity: config.effect.intensity
         ) { [weak self] in
             self?.hide()
             cb?()
