@@ -120,9 +120,14 @@ public enum SearchFilter {
     ///
     /// Scoring rules:
     ///   - +1 per matched char (the floor).
-    ///   - +8 when the matched char is at a word boundary (start
-    ///     of string OR previous char is non-alphanumeric). This is
-    ///     what makes `cls` rank "Close Tab" above "ApplauseClass".
+    ///   - **+8 ONLY on the first matched char** when that position
+    ///     is a word boundary (start of string OR previous char is
+    ///     non-alphanumeric). This is what makes `cls` rank
+    ///     "Close Tab" above "ApplauseClass" — the start-of-word
+    ///     anchor matters; boundaries hit mid-gap don't.
+    ///     A boundary bonus on subsequent matches would let
+    ///     `ab` in "a_b_cdef" (boundary on `b`) outscore "abcdef"
+    ///     (contiguous), which is wrong.
     ///   - +4 when a matched char is immediately after the previous
     ///     match (no gap). Substrings get the maximum consecutive
     ///     bonus, which is the "exact prefix still wins" rule.
@@ -148,16 +153,24 @@ public enum SearchFilter {
         while ti < t.count && qi < q.count {
             if t[ti] == q[qi] {
                 score += 1
-                let prev: Unicode.Scalar? = ti > 0 ? t[ti - 1] : nil
-                let isBoundary: Bool
-                if let p = prev {
-                    isBoundary = !isAlphanumeric(p)
-                } else {
-                    isBoundary = true
+                if firstMatchedAt < 0 {
+                    // Anchor: first matched char gets the
+                    // word-boundary bonus when it lands at a
+                    // word start. Subsequent matches don't —
+                    // see the doc above for the "a_b" pitfall.
+                    let prev: Unicode.Scalar? =
+                        ti > 0 ? t[ti - 1] : nil
+                    let isBoundary: Bool
+                    if let p = prev {
+                        isBoundary = !isAlphanumeric(p)
+                    } else {
+                        isBoundary = true
+                    }
+                    if isBoundary { score += 8 }
+                    firstMatchedAt = ti
+                } else if ti == prevMatchedAt + 1 {
+                    score += 4
                 }
-                if isBoundary { score += 8 }
-                if ti == prevMatchedAt + 1 { score += 4 }
-                if firstMatchedAt < 0 { firstMatchedAt = ti }
                 prevMatchedAt = ti
                 qi += 1
             }
