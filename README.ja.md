@@ -310,6 +310,8 @@ press を一時的に保留して chord suffix に振り替えられる:
 | `,s` | `AVSpeechSynthesizer` でタイトル読み上げ |
 | `,m` | 合成 **Cmd-click**（リンクを新タブで開く等）|
 | `,h` | 合成 **Shift-click**（multi-select リスト / テキスト範囲拡張）|
+| `,d` | 合成 **ダブルクリック**（テキストで word 選択、Finder で "開く"）|
+| `,t` | 合成 **トリプルクリック**（行 / 段落選択）|
 
 デフォルトは **オフ** — opt-in は `config.toml` に
 `[chord].leader = ","` を設定。chord モード有効時:

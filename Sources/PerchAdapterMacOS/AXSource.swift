@@ -789,6 +789,12 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         case .synthShiftClick:
             return dispatchSynthClick(elt, flags: .maskShift,
                                       id: id, tag: "synth-shift-click")
+        case .doubleClick:
+            return dispatchMultiClick(elt, count: 2,
+                                      id: id, tag: "double-click")
+        case .tripleClick:
+            return dispatchMultiClick(elt, count: 3,
+                                      id: id, tag: "triple-click")
         case .speakTitle:
             // Chord `,s` (#57). Speak the element's title /
             // composed label via AVSpeechSynthesizer. Same label
@@ -892,6 +898,55 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         up.flags = flags
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+        Log.line("dispatch: \(tag) ok @ "
+                 + "(\(Int(pt.x)),\(Int(pt.y))) → id=\(id)")
+        return true
+    }
+
+    /// Issue #72 / M4-η — synthetic multi-click (double / triple)
+    /// at the element's frame center. AX has no "double-click"
+    /// action and AXPress fires once; this is the only path to
+    /// word- / line-select semantics from hint mode.
+    ///
+    /// macOS reads multi-click via `kCGMouseEventClickState` on
+    /// each event in the sequence (1, 2, 3, …). Posting two
+    /// mouseDown+mouseUp pairs with clickState 1 then 2 is what
+    /// makes the receiving app's `-[NSEvent clickCount]` read 2.
+    /// All events go through `cghidEventTap` rapid-fire — macOS's
+    /// double-click threshold (typically 500ms) is comfortable
+    /// for synchronous `.post(...)` calls.
+    private func dispatchMultiClick(
+        _ elt: AXUIElement, count: Int,
+        id: String, tag: String
+    ) -> Bool {
+        guard count >= 1, let pt = frameCenter(of: elt) else {
+            Log.line("dispatch: \(tag) no frame → id=\(id)")
+            return false
+        }
+        _ = CGWarpMouseCursorPosition(pt)
+        guard let src = CGEventSource(stateID: .hidSystemState) else {
+            Log.line("dispatch: \(tag) no event source → id=\(id)")
+            return false
+        }
+        for i in 1...count {
+            guard let down = CGEvent(
+                mouseEventSource: src,
+                mouseType: .leftMouseDown,
+                mouseCursorPosition: pt,
+                mouseButton: .left),
+                  let up = CGEvent(
+                    mouseEventSource: src,
+                    mouseType: .leftMouseUp,
+                    mouseCursorPosition: pt,
+                    mouseButton: .left)
+            else { continue }
+            down.setIntegerValueField(.mouseEventClickState,
+                                      value: Int64(i))
+            up.setIntegerValueField(.mouseEventClickState,
+                                    value: Int64(i))
+            down.post(tap: .cghidEventTap)
+            up.post(tap: .cghidEventTap)
+        }
         Log.line("dispatch: \(tag) ok @ "
                  + "(\(Int(pt.x)),\(Int(pt.y))) → id=\(id)")
         return true
@@ -1057,7 +1112,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             Log.line("dispatch: emoji copy → \(id)")
             return true
         case .rightClick, .focus, .revealInFinder, .speakTitle,
-             .synthCmdClick, .synthShiftClick:
+             .synthCmdClick, .synthShiftClick,
+             .doubleClick, .tripleClick:
             Log.line("dispatch: emoji unsupported action "
                      + "\(action.rawValue) → \(id)")
             return false

@@ -117,6 +117,17 @@ public enum HintAction: String, Sendable, CaseIterable {
     /// range extend). Same `CGEvent` synth path as `.synthCmdClick`
     /// with `.maskShift` instead.
     case synthShiftClick
+    /// Chord `,d` (issue #72 / M4-η) — synthetic **double-click**
+    /// at the element's frame center. Used for word-select in
+    /// text views, "open" in Finder, etc. Posts two
+    /// mouseDown+mouseUp pairs with `kCGMouseEventClickState`
+    /// 1 then 2 so the receiving app's `-[NSEvent clickCount]`
+    /// reads as a real double-click.
+    case doubleClick
+    /// Chord `,t` (issue #72 / M4-η) — synthetic **triple-click**.
+    /// Three mouseDown+mouseUp pairs with `clickState` 1/2/3.
+    /// Used for line / paragraph selection in text views.
+    case tripleClick
 }
 
 /// Parsed `[hotkey].combo` value.
