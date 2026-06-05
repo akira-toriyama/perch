@@ -260,6 +260,19 @@ shortcut のある行に合わせて統一されるので Spotlight 風の
 （function キー / Tab / 矢印キー等）は follow-up 扱い。
 - **Don't call it:** menu hint, shortcut hint, ショートカット表示（一般名は可）
 
+### DragMode (keyboard drag-and-drop)
+issue #69 (M4-δ)。hint mode が届かない **UI ドラッグ操作**用
+（Finder 列 resize / Safari タブ並び替え / NSSplitView /
+リスト並び替え等）。2-phase state machine: `.positioning`
+（ボタン未保持、矢印で nudge）→ `d` で `leftMouseDown` →
+`.dragging`（矢印で nudge + `leftMouseDragged` 発火）→ `d` /
+space / Enter で `leftMouseUp` → exit。step size は NudgeMode
+と同一（bare 1 / Shift 10 / Alt 100 / Cmd 画面端）。**Esc は
+キャンセルではなく "安全リリース"** — `.dragging` 中の Esc は
+`mouseUp` を発火してから抜ける（`mouseDown` を system input
+queue に残さない）。
+- **Don't call it:** mouse drag, drag-drop mode, ドラッグモード（一般名は可）
+
 ### NudgeMode (arrow-nudge cursor)
 issue #68 (M4-γ)。`--grid` / `--rgrid` 後の **ラストマイル
 ピクセル調整**。OverlayWindow なし（カーソルが視覚フィードバック）、

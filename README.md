@@ -116,7 +116,8 @@ watches the file for changes when running as a daemon).
 | `--grid` | client | enter coordinate grid — divide the screen into labeled cells, type a label to warp the cursor + left-click via synthetic `CGEvent` (AX-bypass fallback for Figma canvas / Photoshop / custom-drawn UI) |
 | `--rgrid` | client | enter recursive grid — each label drills into the chosen cell up to `[grid].max-depth` levels (default 3, ≈ pixel precision on 4K). `space` clicks at current cell center; `Backspace` pops one level |
 | `--nudge` | client | enter arrow-nudge cursor mode — arrows move cursor 1/10/100/edge px (modifier-stepped), `space` clicks + exits. The last-mile precision after `--grid` or `--rgrid` |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge) |
+| `--drag` | client | enter keyboard drag — nudge to A, press `d` to grab (mouseDown), nudge to B, press `d` again to release (mouseUp). For drag-and-drop, splitter resize, reorder, etc. |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge / drag) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -268,6 +269,27 @@ you're not sure you're in nudge mode, `perch --status` confirms.
 
 Ctrl is intentionally NOT bound to a step size; Ctrl+arrow is
 reserved for macOS Mission Control / Spaces shortcuts.
+
+### Drag mode (keyboard-driven drag-and-drop)
+
+`perch --drag` performs UI drag operations that aren't reachable
+through hint mode — Finder column resize, Safari tab reorder,
+drag-to-select-text, NSSplitView drag, drag-to-reorder lists.
+
+| Phase / Key | Effect |
+|---|---|
+| **`.positioning`** (cursor free) | |
+| `arrow` (1/10/100/edge px via Shift/Alt/Cmd) | move cursor toward A |
+| `d` | **grab** — fire `mouseDown` at current cursor → `.dragging` |
+| `Esc` | exit silently (no drag started) |
+| **`.dragging`** (button held) | |
+| `arrow` | move cursor toward B + post `mouseDragged` so the receiving app updates drop-target highlight |
+| `d` / `space` / `Enter` | **release** — fire `mouseUp` + exit |
+| `Esc` | **safety release** — fires `mouseUp` first, then exits (don't strand a `mouseDown`) |
+
+Pre-position the cursor with `--grid` / `--rgrid` for a coarse
+jump, then `--drag` to perform the actual operation; nudging
+inside drag mode tunes the start / end points.
 
 ### Window switcher
 

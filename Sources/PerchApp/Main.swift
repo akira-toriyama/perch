@@ -70,6 +70,11 @@ enum PerchApp {
                                       (Shift), 100px (Alt), screen-edge
                                       (Cmd). Space/Enter clicks + exits.
                                       Last-mile precision after --grid.
+          perch --drag                enter keyboard drag — nudge to A,
+                                      `d` to grab (mouseDown), nudge to
+                                      B, `d` again to release (mouseUp).
+                                      Esc is a safety release. For UI
+                                      drag-and-drop (resize, reorder).
           perch --cancel              dismiss the overlay if showing
           perch --reload              re-read ~/.config/perch/config.toml
           perch --status              print active hotkey, alphabet, last event
@@ -130,7 +135,7 @@ enum PerchApp {
             "--dump-ax", "--dump-ax-tree", "--dump-regions",
             "--activate", "--cancel", "--scroll", "--search",
             "--regional", "--menu", "--windows", "--emoji",
-            "--grid", "--rgrid", "--nudge",
+            "--grid", "--rgrid", "--nudge", "--drag",
             "--reload", "--quit", "--status",
         ]
         for a in argv where !recognised.contains(a) {
@@ -177,6 +182,7 @@ enum PerchApp {
         if argv.contains("--grid")     { runClient(cmd: "grid") }
         if argv.contains("--rgrid")    { runClient(cmd: "rgrid") }
         if argv.contains("--nudge")    { runClient(cmd: "nudge") }
+        if argv.contains("--drag")     { runClient(cmd: "drag") }
         if argv.contains("--cancel")   { runClient(cmd: "cancel") }
         if argv.contains("--reload")   { runClient(cmd: "reload") }
         if argv.contains("--quit")     { runClient(cmd: "quit") }
