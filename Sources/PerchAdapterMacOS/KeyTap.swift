@@ -39,16 +39,27 @@ public final class KeyTap: @unchecked Sendable {
     /// app — that's what the other modes (scroll / search / grid)
     /// want.
     fileprivate let onKeyUp: (@Sendable (CGKeyCode) -> Bool)?
+    /// Optional modifier-state callback. Fires on `.flagsChanged`
+    /// events (the user pressed / released Cmd / Shift / Alt /
+    /// Ctrl WITHOUT typing a letter). Used by the modifier-badge
+    /// path to repaint pills the moment a modifier is held —
+    /// otherwise the badge wouldn't appear until the next keyDown.
+    /// Always passive: flagsChanged events are not swallowed (no
+    /// "swallow" return value), so the modifier reaches the
+    /// underlying app normally.
+    fileprivate let onFlagsChanged: (@Sendable (CGEventFlags) -> Void)?
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
     public init(
         onKeyDown: @escaping @Sendable (CGKeyCode, CGEventFlags, String) -> Bool,
-        onKeyUp: (@Sendable (CGKeyCode) -> Bool)? = nil
+        onKeyUp: (@Sendable (CGKeyCode) -> Bool)? = nil,
+        onFlagsChanged: (@Sendable (CGEventFlags) -> Void)? = nil
     ) {
         self.onKeyDown = onKeyDown
         self.onKeyUp = onKeyUp
+        self.onFlagsChanged = onFlagsChanged
     }
 
     deinit { uninstall() }
@@ -67,6 +78,9 @@ public final class KeyTap: @unchecked Sendable {
             = CGEventMask(1 << CGEventType.keyDown.rawValue)
         if onKeyUp != nil {
             mask |= CGEventMask(1 << CGEventType.keyUp.rawValue)
+        }
+        if onFlagsChanged != nil {
+            mask |= CGEventMask(1 << CGEventType.flagsChanged.rawValue)
         }
         let userInfo = Unmanaged.passUnretained(self).toOpaque()
 
@@ -120,6 +134,16 @@ public final class KeyTap: @unchecked Sendable {
                             return nil           // swallow
                         }
                     }
+                }
+                if type == .flagsChanged {
+                    let kt = Unmanaged<KeyTap>
+                        .fromOpaque(userInfo).takeUnretainedValue()
+                    // Never swallow — flagsChanged is purely
+                    // observational here; the modifier itself
+                    // still needs to reach the underlying app
+                    // (otherwise Cmd-Tab while overlay is up
+                    // would stop working).
+                    kt.onFlagsChanged?(event.flags)
                 }
                 return Unmanaged.passUnretained(event)
             },

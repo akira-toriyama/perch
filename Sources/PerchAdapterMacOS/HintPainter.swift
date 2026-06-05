@@ -83,6 +83,11 @@ final class HintPainter: NSView {
     /// OverlayCanvas updates this each tick.
     private var ghosts: [Ghost] = []
 
+    /// Currently-held modifier flags (Cmd / Shift / Alt / Ctrl).
+    /// Drives the modifier-badge corner glyph when
+    /// `[overlay].show-modifier-badge` is on.
+    private var modifierFlags: CGEventFlags = []
+
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
@@ -149,6 +154,14 @@ final class HintPainter: NSView {
     /// animation and the driver shuts down).
     func setGhosts(_ gs: [Ghost]) {
         ghosts = gs
+        needsDisplay = true
+    }
+
+    /// Update the currently-held modifier flags. The badge corner
+    /// glyph repaints to match (only when the config opted in via
+    /// `show-modifier-badge`).
+    func setModifierFlags(_ flags: CGEventFlags) {
+        modifierFlags = flags
         needsDisplay = true
     }
 
@@ -314,6 +327,18 @@ final class HintPainter: NSView {
                 y: p.rect.midY - textSize.height / 2)
             attr.draw(at: textOrigin)
 
+            // Modifier-key badge (top-right corner). Active only
+            // when configured + at least one tracked modifier is
+            // held. The glyph confirms the action that will fire
+            // on resolve so the user doesn't have to remember the
+            // Cmd/Shift/Alt → action mapping.
+            if cfg.showModifierBadge, !modifierFlags.isEmpty {
+                drawModifierBadge(
+                    rect: p.rect,
+                    flags: modifierFlags,
+                    palette: palette)
+            }
+
             if pillAlpha < 1, let ctx = NSGraphicsContext.current {
                 ctx.cgContext.endTransparencyLayer()
                 ctx.cgContext.setAlpha(1)
@@ -409,6 +434,46 @@ final class HintPainter: NSView {
             ctx.cgContext.setAlpha(1)
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    // MARK: - Modifier badge
+
+    /// Compose the macOS modifier glyph string for the held flags.
+    /// Order matches Apple's canonical glyph order (`⌃⌥⇧⌘`) so the
+    /// badge reads like a real keyboard-shortcut annotation. Ctrl
+    /// is included even though it cancels hint mode — users may
+    /// glance at the pill while pressing Ctrl mid-stream and the
+    /// badge should reflect what's actually held.
+    private func modifierGlyph(_ flags: CGEventFlags) -> String {
+        var s = ""
+        if flags.contains(.maskControl)   { s += "\u{2303}" }   // ⌃
+        if flags.contains(.maskAlternate) { s += "\u{2325}" }   // ⌥
+        if flags.contains(.maskShift)     { s += "\u{21E7}" }   // ⇧
+        if flags.contains(.maskCommand)   { s += "\u{2318}" }   // ⌘
+        return s
+    }
+
+    /// Paint the modifier-badge glyph in the pill's top-right
+    /// corner. Sized to fit comfortably in the pill's edge gutter;
+    /// uses the accent color so it pops against the body fill.
+    private func drawModifierBadge(
+        rect: CGRect,
+        flags: CGEventFlags,
+        palette: ResolvedPalette
+    ) {
+        let glyph = modifierGlyph(flags)
+        guard !glyph.isEmpty else { return }
+        let font = NSFont.systemFont(ofSize: 10, weight: .semibold)
+        let attr = NSAttributedString(string: glyph, attributes: [
+            .font: font,
+            .foregroundColor: palette.accentColor.withAlphaComponent(0.95)])
+        let sz = attr.size()
+        // Anchor the glyph to the pill's top-right corner with a
+        // 3pt inset so it doesn't kiss the border.
+        let origin = NSPoint(
+            x: rect.maxX - sz.width - 3,
+            y: rect.minY + 1)
+        attr.draw(at: origin)
     }
 
     // MARK: - Pill geometry

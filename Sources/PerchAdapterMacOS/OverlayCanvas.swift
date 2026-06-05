@@ -792,6 +792,13 @@ final class OverlayCanvas: NSView {
         return CGVector(dx: dx, dy: dy)
     }
 
+    /// Push the currently-held modifier flags into the painter so
+    /// the modifier-badge corner glyph repaints. Called from the
+    /// KeyTap's `onFlagsChanged` callback while the overlay is up.
+    func setModifierFlags(_ flags: CGEventFlags) {
+        painter.setModifierFlags(flags)
+    }
+
     func clear() {
         pills.removeAll(keepingCapacity: true)
         typed = ""

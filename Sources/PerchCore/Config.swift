@@ -105,6 +105,14 @@ public struct PerchConfig: Sendable {
     /// silently fall back to disabled per typo-tolerance.
     public let overlayPeekKey: String
 
+    /// `true` to draw a small modifier-glyph badge in the top-right
+    /// corner of every pill when the user holds Cmd / Shift / Alt
+    /// during hint mode. Confirms the action mode that will fire on
+    /// resolve (Cmd → copyTitle, Shift → rightClick, Alt → focus,
+    /// Cmd+Shift → pressContinuous). False (default) keeps pills
+    /// clean — same UX as before this knob existed.
+    public let showModifierBadge: Bool
+
     /// What perch does to the WINNING pill at hint-resolve time.
     /// Ports wand's `[gesture.effect] match` vocabulary, scoped to
     /// perch's single-pill resolve. Default `.none` keeps the snappy
@@ -288,6 +296,7 @@ public struct PerchConfig: Sendable {
         overlayAnimEnabled: true,
         overlayShowShortcuts: true,
         overlayPeekKey: "space",
+        showModifierBadge: false,
         matchEffect: .none,
         unmatchEffect: .none,
         narrowEffect: .none,
@@ -398,6 +407,8 @@ public struct PerchConfig: Sendable {
         let peekKey = (doc["overlay"]?["peek-key"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             ?? "space"
+        let showBadge = doc["overlay"]?["show-modifier-badge"]?.asBool
+            ?? false
 
         // [overlay.effect] — wand-style match / unmatch / intensity.
         // Same flat-key shape as [behavior.web]: TOML's dotted-table
@@ -550,6 +561,7 @@ public struct PerchConfig: Sendable {
             overlayAnimEnabled: anim,
             overlayShowShortcuts: showShortcuts,
             overlayPeekKey: peekKey,
+            showModifierBadge: showBadge,
             matchEffect: matchEff,
             unmatchEffect: unmatchEff,
             narrowEffect: narrowEff,

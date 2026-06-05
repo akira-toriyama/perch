@@ -209,6 +209,16 @@ public final class OverlayWindow {
                 return MainActor.assumeIsolated {
                     self.handleTapKeyUp(keyCode: keyCode)
                 }
+            },
+            // Modifier badge: repaint pills whenever the user
+            // presses / releases Cmd / Shift / Alt / Ctrl mid-hint
+            // so the corner glyph reflects the action that will
+            // fire on resolve.
+            onFlagsChanged: { [weak self] flags in
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    self.canvas.setModifierFlags(flags)
+                }
             }
         )
         guard tap.install() else {
