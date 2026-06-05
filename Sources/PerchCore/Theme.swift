@@ -146,6 +146,32 @@ public enum ThemeFont: Sendable, Equatable {
     case system
 }
 
+/// What the modifier-badge corner annotation shows when a modifier
+/// is held during hint mode.
+///   - `.off` — no badge at all
+///   - `.glyph` — `⌃⌥⇧⌘` Apple-canonical glyphs (the historical
+///     behaviour; off-but-with-modifier renders as `⌘`, `⇧`, etc.)
+///   - `.action` — glyph + a short action verb (`⌘ Copy`, `⇧ Right`,
+///     `⌥ Focus`, `⌘⇧ Chain`) so the user reads exactly what the
+///     resolve will do
+public enum ModifierBadgeStyle: String, Sendable, CaseIterable {
+    case off
+    case glyph
+    case action
+
+    /// Parse with bool tolerance — older configs used
+    /// `show-modifier-badge = true` / `false`; map those to `.glyph`
+    /// / `.off`. Unknown strings clamp to `.off`.
+    public static func parse(_ s: String) -> ModifierBadgeStyle? {
+        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
+        switch t {
+        case "true", "1", "yes", "on": return .glyph
+        case "false", "0", "no":       return .off
+        default: return ModifierBadgeStyle(rawValue: t)
+        }
+    }
+}
+
 /// Pill geometry preset. The historical perch shape is `.pill`
 /// (10pt rounded rect); the alternates let users dial visual
 /// density up or down without changing the theme palette.

@@ -83,15 +83,20 @@ public struct OverlayConfig: Sendable {
     /// Hold-to-peek key. Empty = disabled.
     public let peekKey: String
 
-    /// Show `⌃⌥⇧⌘` glyph in pill top-right corner while modifiers
-    /// are held during hint mode.
-    public let showModifierBadge: Bool
+    /// What the modifier-badge corner annotation shows when a
+    /// modifier is held during hint mode. `.off` (default) skips
+    /// the badge; `.glyph` shows `⌃⌥⇧⌘`; `.action` shows glyph +
+    /// action verb (e.g. `⌘ Copy`).
+    ///
+    /// Older configs that used `show-modifier-badge = true` / `false`
+    /// parse to `.glyph` / `.off` via `ModifierBadgeStyle.parse`.
+    public let modifierBadge: ModifierBadgeStyle
 
     public init(
         theme: Theme, accent: String, pillShape: PillShape,
         fontSize: Double, blurEnabled: Bool, animEnabled: Bool,
         showShortcuts: Bool, peekKey: String,
-        showModifierBadge: Bool
+        modifierBadge: ModifierBadgeStyle
     ) {
         self.theme = theme
         self.accent = accent
@@ -101,7 +106,7 @@ public struct OverlayConfig: Sendable {
         self.animEnabled = animEnabled
         self.showShortcuts = showShortcuts
         self.peekKey = peekKey
-        self.showModifierBadge = showModifierBadge
+        self.modifierBadge = modifierBadge
     }
 }
 
@@ -236,6 +241,44 @@ public struct BehaviorConfig: Sendable {
     }
 }
 
+/// Effect-channel resolvers — per-app `[behavior."<bundle>"]` keys
+/// (e.g. `match-effect = "none"`) win over the global
+/// `[overlay.effect]` defaults. Stored on `BehaviorConfig` so the
+/// adapter only carries one config snapshot.
+extension BehaviorConfig {
+    public func effectiveAppearEffect(
+        for bundleID: String?, fallback: AppearEffect
+    ) -> AppearEffect {
+        guard let bid = bundleID,
+              let e = perApp[bid]?.appearEffect else { return fallback }
+        return e
+    }
+
+    public func effectiveMatchEffect(
+        for bundleID: String?, fallback: MatchEffect
+    ) -> MatchEffect {
+        guard let bid = bundleID,
+              let e = perApp[bid]?.matchEffect else { return fallback }
+        return e
+    }
+
+    public func effectiveUnmatchEffect(
+        for bundleID: String?, fallback: UnmatchEffect
+    ) -> UnmatchEffect {
+        guard let bid = bundleID,
+              let e = perApp[bid]?.unmatchEffect else { return fallback }
+        return e
+    }
+
+    public func effectiveNarrowEffect(
+        for bundleID: String?, fallback: MatchEffect
+    ) -> MatchEffect {
+        guard let bid = bundleID,
+              let e = perApp[bid]?.narrowEffect else { return fallback }
+        return e
+    }
+}
+
 /// `[regional]` — frame floor for regional-mode container labeling.
 public struct RegionalConfig: Sendable {
     public let minWidth: Double
@@ -301,20 +344,37 @@ public struct SearchConfig: Sendable {
 /// Per-bundle-id partial override of the `[behavior]` section. Every
 /// field is optional: only the keys the user explicitly set in
 /// `[behavior."com.foo.bar"]` are non-nil; missing keys fall through
-/// to the global `[behavior]` value at resolve time.
+/// to the global value at resolve time.
+///
+/// Includes effect-kind overrides (`appear-effect` / `match-effect` /
+/// `unmatch-effect` / `narrow-effect`) so users can tame the
+/// "wild + fireworks" preset per app — e.g. silence all effects
+/// inside Figma but keep them globally.
 public struct BehaviorOverrides: Sendable, Equatable {
     public let roles: [String]?
     public let minSize: Double?
     public let autoClickOnUnique: Bool?
+    public let appearEffect: AppearEffect?
+    public let matchEffect: MatchEffect?
+    public let unmatchEffect: UnmatchEffect?
+    public let narrowEffect: MatchEffect?
 
     public init(
         roles: [String]? = nil,
         minSize: Double? = nil,
-        autoClickOnUnique: Bool? = nil
+        autoClickOnUnique: Bool? = nil,
+        appearEffect: AppearEffect? = nil,
+        matchEffect: MatchEffect? = nil,
+        unmatchEffect: UnmatchEffect? = nil,
+        narrowEffect: MatchEffect? = nil
     ) {
         self.roles = roles
         self.minSize = minSize
         self.autoClickOnUnique = autoClickOnUnique
+        self.appearEffect = appearEffect
+        self.matchEffect = matchEffect
+        self.unmatchEffect = unmatchEffect
+        self.narrowEffect = narrowEffect
     }
 }
 
@@ -382,7 +442,7 @@ public struct PerchConfig: Sendable {
             theme: .system, accent: "system", pillShape: .pill,
             fontSize: 15, blurEnabled: true, animEnabled: true,
             showShortcuts: true, peekKey: "space",
-            showModifierBadge: false),
+            modifierBadge: .off),
         effect: EffectConfig(
             appear: .pop, match: .none, unmatch: .none,
             narrow: .none, intensity: .normal, durationScale: 1.0),
@@ -470,13 +530,24 @@ public struct PerchConfig: Sendable {
         let peekKey = (doc["overlay"]?["peek-key"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             ?? "space"
-        let showBadge = doc["overlay"]?["show-modifier-badge"]?.asBool
-            ?? false
+        // show-modifier-badge accepts:
+        //   bool (true → .glyph, false → .off — back-compat)
+        //   string ("off" / "glyph" / "action" / "true" / "false")
+        // Unknown / unset → .off.
+        let badge: ModifierBadgeStyle = {
+            if let s = doc["overlay"]?["show-modifier-badge"]?.asString {
+                return ModifierBadgeStyle.parse(s) ?? .off
+            }
+            if let b = doc["overlay"]?["show-modifier-badge"]?.asBool {
+                return b ? .glyph : .off
+            }
+            return .off
+        }()
         return OverlayConfig(
             theme: theme, accent: accent, pillShape: shape,
             fontSize: size, blurEnabled: blur, animEnabled: anim,
             showShortcuts: showShortcuts, peekKey: peekKey,
-            showModifierBadge: showBadge)
+            modifierBadge: badge)
     }
 
     private static func parseEffect(_ doc: TOML.Document) -> EffectConfig {
@@ -560,9 +631,21 @@ public struct PerchConfig: Sendable {
                 .map { $0.filter { !$0.isEmpty } }
             let m = section["min-size"]?.asDouble.map { max(0, $0) }
             let a = section["auto-click-on-unique"]?.asBool
-            if r == nil, m == nil, a == nil { continue }
+            let appear = section["appear-effect"]?.asString
+                .flatMap(AppearEffect.parse)
+            let match = section["match-effect"]?.asString
+                .flatMap(MatchEffect.parse)
+            let unmatch = section["unmatch-effect"]?.asString
+                .flatMap(UnmatchEffect.parse)
+            let narrow = section["narrow-effect"]?.asString
+                .flatMap(MatchEffect.parse)
+            if r == nil, m == nil, a == nil,
+               appear == nil, match == nil,
+               unmatch == nil, narrow == nil { continue }
             perApp[bid] = BehaviorOverrides(
-                roles: r, minSize: m, autoClickOnUnique: a)
+                roles: r, minSize: m, autoClickOnUnique: a,
+                appearEffect: appear, matchEffect: match,
+                unmatchEffect: unmatch, narrowEffect: narrow)
         }
 
         return BehaviorConfig(

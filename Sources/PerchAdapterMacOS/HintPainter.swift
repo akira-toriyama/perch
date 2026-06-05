@@ -361,13 +361,15 @@ final class HintPainter: NSView {
 
             // Modifier-key badge (top-right corner). Active only
             // when configured + at least one tracked modifier is
-            // held. The glyph confirms the action that will fire
-            // on resolve so the user doesn't have to remember the
-            // Cmd/Shift/Alt → action mapping.
-            if cfg.overlay.showModifierBadge, !modifierFlags.isEmpty {
+            // held. `.glyph` shows `⌃⌥⇧⌘`; `.action` adds the verb
+            // (`⌘ Copy`, `⇧ Right`, `⌥ Focus`, `⌘⇧ Chain`) so the
+            // user reads exactly what the resolve will do.
+            if cfg.overlay.modifierBadge != .off,
+               !modifierFlags.isEmpty {
                 drawModifierBadge(
                     rect: p.rect,
                     flags: modifierFlags,
+                    style: cfg.overlay.modifierBadge,
                     palette: palette)
             }
 
@@ -538,27 +540,50 @@ final class HintPainter: NSView {
         return s
     }
 
-    /// Paint the modifier-badge glyph in the pill's top-right
-    /// corner. Sized to fit comfortably in the pill's edge gutter;
-    /// uses the accent color so it pops against the body fill.
+    /// Paint the modifier-badge in the pill's top-right corner.
+    /// `.glyph` shows just `⌃⌥⇧⌘`; `.action` appends the verb so
+    /// the badge reads e.g. `⌘ Copy`. Anchored with a 3pt inset
+    /// from the corner.
     private func drawModifierBadge(
         rect: CGRect,
         flags: CGEventFlags,
+        style: ModifierBadgeStyle,
         palette: ResolvedPalette
     ) {
         let glyph = modifierGlyph(flags)
         guard !glyph.isEmpty else { return }
+        let text: String
+        switch style {
+        case .off:
+            return
+        case .glyph:
+            text = glyph
+        case .action:
+            text = "\(glyph) \(Self.actionVerb(flags: flags))"
+        }
         let font = NSFont.systemFont(ofSize: 10, weight: .semibold)
-        let attr = NSAttributedString(string: glyph, attributes: [
+        let attr = NSAttributedString(string: text, attributes: [
             .font: font,
             .foregroundColor: palette.accentColor.withAlphaComponent(0.95)])
         let sz = attr.size()
-        // Anchor the glyph to the pill's top-right corner with a
-        // 3pt inset so it doesn't kiss the border.
         let origin = NSPoint(
             x: rect.maxX - sz.width - 3,
             y: rect.minY + 1)
         attr.draw(at: origin)
+    }
+
+    /// Short verb naming the action that will fire on resolve given
+    /// the held modifier flags. Mirrors OverlayWindow.actionFor —
+    /// keep in sync. Two-letter for `Chain` (Cmd+Shift) is
+    /// intentional so the badge stays compact.
+    private static func actionVerb(flags: CGEventFlags) -> String {
+        if flags.contains(.maskCommand) && flags.contains(.maskShift) {
+            return "Chain"            // pressContinuous
+        }
+        if flags.contains(.maskCommand)   { return "Copy" }
+        if flags.contains(.maskAlternate) { return "Focus" }
+        if flags.contains(.maskShift)     { return "Right" }
+        return ""
     }
 
     // MARK: - Pill geometry
