@@ -43,6 +43,7 @@ final class Controller {
     private(set) var config: PerchConfig
     private let source: AXUIElementSource
     private let overlay: OverlayWindow
+    private let sound: SoundPlayer
     // Created in `start()` because the callback captures `self` — a
     // self-capturing closure can't be passed during the initializer
     // (Swift forbids accessing self before all stored properties are
@@ -90,7 +91,8 @@ final class Controller {
     init(config: PerchConfig) {
         self.config = config
         self.source = AXUIElementSource(config: config)
-        self.overlay = OverlayWindow(config: config)
+        self.sound = SoundPlayer(config: config)
+        self.overlay = OverlayWindow(config: config, sound: sound)
     }
 
     func start() {
@@ -135,6 +137,7 @@ final class Controller {
         config = new
         source.updateConfig(new)
         overlay.updateConfig(new)
+        sound.updateConfig(new)
         if hotkeyChanged {
             hotkey?.install(combo: new.hotkey)
         }
@@ -576,6 +579,7 @@ final class Controller {
         // `enumerate()` and this line would otherwise let per-app
         // `roles` / `min-size` apply to (say) Chrome while
         // `auto-click-on-unique` resolved against Word's override.
+        sound.playActivate()
         overlay.show(
             hints: hints,
             bundleID: source.lastEnumeratedBundleID,

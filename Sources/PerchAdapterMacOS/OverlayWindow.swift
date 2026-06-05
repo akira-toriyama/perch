@@ -42,6 +42,7 @@ public final class OverlayWindow {
 
     private let panel: NSPanel
     private let canvas: OverlayCanvas
+    private let sound: SoundPlayer?
     private var keyTap: KeyTap?
     private var cancelKeyCode: CGKeyCode = 53        // Esc by default
     /// Hold-to-peek key (nil = disabled). While held, the panel is
@@ -102,8 +103,9 @@ public final class OverlayWindow {
         "g": .nestedGrid,
     ]
 
-    public init(config: PerchConfig) {
+    public init(config: PerchConfig, sound: SoundPlayer? = nil) {
         self.config = config
+        self.sound = sound
 
         // NSPanel rather than NSWindow because non-activating
         // panels do not steal focus from the frontmost app — perch
@@ -366,6 +368,7 @@ public final class OverlayWindow {
             enterChordWait(hint: hint)
             return
         }
+        sound?.playMatch()
         let cb = onResolve
         // Match-effect path: dispatch AXPress synchronously (so the
         // app reacts immediately — the user's perceived click
@@ -487,6 +490,7 @@ public final class OverlayWindow {
         let action = chordAction ?? base
         Log.line("overlay: chord finalize \(action.rawValue) "
                  + "→ \(hint.keys)")
+        sound?.playMatch()
         let cb = onResolve
         if config.overlayAnimEnabled, config.matchEffect != .none {
             cb?(hint, action)
@@ -548,6 +552,7 @@ public final class OverlayWindow {
     /// completion handler gates the hide() so the pills don't
     /// vanish mid-animation.
     private func flashThenCancel() {
+        sound?.playUnmatch()
         let cb = onCancel
         guard config.overlayAnimEnabled else {
             hide()

@@ -174,6 +174,28 @@ public struct PerchConfig: Sendable {
     /// but not duration — that's `effectDurationScale` below.
     public let effectIntensity: EffectIntensity
 
+    /// macOS system-sound name (`"Tink"` / `"Pop"` / `"Glass"` /
+    /// `"Hero"` / `"Sosumi"` / …) OR a file path (`"~/foo.mp3"` /
+    /// `"/Users/me/click.wav"`). The adapter expands `~`, tries the
+    /// path first, then falls back to `NSSound(named:)`. Empty
+    /// string or `"none"` disables sound for this direction.
+    /// Plays on hint resolve (any modifier).
+    public let matchSound: String
+
+    /// Sound to play on a missed keypress (non-matching letter /
+    /// non-letter key). Same format as `matchSound`.
+    public let unmatchSound: String
+
+    /// Sound to play when hint mode activates (hotkey fires, AX
+    /// enumeration completes, panel paints). Same format.
+    public let activateSound: String
+
+    /// Master volume for all sounds, 0.0..1.0. Clamped per
+    /// typo-tolerance. Default 0.5 — keeps system sounds at half
+    /// their natural volume so a screen full of pills + a chime
+    /// doesn't become startling.
+    public let soundVolume: Double
+
     /// Multiplier on every animation duration (match / unmatch /
     /// narrow). 1.0 = the calibrated baseline (120-220ms depending
     /// on kind). 2.0 doubles every duration so the user can
@@ -337,6 +359,10 @@ public struct PerchConfig: Sendable {
         borderWidth: 1.5,
         borderCycleSeconds: 3.0,
         effectIntensity: .normal,
+        matchSound: "",
+        unmatchSound: "",
+        activateSound: "",
+        soundVolume: 0.5,
         effectDurationScale: 1.0,
         autoClickOnUnique: true,
         roles: defaultRoles,
@@ -489,6 +515,19 @@ public struct PerchConfig: Sendable {
             return raw >= 0.1 && raw <= 5.0 ? raw : 1.0
         }()
 
+        // [overlay.sound] — accept either a macOS system-sound
+        // name (NSSound(named:)) or a file path (tilde-expanded
+        // at load time on the adapter side). Empty/"none" disables.
+        let soundSection = doc["overlay.sound"]
+        let matchSnd = soundSection?["match"]?.asString ?? ""
+        let unmatchSnd = soundSection?["unmatch"]?.asString ?? ""
+        let activateSnd = soundSection?["activate"]?.asString ?? ""
+        let volume: Double = {
+            guard let raw = soundSection?["volume"]?.asDouble
+            else { return 0.5 }
+            return max(0, min(1, raw))
+        }()
+
         let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
             .map { $0.filter { !$0.isEmpty } } ?? defaultRoles
@@ -627,6 +666,10 @@ public struct PerchConfig: Sendable {
             borderWidth: borderWidth,
             borderCycleSeconds: borderCycle,
             effectIntensity: intensity,
+            matchSound: matchSnd,
+            unmatchSound: unmatchSnd,
+            activateSound: activateSnd,
+            soundVolume: volume,
             effectDurationScale: durScale,
             autoClickOnUnique: autoClick,
             roles: roles,
