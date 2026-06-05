@@ -84,6 +84,10 @@ public final class OverlayWindow {
         // means speakTitle; h is the home-row index finger).
         "m": .synthCmdClick,
         "h": .synthShiftClick,
+        // M4-η (#72): multi-click via clickState. `d` = double,
+        // `t` = triple — mnemonic from "double" / "triple".
+        "d": .doubleClick,
+        "t": .tripleClick,
     ]
 
     public init(config: PerchConfig) {

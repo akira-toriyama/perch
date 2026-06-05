@@ -325,6 +325,8 @@ the press briefly and route through a chord suffix instead:
 | `,s` | speak title via `AVSpeechSynthesizer` |
 | `,m` | synthetic **Cmd-click** at the element center (open link in new tab, etc.) |
 | `,h` | synthetic **Shift-click** (extend selection in multi-select lists / text ranges) |
+| `,d` | synthetic **double-click** at the element center (word-select in text, "open" in Finder) |
+| `,t` | synthetic **triple-click** (line / paragraph select) |
 
 Default is **off** — set `[chord].leader = ","` in
 `config.toml` to opt in. With chord mode on:
