@@ -323,6 +323,8 @@ the press briefly and route through a chord suffix instead:
 | `,o` | reveal in Finder (file-URL elements only) |
 | `,u` | copy URL (link / file elements) |
 | `,s` | speak title via `AVSpeechSynthesizer` |
+| `,m` | synthetic **Cmd-click** at the element center (open link in new tab, etc.) |
+| `,h` | synthetic **Shift-click** (extend selection in multi-select lists / text ranges) |
 
 Default is **off** — set `[chord].leader = ","` in
 `config.toml` to opt in. With chord mode on:
@@ -334,6 +336,12 @@ Default is **off** — set `[chord].leader = ","` in
 - `Cmd+<label>` / `Shift+<label>` / `Alt+<label>` /
   `Cmd+Shift+<label>` still work as today — chord is a
   modifier-less alternative, not a replacement.
+
+`,m` / `,h` (M4-ε) cross the AX-bypass carve-out: the cursor
+visibly jumps to the element and a `CGEvent` mouse-click with
+the modifier flag fires. `AXPress` doesn't honor modifiers, so
+this is the only way to reach "Cmd-click to open in new tab"
+through hint mode.
 
 ### Emoji picker
 

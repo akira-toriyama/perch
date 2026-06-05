@@ -783,6 +783,12 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             // other URL schemes log + return false rather than
             // open in a browser (that's `kAXPressAction`'s job).
             return dispatchRevealInFinder(elt, id: id)
+        case .synthCmdClick:
+            return dispatchSynthClick(elt, flags: .maskCommand,
+                                      id: id, tag: "synth-cmd-click")
+        case .synthShiftClick:
+            return dispatchSynthClick(elt, flags: .maskShift,
+                                      id: id, tag: "synth-shift-click")
         case .speakTitle:
             // Chord `,s` (#57). Speak the element's title /
             // composed label via AVSpeechSynthesizer. Same label
@@ -834,6 +840,87 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         pb.setString(s, forType: .string)
         Log.line("dispatch: copyURL ok (\(s.count) chars) → id=\(id)")
         return true
+    }
+
+    /// Issue #70 / M4-ε — synthetic modifier-held mouse click at
+    /// the element's frame center. AX dispatch (`kAXPressAction`)
+    /// doesn't honor modifier flags, so "Cmd-click to open in
+    /// new tab" / "Shift-click to extend selection" are
+    /// unreachable through the regular hint path. This route
+    /// uses `CGEvent` with `.flags = mod` to mimic a real
+    /// modifier-held click.
+    ///
+    /// **Crosses the AX-bypass carve-out** (cursor visibly jumps
+    /// to the element). Same rationale as `--grid` / `--drag` /
+    /// `--nudge`: when AX-press can't deliver the semantic, mouse
+    /// synth is the only option.
+    private func dispatchSynthClick(
+        _ elt: AXUIElement, flags: CGEventFlags,
+        id: String, tag: String
+    ) -> Bool {
+        // Resolve the element's frame center. Use the raw AX
+        // position+size — `enumerate()` already filtered out
+        // off-screen / clipped elements, so this is the visible
+        // bounds we computed when emitting the hint.
+        let center = frameCenter(of: elt)
+        guard let pt = center else {
+            Log.line("dispatch: \(tag) no frame → id=\(id)")
+            return false
+        }
+        _ = CGWarpMouseCursorPosition(pt)
+        guard let src = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(
+                mouseEventSource: src,
+                mouseType: .leftMouseDown,
+                mouseCursorPosition: pt,
+                mouseButton: .left),
+              let up = CGEvent(
+                mouseEventSource: src,
+                mouseType: .leftMouseUp,
+                mouseCursorPosition: pt,
+                mouseButton: .left)
+        else {
+            Log.line("dispatch: \(tag) CGEvent create failed "
+                     + "→ id=\(id)")
+            return false
+        }
+        // Modifier flags attach to BOTH events. Most apps key off
+        // the down event but a few (Safari new-tab handling among
+        // them) read flags off the up event too — set on both to
+        // be safe.
+        down.flags = flags
+        up.flags = flags
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        Log.line("dispatch: \(tag) ok @ "
+                 + "(\(Int(pt.x)),\(Int(pt.y))) → id=\(id)")
+        return true
+    }
+
+    /// Read `(kAXPosition, kAXSize)` and return the frame's
+    /// center in CG global coords. Used by synthetic-click
+    /// dispatch (#70) which needs the click point but doesn't
+    /// have a `UIElement.frame` handy (the dispatch path receives
+    /// only the live `AXUIElement`, not the original `UIElement`
+    /// that ferried the frame to Core).
+    private func frameCenter(of elt: AXUIElement) -> CGPoint? {
+        var posVal: CFTypeRef?
+        var sizeVal: CFTypeRef?
+        let errP = AXUIElementCopyAttributeValue(
+            elt, kAXPositionAttribute as CFString, &posVal)
+        let errS = AXUIElementCopyAttributeValue(
+            elt, kAXSizeAttribute as CFString, &sizeVal)
+        guard errP == .success, errS == .success,
+              let pRef = posVal, let sRef = sizeVal,
+              CFGetTypeID(pRef) == AXValueGetTypeID(),
+              CFGetTypeID(sRef) == AXValueGetTypeID()
+        else { return nil }
+        var pos = CGPoint.zero
+        var size = CGSize.zero
+        _ = AXValueGetValue(pRef as! AXValue, .cgPoint, &pos)
+        _ = AXValueGetValue(sRef as! AXValue, .cgSize, &size)
+        return CGPoint(x: pos.x + size.width / 2,
+                       y: pos.y + size.height / 2)
     }
 
     /// `.revealInFinder` body — only fires on `file://` URLs.
@@ -969,7 +1056,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             pb.setString(glyph, forType: .string)
             Log.line("dispatch: emoji copy → \(id)")
             return true
-        case .rightClick, .focus, .revealInFinder, .speakTitle:
+        case .rightClick, .focus, .revealInFinder, .speakTitle,
+             .synthCmdClick, .synthShiftClick:
             Log.line("dispatch: emoji unsupported action "
                      + "\(action.rawValue) → \(id)")
             return false

@@ -104,6 +104,19 @@ public enum HintAction: String, Sendable, CaseIterable {
     /// Chord `,s` (issue #57) — speak the element's title via
     /// `AVSpeechSynthesizer`. Accessibility / proofreading use.
     case speakTitle
+    /// Chord `,m` (issue #70 / M4-ε) — **synthetic Cmd-click**.
+    /// `AXPress` doesn't honor modifier flags, so `Cmd+click to
+    /// open a link in a new tab` isn't reachable through the
+    /// regular hint dispatch. This case routes through `CGEvent`
+    /// mouse-down + mouse-up at the element's frame center with
+    /// `.maskCommand` set, mimicking a real Cmd-click. Crosses
+    /// the AX-bypass carve-out documented in CLAUDE.md.
+    case synthCmdClick
+    /// Chord `,h` (issue #70 / M4-ε) — synthetic Shift-click for
+    /// extend-selection workflows (multi-row list pick, text
+    /// range extend). Same `CGEvent` synth path as `.synthCmdClick`
+    /// with `.maskShift` instead.
+    case synthShiftClick
 }
 
 /// Parsed `[hotkey].combo` value.
