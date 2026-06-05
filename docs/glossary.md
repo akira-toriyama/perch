@@ -292,6 +292,19 @@ Alt 100 / Cmd 画面端）を解釈し `CGWarpMouseCursorPosition` +
 Ctrl は macOS の Mission Control 予約のため step に未割当。
 - **Don't call it:** mouse keys, arrow cursor, ナッジ（一般名は可）
 
+### VisionHints (--vision)
+issue #73 (M5)。**最終 AX-bypass レイヤ**。Apple Vision の
+`VNRecognizeTextRequest` で main display を OCR、認識した
+各テキスト領域を `UIElement`（id `"vision:<x>:<y>"`、role
+`"VisionText"`、frame = bounding box）に。dispatch は CGEvent
+で重心クリック（emoji 系と同じ side-table フリー方式 — id 自体
+に座標エンコード）。Screen Recording TCC 必要、未付与時は
+`CGDisplayCreateImage` が nil → 空 enum で silent fallback。
+レイテンシ Apple Silicon で 100-400ms、`.fast` recognition。
+座標変換は (1) Vision normalized 0..1 bottom-left → (2) pixel
+top-left flip → (3) backingScale で point 化 — 3 段全て必要。
+- **Don't call it:** ocr hints, vision overlay, OCR モード（一般名は可）
+
 ### GridMode (coordinate grid)
 issue #66 (M4-α) + issue #67 (M4-β)。hint mode の **AX-bypass
 フォールバック**。Figma canvas / Photoshop / 任意の custom-drawn

@@ -366,7 +366,7 @@ frontmost app's focused window**. The seam is captured at
   Log.line (always on) so users can attach `/tmp/perch.log` to
   bug reports without re-running with `PERCH_DEBUG=1`.
 
-### Scroll mode + search mode + regional mode + menu mode + window switcher + emoji picker + grid mode
+### Scroll mode + search mode + regional mode + menu mode + window switcher + emoji picker + grid mode + vision hints
 
 - **`ScrollMode` and `SearchMode` are parallel to
   `OverlayWindow`** — each owns its own KeyTap + (for search)
@@ -428,6 +428,29 @@ frontmost app's focused window**. The seam is captured at
   explicitly). Table is intentionally curated, not the full
   CLDR ≈3700 — add entries when a user reports `"I typed X and
   got nothing"`, don't bulk-import.
+- **Vision-OCR hints (issue #73 / M5)** are the **final
+  AX-bypass layer**. Grid picks coordinates by labelled cells;
+  vision picks by **what the text says** — Apple Vision's
+  `VNRecognizeTextRequest` runs OCR on the main display capture
+  and emits one `UIElement` per recognised string. Dispatch is
+  synthetic `CGEvent` mouse click at the recognised centroid
+  (no AX target — same as grid). Each result's id encodes the
+  click point directly (`"vision:<x>:<y>"`) so dispatch needs
+  no side-table.
+  **Coord pipeline**: Vision's `boundingBox` is normalised
+  bottom-left origin (0..1). The 3-step convert lands a click in
+  the right place — multiply by image pixel size → flip Y to
+  top-left → divide by `screen.backingScaleFactor` (HiDPI). Skip
+  any step and pills go to the wrong place; the doc on
+  `enumerateVision()` spells out why.
+  **Screen Recording TCC grant** is required. `CGDisplayCreateImage`
+  returns nil without it; we log + return empty so the overlay
+  dismisses silently rather than crashing. Latency is 100-400ms
+  per invocation — acceptable for the deliberate `--vision`
+  fallback, not the default path. **Don't try to integrate
+  vision results with the hint walker** — different latency
+  profile, different dispatch path, mixing them confuses the
+  pipeline.
 - **Grid mode (issue #66 / M4-α)** is the **explicit AX-bypass
   fallback** for UIs that hint mode can't see (Figma canvas,
   Photoshop, web `<canvas>`, custom-drawn views). Owns its own

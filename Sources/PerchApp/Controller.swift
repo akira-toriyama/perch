@@ -246,6 +246,33 @@ final class Controller {
                          reenter: { [weak self] in self?.enterGridMode() })
     }
 
+    /// Vision-OCR hint mode (issue #73 / M5) — captures the main
+    /// display, runs `VNRecognizeTextRequest`, surfaces each
+    /// recognised text region as a hint. The fallback layer when
+    /// even grid is too coarse — the user wants to click the
+    /// **specific text** they see, regardless of what's behind it
+    /// in the AX layer. Dispatch is `CGEvent` mouse synth at the
+    /// recognised centroid.
+    func enterVisionMode() {
+        // Same overlay-based flow as hint / regional. Use
+        // `runHintFlow` so labels, dispatch, and toggle semantics
+        // come for free.
+        if activeMode == .hint || activeMode == .regional {
+            overlay.hide()
+            activeMode = nil
+        }
+        if let s = scroll { s.stop(); scroll = nil }
+        if let s = search { s.stop(); search = nil }
+        if let g = grid { g.stop(); grid = nil }
+        if let n = nudge { n.stop(); nudge = nil }
+        if let d = drag { d.stop(); drag = nil }
+        runHintFlow(
+            elements: source.enumerateVision(),
+            modeLabel: "vision",
+            mode: .hint,
+            reenter: { [weak self] in self?.enterVisionMode() })
+    }
+
     /// Drag mode (issue #69 / M4-δ) — keyboard-driven drag-and-
     /// drop. Enters in `.positioning` (cursor free, no button
     /// held); `d` grabs (mouseDown); arrows move cursor + fire
@@ -604,6 +631,9 @@ final class Controller {
                 case "drag":
                     Log.line("controller: --drag received")
                     self.enterDragMode()
+                case "vision":
+                    Log.line("controller: --vision received")
+                    self.enterVisionMode()
                 case "quit":
                     Log.line("controller: --quit received, exiting")
                     // Reverse the renderer-AX wake on every
