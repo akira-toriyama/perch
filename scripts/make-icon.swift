@@ -6,19 +6,26 @@
 // Run from the repo root via `scripts/make-icon.sh` (or directly:
 // `swift run`).
 //
-// Design: a single hint pill labelled "P" sitting on a faint
-// horizontal "home row" guideline, on a yellow squircle. The yellow
-// matches the overlay's `[overlay].background` so the app icon and
-// the live hint pills share an identity. The home-row guide is the
-// visual nod to the keyboard row perch biases its labels toward.
+// Design: a flat geometric "perched bird" silhouette on a yellow
+// squircle. "Perch" literally means a branch a bird rests on, so the
+// icon is the brand name in pictogram form. Composition follows the
+// Twitter-bird family of icons (flat, no outline, composed of
+// overlapping geometric primitives), with a horizontal branch under
+// the bird's feet that doubles as the keyboard "home row" guide.
+//
+// Colors:
+//   bg     #fde047 → #facc15  (overlay pill bg, gradient for depth)
+//   ink    #1f2937              (overlay foreground; bird silhouette)
+//
+// A bright yellow perimeter prevents the icon from "framing dark"
+// against dark Docks/wallpapers — the previous dark-squircle version
+// dropped visibility there.
 
 import AppKit
 import CoreGraphics
 import Foundation
 
 // MARK: - Output sizes
-// Standard macOS .iconset members. Listing both the 1x and the @2x
-// physical size lets iconutil pick the right entry on every display.
 let sizes: [(label: String, dim: Int)] = [
     ("16x16",      16),
     ("16x16@2x",   32),
@@ -33,20 +40,18 @@ let sizes: [(label: String, dim: Int)] = [
 ]
 
 // MARK: - Colors
-// Yellow gradient — top → bottom. Matches the overlay's pill bg
-// (#fde047) so app icon + live hints read as one identity. The
-// bottom is a slightly darker tint of the same hue (#f59e0b) so
-// the gradient reads as depth, not a second color.
+// Brand yellow (matches [overlay].background = #fde047 with a slight
+// darker bottom #facc15 for a subtle gradient).
 private let bgTop    = CGColor(srgbRed: 0xfd/255, green: 0xe0/255, blue: 0x47/255, alpha: 1)
-private let bgBottom = CGColor(srgbRed: 0xf5/255, green: 0x9e/255, blue: 0x0b/255, alpha: 1)
-// Dark slate, matching [overlay].foreground = #1f2937.
+private let bgBottom = CGColor(srgbRed: 0xfa/255, green: 0xcc/255, blue: 0x15/255, alpha: 1)
+// Dark slate ink (matches [overlay].foreground = #1f2937).
 private let inkFG    = CGColor(srgbRed: 0x1f/255, green: 0x29/255, blue: 0x37/255, alpha: 1)
-// Faint home-row guide.
-private let guideFG  = CGColor(srgbRed: 0x1f/255, green: 0x29/255, blue: 0x37/255, alpha: 0.25)
+// Eye highlight — same yellow as bg so it reads as negative space
+// when the bird overlaps it.
+private let eyeFG    = CGColor(srgbRed: 0xfd/255, green: 0xe0/255, blue: 0x47/255, alpha: 1)
 
 // MARK: - Rendering
 
-/// Render the icon at `side` × `side` px and return a CGImage.
 func render(side dim: CGFloat) -> CGImage {
     let cs = CGColorSpaceCreateDeviceRGB()
     guard let ctx = CGContext(
@@ -55,8 +60,7 @@ func render(side dim: CGFloat) -> CGImage {
         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
     ) else { fatalError("CGContext alloc failed at \(dim)") }
 
-    // Squircle background. The corner-radius ratio matches Apple's
-    // own app-icon template (≈22.37% of the side).
+    // Squircle background (Apple template ratio ≈22.37%).
     let rect = CGRect(x: 0, y: 0, width: dim, height: dim)
     let r = dim * 0.2237
     let bgPath = CGPath(roundedRect: rect, cornerWidth: r,
@@ -69,8 +73,7 @@ func render(side dim: CGFloat) -> CGImage {
         colors: [bgTop, bgBottom] as CFArray,
         locations: [0, 1]
     )!
-    // CGContext bitmaps are Y-up: start the gradient at the *top*
-    // (y == dim) and walk down to y == 0.
+    // Y-up bitmap: start at top (y == dim), end at bottom.
     ctx.drawLinearGradient(
         gradient,
         start: CGPoint(x: 0, y: dim),
@@ -78,35 +81,7 @@ func render(side dim: CGFloat) -> CGImage {
         options: [])
     ctx.restoreGState()
 
-    // Home-row guideline — a faint horizontal line across the lower
-    // third (Y is up, so "lower visually" = smaller Y). It's the
-    // baseline the hint pill sits on, evoking the keyboard's home row.
-    let guideY = dim * 0.32
-    ctx.setStrokeColor(guideFG)
-    ctx.setLineWidth(max(1, dim * 0.012))
-    ctx.move(to: CGPoint(x: dim * 0.16, y: guideY))
-    ctx.addLine(to: CGPoint(x: dim * 0.84, y: guideY))
-    ctx.strokePath()
-
-    // Hint pill — rounded rectangle "perched" on the home-row guide.
-    // The pill is positioned with its bottom edge touching guideY.
-    let pillW = dim * 0.48
-    let pillH = dim * 0.42
-    let pillX = (dim - pillW) / 2
-    let pillY = guideY                      // bottom edge on the guide
-    let pillR = pillH * 0.18
-    let pillPath = CGPath(
-        roundedRect: CGRect(x: pillX, y: pillY, width: pillW, height: pillH),
-        cornerWidth: pillR, cornerHeight: pillR, transform: nil)
-    ctx.setFillColor(inkFG)
-    ctx.addPath(pillPath)
-    ctx.fillPath()
-
-    // "P" glyph centered in the pill — drawn as a path so we don't
-    // depend on a specific font being available at build time.
-    // Bold geometric P: vertical stem + a closed half-loop.
-    drawP(ctx: ctx, dim: dim, pillX: pillX, pillY: pillY,
-          pillW: pillW, pillH: pillH)
+    drawBird(ctx: ctx, dim: dim)
 
     guard let image = ctx.makeImage() else {
         fatalError("makeImage failed at \(dim)")
@@ -114,54 +89,108 @@ func render(side dim: CGFloat) -> CGImage {
     return image
 }
 
-/// Draw a stylised "P" inside a pill. All numbers are fractions of
-/// `dim` so the icon scales cleanly across the 10 sizes.
-func drawP(ctx: CGContext, dim: CGFloat,
-           pillX: CGFloat, pillY: CGFloat,
-           pillW: CGFloat, pillH: CGFloat) {
-    // Layout inside the pill:
-    //   stem at left third, vertical, full pill height (minus padding)
-    //   loop occupies right two-thirds, top half of the pill
-    let padding = dim * 0.05
-    let stemW = pillW * 0.18
-    let stemX = pillX + (pillW - stemW * 2.5) / 2   // slight left bias
-    let stemBottom = pillY + padding
-    let stemTop = pillY + pillH - padding
-    let stemH = stemTop - stemBottom
+/// Draw the perched-bird silhouette + branch. All coordinates are
+/// fractions of `dim` (CG y-up) so the design scales identically at
+/// every iconset size.
+func drawBird(ctx: CGContext, dim: CGFloat) {
+    ctx.setFillColor(inkFG)
 
-    // White ink for the P (contrast against dark pill).
-    let ink = CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 1)
-    ctx.setFillColor(ink)
+    // ─── Branch ─────────────────────────────────────────────────
+    // Pill-shaped horizontal bar. Doubles as the "home row" guide
+    // visual nod that survived from the previous design.
+    let branchY = dim * 0.18
+    let branchH = dim * 0.030
+    let branchPath = CGPath(
+        roundedRect: CGRect(
+            x: dim * 0.10, y: branchY,
+            width: dim * 0.80, height: branchH),
+        cornerWidth: branchH / 2,
+        cornerHeight: branchH / 2,
+        transform: nil)
+    ctx.addPath(branchPath)
+    ctx.fillPath()
 
-    // Stem.
-    ctx.fill(CGRect(x: stemX, y: stemBottom, width: stemW, height: stemH))
+    // ─── Legs ───────────────────────────────────────────────────
+    // Two thin verticals from the branch up to the body's bottom.
+    let legTop = branchY + branchH * 0.5
+    let legBottom = legTop
+    let legH = dim * 0.085
+    let legW = dim * 0.028
+    ctx.fill(CGRect(x: dim * 0.42, y: legBottom, width: legW, height: legH))
+    ctx.fill(CGRect(x: dim * 0.54, y: legBottom, width: legW, height: legH))
 
-    // Loop: a ring fitting the top half of the pill, right of the
-    // stem. Built as the difference of two ellipses (outer minus
-    // inner) using even-odd fill.
-    let loopOuterX = stemX + stemW * 0.9         // overlap the stem a touch
-    let loopOuterY = stemBottom + stemH * 0.5    // bottom of loop = mid stem
-    let loopOuterW = pillW * 0.5
-    let loopOuterH = stemH * 0.5
-
+    // ─── Body ───────────────────────────────────────────────────
+    // Egg-shape, tilted slightly so the head sits higher than the
+    // tail. Drawn via a rotated ellipse.
     ctx.saveGState()
-    let outer = CGPath(
-        ellipseIn: CGRect(x: loopOuterX, y: loopOuterY,
-                          width: loopOuterW, height: loopOuterH),
-        transform: nil)
-    let innerInset = min(loopOuterW, loopOuterH) * 0.26
-    let inner = CGPath(
-        ellipseIn: CGRect(x: loopOuterX + innerInset,
-                          y: loopOuterY + innerInset,
-                          width: loopOuterW - innerInset * 2,
-                          height: loopOuterH - innerInset * 2),
-        transform: nil)
-    let ring = CGMutablePath()
-    ring.addPath(outer)
-    ring.addPath(inner)
-    ctx.addPath(ring)
-    ctx.fillPath(using: .evenOdd)
+    ctx.translateBy(x: dim * 0.48, y: dim * 0.46)
+    ctx.rotate(by: 0.18)  // ~10° counterclockwise — head-up posture
+    let bodyRect = CGRect(
+        x: -dim * 0.23, y: -dim * 0.16,
+        width: dim * 0.46, height: dim * 0.32)
+    ctx.fillEllipse(in: bodyRect)
     ctx.restoreGState()
+
+    // ─── Tail ───────────────────────────────────────────────────
+    // Triangular wedge extending back-and-up from the body.
+    let tailPath = CGMutablePath()
+    tailPath.move(to:    CGPoint(x: dim * 0.32, y: dim * 0.44))
+    tailPath.addLine(to: CGPoint(x: dim * 0.08, y: dim * 0.62))
+    tailPath.addLine(to: CGPoint(x: dim * 0.18, y: dim * 0.32))
+    tailPath.closeSubpath()
+    ctx.addPath(tailPath)
+    ctx.fillPath()
+
+    // ─── Wing ───────────────────────────────────────────────────
+    // A leaf-shaped patch slightly offset on the body — gives the
+    // silhouette dimension without an outline.
+    // Drawn in the *background* yellow so it cuts a subtle wing
+    // shape out of the body fill.
+    ctx.setFillColor(bgTop)
+    let wingPath = CGMutablePath()
+    wingPath.move(to:    CGPoint(x: dim * 0.34, y: dim * 0.46))
+    wingPath.addQuadCurve(
+        to:      CGPoint(x: dim * 0.58, y: dim * 0.38),
+        control: CGPoint(x: dim * 0.46, y: dim * 0.56))
+    wingPath.addQuadCurve(
+        to:      CGPoint(x: dim * 0.34, y: dim * 0.46),
+        control: CGPoint(x: dim * 0.46, y: dim * 0.34))
+    wingPath.closeSubpath()
+    ctx.addPath(wingPath)
+    ctx.fillPath()
+
+    // Restore ink for remaining bird parts.
+    ctx.setFillColor(inkFG)
+
+    // ─── Head ───────────────────────────────────────────────────
+    // Circle overlapping the body's upper-right shoulder.
+    let headR = dim * 0.125
+    let headC = CGPoint(x: dim * 0.66, y: dim * 0.62)
+    ctx.fillEllipse(in: CGRect(
+        x: headC.x - headR, y: headC.y - headR,
+        width: headR * 2, height: headR * 2))
+
+    // ─── Beak ───────────────────────────────────────────────────
+    // Short triangle pointing right from the head.
+    let beakPath = CGMutablePath()
+    beakPath.move(to:    CGPoint(x: dim * 0.76, y: dim * 0.66))
+    beakPath.addLine(to: CGPoint(x: dim * 0.92, y: dim * 0.61))
+    beakPath.addLine(to: CGPoint(x: dim * 0.76, y: dim * 0.56))
+    beakPath.closeSubpath()
+    ctx.addPath(beakPath)
+    ctx.fillPath()
+
+    // ─── Eye ────────────────────────────────────────────────────
+    // A tiny dot of bg color punched through the head.
+    // Skipped below 64px — at small sizes the dot turns into noise.
+    if dim >= 64 {
+        ctx.setFillColor(eyeFG)
+        let eyeR = max(dim * 0.020, 1)
+        let eyeC = CGPoint(x: dim * 0.71, y: dim * 0.66)
+        ctx.fillEllipse(in: CGRect(
+            x: eyeC.x - eyeR, y: eyeC.y - eyeR,
+            width: eyeR * 2, height: eyeR * 2))
+    }
 }
 
 func writePNG(_ image: CGImage, to url: URL) throws {
