@@ -121,6 +121,22 @@ public struct PerchConfig: Sendable {
     /// asymmetric with `regionalMinWidth`. Clamped to `>= 0`.
     public let regionalMinHeight: Double
 
+    // MARK: - [grid]
+
+    /// Columns in the `--grid` overlay (issue #66 / M4-α). The
+    /// screen union is divided into `gridCols × gridRows` cells;
+    /// each cell gets a label via the standard `Labeler.assign(...)`
+    /// (so the alphabet stays consistent with hint mode). Default
+    /// 12×8 — a 4K monitor at this density gives ~160×135 px cells,
+    /// which is "close enough" for a single-step pick before
+    /// recursive grid (M4-β) drills deeper.
+    /// Clamped to `2..32` per typo-tolerance; values outside fall
+    /// back to the defaults.
+    public let gridCols: Int
+
+    /// Rows in the `--grid` overlay. See `gridCols`.
+    public let gridRows: Int
+
     // MARK: - [chord]
 
     /// Chord-suffix leader character (issue #57). Empty (the
@@ -191,6 +207,8 @@ public struct PerchConfig: Sendable {
         perApp: [:],
         regionalMinWidth: 200,
         regionalMinHeight: 100,
+        gridCols: 12,
+        gridRows: 8,
         chordLeader: "",
         chordTimeoutMs: 600,
         searchSynonyms: [:]
@@ -324,6 +342,19 @@ public struct PerchConfig: Sendable {
         let regionalMinH = (doc["regional"]?["min-height"]?.asDouble)
             .map { max(0, $0) } ?? 100
 
+        // Grid mode (#66 / M4-α). Both axes clamp to 2..32 per
+        // typo-tolerance; values outside fall back to defaults
+        // (12×8). Below 2 there's nothing to subdivide; above 32 the
+        // labels become unreadable on real-world displays.
+        let gridCols: Int = {
+            guard let raw = doc["grid"]?["cols"]?.asInt else { return 12 }
+            return raw >= 2 && raw <= 32 ? raw : 12
+        }()
+        let gridRows: Int = {
+            guard let raw = doc["grid"]?["rows"]?.asInt else { return 8 }
+            return raw >= 2 && raw <= 32 ? raw : 8
+        }()
+
         // Chord-suffix knobs (#57). Leader is normalised to a
         // single lowercased character; empty (the default) means
         // chord mode is OFF and the bare-resolve UX is unchanged.
@@ -380,6 +411,8 @@ public struct PerchConfig: Sendable {
             perApp: perApp,
             regionalMinWidth: regionalMinW,
             regionalMinHeight: regionalMinH,
+            gridCols: gridCols,
+            gridRows: gridRows,
             chordLeader: chordLeader,
             chordTimeoutMs: chordTimeoutMs,
             searchSynonyms: synonyms)

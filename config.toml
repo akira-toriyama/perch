@@ -200,6 +200,22 @@ min-size = 6
 # open   = ["launch", "start"]
 
 
+# ---- Coordinate grid (M4-α, issue #66) --------------------------
+# `perch --grid` overlays a labeled grid across the screen union
+# and warps the cursor + clicks via synthetic CGEvent when the user
+# types a label. The AX-bypass fallback for Figma canvas /
+# Photoshop / web <canvas> / custom-drawn UIs where hint mode is
+# blind.
+#
+# `cols × rows` controls the grid density. Default 12×8 — a 4K
+# display at this density gives ~160×135 px cells (close enough
+# for a single-step pick; M4-β recursive grid drills further).
+# Both clamp to 2..32; out-of-range values fall back to defaults.
+[grid]
+cols = 12
+rows = 8
+
+
 # ---- Regional hint mode ------------------------------------------
 # Entered via `perch --regional`. Labels large containers (article
 # body, sidebar pane, embedded image, scroll area, outline view)

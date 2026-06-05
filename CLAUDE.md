@@ -97,9 +97,19 @@ frontmost app's focused window**. The seam is captured at
   id and looks it up in `press(id:)`. The serialised
   `UIElement` is what flows through Core.
 - **`press(id:)` uses `AXUIElementPerformAction(_,
-  kAXPressAction)`** — never simulates a synthetic mouse click.
-  AX press is less disruptive (no focus change, no cursor jump)
-  and matches the way native UI tests drive controls.
+  kAXPressAction)`** for AX-anchored dispatches (hint, regional,
+  search, menu, windows). AX press is less disruptive (no focus
+  change, no cursor jump) and matches the way native UI tests
+  drive controls. **Mouse synthesis carve-out:** the M4 series
+  (`--grid` / `--rgrid` / `--nudge` / `--drag` and the
+  modifier-held click variant) is the explicit AX-bypass — those
+  modes have no AX target by definition, so `CGEvent` mouse
+  events are the ONLY dispatch path. The cursor WILL visibly
+  jump on grid / nudge clicks; that's an accepted trade-off for
+  reaching Figma canvas / Photoshop / custom-drawn UI. **Don't
+  reach for `CGEvent` in the AX-anchored path** — if you're
+  about to add synthetic clicks to hint / search / menu /
+  windows, stop and reconsider.
 - The id is `"\(pid):\(seq)"`, where `seq` is a monotonic
   counter scoped to **one enumeration**. The side-table is
   cleared at the top of every `enumerate()`, so ids from a
@@ -356,7 +366,7 @@ frontmost app's focused window**. The seam is captured at
   Log.line (always on) so users can attach `/tmp/perch.log` to
   bug reports without re-running with `PERCH_DEBUG=1`.
 
-### Scroll mode + search mode + regional mode + menu mode + window switcher + emoji picker
+### Scroll mode + search mode + regional mode + menu mode + window switcher + emoji picker + grid mode
 
 - **`ScrollMode` and `SearchMode` are parallel to
   `OverlayWindow`** — each owns its own KeyTap + (for search)
@@ -418,6 +428,23 @@ frontmost app's focused window**. The seam is captured at
   explicitly). Table is intentionally curated, not the full
   CLDR ≈3700 — add entries when a user reports `"I typed X and
   got nothing"`, don't bulk-import.
+- **Grid mode (issue #66 / M4-α)** is the **explicit AX-bypass
+  fallback** for UIs that hint mode can't see (Figma canvas,
+  Photoshop, web `<canvas>`, custom-drawn views). Owns its own
+  KeyTap + NSPanel (mirrors `SearchMode` / `ScrollMode`), divides
+  the screen union into `[grid].cols × [grid].rows` cells, and
+  feeds synthetic `UIElement`s (id `"grid:<r>:<c>"`, role
+  `"GridCell"`) through the existing `Labeler.assign(...)` so the
+  alphabet matches hint mode. **Dispatch is `CGEvent` mouse
+  events**, NOT `AXUIElementSource.act(...)` — there's no AX
+  target for a cell. The cursor WILL visibly jump; that's the
+  accepted trade-off (see "Mouse synthesis carve-out" above).
+  Action mapping: bare → left click, Shift → right, Cmd → warp
+  only (for the `--drag` workflow), Cmd+Shift → left click +
+  re-enter for chained operations. **Don't promote grid cells
+  to AX-anchored UIElements** — the whole point is that no AX
+  layer exists; the synthetic id is a marker, not a side-table
+  key.
 - **Window switcher (issue #54)** is another `SearchMode`
   variant — same shared `startSearchSession` seam, with
   `enumerateWindows()` walking `NSWorkspace.runningApplications`

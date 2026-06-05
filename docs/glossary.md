@@ -260,6 +260,20 @@ shortcut のある行に合わせて統一されるので Spotlight 風の
 （function キー / Tab / 矢印キー等）は follow-up 扱い。
 - **Don't call it:** menu hint, shortcut hint, ショートカット表示（一般名は可）
 
+### GridMode (coordinate grid)
+issue #66 (M4-α)。hint mode の **AX-bypass フォールバック**。
+Figma canvas / Photoshop / 任意の custom-drawn UI など hint mode
+が見えない領域用。screen union を `[grid].cols × [grid].rows`
+（既定 12×8、clamp 2..32）に分割、各 cell に既存 `Labeler.assign(...)`
+で label（hint mode と同じアルファベット）。発火は **AX ではなく
+`CGEvent` で warp + mouse down/up**（カーソルジャンプは設計上の
+許容コスト）。Action mapping: bare → left click / Shift → right /
+Cmd → warp only / Cmd+Shift → click + 再エントリ。エントリは
+`perch --grid`（CLI only）。CLAUDE.md の "AX press never simulates
+synthetic click" ルールは grid 系（M4 シリーズ全般）でのみ
+**deliberate carve-out**。
+- **Don't call it:** mouse grid, coordinate picker, グリッドモード（一般名は可）
+
 ### EmojiPicker (emoji picker)
 issue #55。`SearchMode` の派生で、enumerator が
 `UIElementSource.enumerateEmoji()` （curated `EmojiTable.entries` を

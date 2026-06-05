@@ -51,6 +51,13 @@ enum PerchApp {
                                       → 🤔); pick with 1-9 to type the
                                       glyph at the caret (Unicode
                                       injection, no pasteboard write)
+          perch --grid                enter coordinate grid — divide
+                                      the screen union into labeled
+                                      cells; type label to warp cursor
+                                      + left-click (Shift → right-click,
+                                      Cmd → warp only). Use when hint
+                                      mode can't see the target (canvas,
+                                      Photoshop, custom UI).
           perch --cancel              dismiss the overlay if showing
           perch --reload              re-read ~/.config/perch/config.toml
           perch --status              print active hotkey, alphabet, last event
@@ -110,7 +117,7 @@ enum PerchApp {
             "--help", "--validate", "--doctor",
             "--dump-ax", "--dump-ax-tree", "--dump-regions",
             "--activate", "--cancel", "--scroll", "--search",
-            "--regional", "--menu", "--windows", "--emoji",
+            "--regional", "--menu", "--windows", "--emoji", "--grid",
             "--reload", "--quit", "--status",
         ]
         for a in argv where !recognised.contains(a) {
@@ -154,6 +161,7 @@ enum PerchApp {
         if argv.contains("--menu")     { runClient(cmd: "menu") }
         if argv.contains("--windows")  { runClient(cmd: "windows") }
         if argv.contains("--emoji")    { runClient(cmd: "emoji") }
+        if argv.contains("--grid")     { runClient(cmd: "grid") }
         if argv.contains("--cancel")   { runClient(cmd: "cancel") }
         if argv.contains("--reload")   { runClient(cmd: "reload") }
         if argv.contains("--quit")     { runClient(cmd: "quit") }
