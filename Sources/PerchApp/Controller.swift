@@ -459,6 +459,7 @@ final class Controller {
             source: source,
             config: config,
             renderMode: renderMode,
+            sound: sound,
             enumerator: enumerator,
             onResolve: { [weak self] element, action in
                 Task { @MainActor [weak self] in
