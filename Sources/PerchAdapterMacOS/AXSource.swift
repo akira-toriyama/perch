@@ -26,6 +26,7 @@
 
 import ApplicationServices
 import AppKit
+import AVFoundation
 import CoreGraphics
 import Foundation
 import PerchCore
@@ -54,6 +55,13 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     // window title. Other enumerators don't populate it, falling
     // back to the live `kAXTitleAttribute` read.
     private var customLabelById: [String: String] = [:]
+
+    /// `AVSpeechSynthesizer` is held as an instance property because
+    /// it owns its in-flight utterance lifetime — a local in
+    /// `dispatchSpeak(...)` would deallocate before the audio
+    /// playback completed. One instance is fine; consecutive
+    /// `.speakTitle` calls queue utterances on the same synth.
+    private lazy var speechSynth = AVSpeechSynthesizer()
 
     // Monotonic counter so each enumerated element gets a unique
     // string id without needing to hash the opaque AXUIElement.
@@ -758,7 +766,96 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             pb.setString(title, forType: .string)
             Log.line("dispatch: copyTitle ok (\(title.count) chars) → id=\(id)")
             return true
+        case .copyURL:
+            // Chord `,u` (#57). `kAXURLAttribute` is the
+            // canonical AX surface for "this element has an
+            // associated URL" — Safari links, Finder file
+            // selections, Mail attachment rows, etc. The value
+            // comes back as either NSURL or NSString depending
+            // on the app; handle both.
+            return dispatchCopyURL(elt, id: id)
+        case .revealInFinder:
+            // Chord `,o` (#57). Reveal the element's file URL in
+            // Finder via `activateFileViewerSelecting`. Only
+            // meaningful when `kAXURLAttribute` is a file:// URL;
+            // other URL schemes log + return false rather than
+            // open in a browser (that's `kAXPressAction`'s job).
+            return dispatchRevealInFinder(elt, id: id)
+        case .speakTitle:
+            // Chord `,s` (#57). Speak the element's title /
+            // composed label via AVSpeechSynthesizer. Same label
+            // resolution rule as `.copyTitle` — picker-composed
+            // strings win when present.
+            let phrase: String
+            if let cached = customLabelById[id], !cached.isEmpty {
+                phrase = cached
+            } else {
+                phrase = (copyAttribute(elt, kAXTitleAttribute) as? String)
+                    ?? (copyAttribute(elt, kAXValueAttribute) as? String)
+                    ?? ""
+            }
+            guard !phrase.isEmpty else {
+                Log.line("dispatch: speakTitle empty → id=\(id)")
+                return false
+            }
+            let utt = AVSpeechUtterance(string: phrase)
+            utt.voice = AVSpeechSynthesisVoice(language: nil)
+            speechSynth.speak(utt)
+            Log.line("dispatch: speakTitle ok "
+                     + "(\(phrase.count) chars) → id=\(id)")
+            return true
         }
+    }
+
+    /// `.copyURL` body — extracted to keep the `act(...)` switch
+    /// readable. `kAXURLAttribute` returns NSURL on most apps,
+    /// NSString on a few; handle both, dropping nil / empty values
+    /// loudly so the chord doesn't silently no-op.
+    private func dispatchCopyURL(
+        _ elt: AXUIElement, id: String
+    ) -> Bool {
+        let raw = copyAttribute(elt, kAXURLAttribute)
+        let urlStr: String?
+        if let url = raw as? URL {
+            urlStr = url.absoluteString
+        } else if let s = raw as? String {
+            urlStr = s
+        } else {
+            urlStr = nil
+        }
+        guard let s = urlStr, !s.isEmpty else {
+            Log.line("dispatch: copyURL no kAXURLAttribute → id=\(id)")
+            return false
+        }
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(s, forType: .string)
+        Log.line("dispatch: copyURL ok (\(s.count) chars) → id=\(id)")
+        return true
+    }
+
+    /// `.revealInFinder` body — only fires on `file://` URLs.
+    /// Other schemes (`https://` links etc.) log + return false
+    /// rather than open in a browser (`.press` already does that).
+    private func dispatchRevealInFinder(
+        _ elt: AXUIElement, id: String
+    ) -> Bool {
+        let raw = copyAttribute(elt, kAXURLAttribute)
+        let url: URL?
+        if let u = raw as? URL {
+            url = u
+        } else if let s = raw as? String {
+            url = URL(string: s)
+        } else {
+            url = nil
+        }
+        guard let u = url, u.isFileURL else {
+            Log.line("dispatch: revealInFinder no file URL → id=\(id)")
+            return false
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([u])
+        Log.line("dispatch: revealInFinder ok → \(u.path)")
+        return true
     }
 
     /// Raise `window` + bring its owning app to the front. The id
@@ -820,13 +917,16 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         switch action {
         case .press, .pressContinuous:
             return typeUnicodeString(glyph, id: id)
-        case .copyTitle:
+        case .copyTitle, .copyURL:
+            // Both copy-like actions land on the same pasteboard
+            // write for emoji — there's no separate "URL" concept.
+            // `.copyURL` arrives via chord `,u`; treat it as copy.
             let pb = NSPasteboard.general
             pb.clearContents()
             pb.setString(glyph, forType: .string)
             Log.line("dispatch: emoji copy → \(id)")
             return true
-        case .rightClick, .focus:
+        case .rightClick, .focus, .revealInFinder, .speakTitle:
             Log.line("dispatch: emoji unsupported action "
                      + "\(action.rawValue) → \(id)")
             return false

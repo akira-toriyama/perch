@@ -208,6 +208,30 @@ Logic, システム設定のサイドバー…)向け。要素の表示タイト
 なのに対し、`--windows` は **名前で特定ウィンドウを 1 キー + 数字
 1 打** で開ける。
 
+### Chord-suffix アクションモード
+
+modifier ベースのアクションマップに対する vim 風の代替
+（issue #57）。bare resolve（修飾キーなし）後、perch が
+press を一時的に保留して chord suffix に振り替えられる:
+
+| Chord | アクション |
+|---|---|
+| `,c` | タイトルをコピー（`Cmd+<label>` と等価）|
+| `,o` | Finder で表示（file-URL 要素のみ）|
+| `,u` | URL をコピー（リンク / file 要素）|
+| `,s` | `AVSpeechSynthesizer` でタイトル読み上げ |
+
+デフォルトは **オフ** — opt-in は `config.toml` に
+`[chord].leader = ","` を設定。chord モード有効時:
+
+- `<label>` 単体は `timeout-ms`（既定 600ms）経過後に
+  `.press` 発火 — 微妙な遅延以外は変化なし。
+- `<label>,c|o|u|s` で chord アクション発火。
+- chord wait 中の `Esc` は press 自体をキャンセル。
+- `Cmd+<label>` / `Shift+<label>` / `Alt+<label>` /
+  `Cmd+Shift+<label>` は従来通り動作 — chord は modifier の
+  **代替**であって置き換えではない。
+
 ### 絵文字ピッカー
 
 `perch --emoji` は `--search` の派生で、対象は

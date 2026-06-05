@@ -183,9 +183,12 @@ public final class ScrollMode {
     }
 
     /// Resolve the pending count, log the motion, and clear the
-    /// buffer. Returns the value to multiply the motion by.
+    /// buffer. Returns the value to multiply the motion by; `gg`
+    /// and `G` call it for the log + buffer-clear side effects
+    /// and ignore the value (hence `@discardableResult`).
     /// Always >= 1 (a parsed `0` shouldn't ever land here because
     /// the bare-zero guard in `handle` rejects it).
+    @discardableResult
     private func consumeCount(for label: String) -> Int {
         let parsed = Int(countBuf) ?? 1
         let n = max(1, min(parsed, Self.maxCount))
