@@ -58,6 +58,13 @@ enum PerchApp {
                                       Cmd → warp only). Use when hint
                                       mode can't see the target (canvas,
                                       Photoshop, custom UI).
+          perch --rgrid               enter recursive grid — each label
+                                      pick subdivides the chosen cell
+                                      up to [grid].max-depth levels
+                                      (default 3). Space / Enter at any
+                                      level clicks the current cell
+                                      center; Backspace pops one level.
+                                      Pixel-precision drill-down.
           perch --cancel              dismiss the overlay if showing
           perch --reload              re-read ~/.config/perch/config.toml
           perch --status              print active hotkey, alphabet, last event
@@ -117,7 +124,8 @@ enum PerchApp {
             "--help", "--validate", "--doctor",
             "--dump-ax", "--dump-ax-tree", "--dump-regions",
             "--activate", "--cancel", "--scroll", "--search",
-            "--regional", "--menu", "--windows", "--emoji", "--grid",
+            "--regional", "--menu", "--windows", "--emoji",
+            "--grid", "--rgrid",
             "--reload", "--quit", "--status",
         ]
         for a in argv where !recognised.contains(a) {
@@ -162,6 +170,7 @@ enum PerchApp {
         if argv.contains("--windows")  { runClient(cmd: "windows") }
         if argv.contains("--emoji")    { runClient(cmd: "emoji") }
         if argv.contains("--grid")     { runClient(cmd: "grid") }
+        if argv.contains("--rgrid")    { runClient(cmd: "rgrid") }
         if argv.contains("--cancel")   { runClient(cmd: "cancel") }
         if argv.contains("--reload")   { runClient(cmd: "reload") }
         if argv.contains("--quit")     { runClient(cmd: "quit") }

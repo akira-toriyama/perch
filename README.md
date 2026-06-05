@@ -114,7 +114,8 @@ watches the file for changes when running as a daemon).
 | `--windows` | client | enter cross-app window switcher — fuzzy-match every window across every running app; `1-9` raises the window and activates its owning app |
 | `--emoji` | client | enter emoji picker — fuzzy-match a curated emoji table by name; `1-9` types the glyph at the caret (Unicode injection — no pasteboard write) |
 | `--grid` | client | enter coordinate grid — divide the screen into labeled cells, type a label to warp the cursor + left-click via synthetic `CGEvent` (AX-bypass fallback for Figma canvas / Photoshop / custom-drawn UI) |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid) |
+| `--rgrid` | client | enter recursive grid — each label drills into the chosen cell up to `[grid].max-depth` levels (default 3, ≈ pixel precision on 4K). `space` clicks at current cell center; `Backspace` pops one level |
+| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid) |
 | `--reload` | client | tell running daemon to re-read config |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
@@ -230,8 +231,18 @@ for reaching AX-invisible UI. Hint mode (`shift+space` /
 `--activate`) remains the snappy, no-cursor-jump default; reach
 for `--grid` only when hint mode can't help.
 
-For pixel-precise targeting, recursive grid (`--rgrid`,
-roadmap M4-β) drills down through the chosen cell — coming soon.
+For pixel-precise targeting, **recursive grid** (`perch --rgrid`)
+drills into the picked cell instead of clicking immediately, up
+to `[grid].max-depth` levels (default 3). On a 4K display three
+drills lands the cursor inside a ~5px region.
+
+| Key | Effect (in `--rgrid`) |
+|---|---|
+| `<label>` | drill into the chosen cell (until depth budget runs out, then click) |
+| `space` / `Enter` | "good enough, click here" — terminal click at the current cell center |
+| `Backspace` | pop one level (return to parent grid) |
+| `Shift` / `Cmd` / `Cmd+Shift` modifiers | same action mapping as `--grid` — applied at click time |
+| `esc` | exit silently |
 
 ### Window switcher
 
