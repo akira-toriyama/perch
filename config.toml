@@ -161,13 +161,19 @@ show-shortcuts = true
 # `--regional`); search / menu / grid modes are unaffected.
 peek-key = "space"
 
-# When true, hint pills display a small ⌃⌥⇧⌘ glyph in their
-# top-right corner reflecting whatever modifiers the user is
-# CURRENTLY holding. Confirms the action mode that will fire on
-# resolve (Cmd → copyTitle, Shift → rightClick, Alt → focus,
-# Cmd+Shift → pressContinuous) without having to remember the
-# mapping. False (default) keeps pills clean.
-show-modifier-badge = false
+# Modifier-key badge — when a modifier is held during hint mode,
+# decorate each pill's top-right corner so the user reads the
+# action that will fire on resolve without having to remember the
+# Cmd/Shift/Alt mapping.
+#
+#   "off"     — no badge (default — keeps pills clean).
+#   "glyph"   — show ⌃⌥⇧⌘ glyph only.
+#   "action"  — show glyph + verb: "⌘ Copy", "⇧ Right", "⌥ Focus",
+#               "⌘⇧ Chain". Highest legibility, slightly wider badge.
+#
+# Back-compat: `true` and `false` still parse (→ "glyph" / "off")
+# so older configs keep working.
+show-modifier-badge = "off"
 
 
 # ---- Overlay effects ---------------------------------------------
@@ -426,7 +432,17 @@ min-size = 6
 # falls through to the global `[behavior]` value (a section with
 # just `min-size` does NOT erase the global `roles` list).
 #
-# Supported keys: `roles`, `min-size`, `auto-click-on-unique`.
+# Supported keys:
+#   AX walk knobs:
+#     `roles`                — role allow-list override
+#     `min-size`             — frame-size floor override
+#     `auto-click-on-unique` — flag override
+#   Effect-channel overrides (silence/swap effects per app):
+#     `appear-effect`        — overrides [overlay.effect].appear
+#     `match-effect`         — overrides [overlay.effect].match
+#     `unmatch-effect`       — overrides [overlay.effect].unmatch
+#     `narrow-effect`        — overrides [overlay.effect].narrow
+#   All effect kinds use the same vocabulary as the global keys.
 #
 # Examples (commented — uncomment + edit to opt in):
 # [behavior."com.google.Chrome"]
@@ -438,6 +454,12 @@ min-size = 6
 #
 # [behavior."com.apple.dt.Xcode"]
 # min-size = 12                     # Xcode toolbar density
+#
+# [behavior."com.figma.Desktop"]
+# match-effect   = "none"            # Silence flashy match-effect inside
+# appear-effect  = "none"            #   Figma so the canvas stays calm
+# unmatch-effect = "none"            #   even with a wild global config
+# narrow-effect  = "none"
 
 
 # ---- Chord-suffix action mode ------------------------------------

@@ -47,6 +47,39 @@ final class OverlayCanvas: NSView {
     private let particleDriver: ParticleDriver
     private let ghostDriver: GhostDriver
     private var pills: [PillLayout] = []
+
+    /// Bundle id of the app the controller resolved as frontmost
+    /// when hint mode entered. Used by `effectiveAppearEffect` /
+    /// `effectiveMatchEffect` / ... lookups so a per-app override
+    /// (e.g. `[behavior."com.figma.Desktop"] match-effect = "none"`)
+    /// wins over the global default. nil for app-agnostic modes
+    /// (grid / search) — lookups then return the global default.
+    var activeBundleID: String?
+
+    /// Per-app overlay-effect lookups. Each consults
+    /// `behavior.perApp[bundleID]` first and falls back to the
+    /// global `[overlay.effect]` knob. Used by every effect-firing
+    /// site so per-app overrides land transparently.
+    func effectiveAppear() -> AppearEffect {
+        config.behavior.effectiveAppearEffect(
+            for: activeBundleID,
+            fallback: config.effect.appear)
+    }
+    func effectiveMatch() -> MatchEffect {
+        config.behavior.effectiveMatchEffect(
+            for: activeBundleID,
+            fallback: config.effect.match)
+    }
+    func effectiveUnmatch() -> UnmatchEffect {
+        config.behavior.effectiveUnmatchEffect(
+            for: activeBundleID,
+            fallback: config.effect.unmatch)
+    }
+    func effectiveNarrow() -> MatchEffect {
+        config.behavior.effectiveNarrowEffect(
+            for: activeBundleID,
+            fallback: config.effect.narrow)
+    }
     private var typed: String = ""
     private var state: VisualState = .idle
     private var appearedAt: TimeInterval?
@@ -147,7 +180,7 @@ final class OverlayCanvas: NSView {
         var eliminated: [(Hint, CGRect)] = []
         if !firstFrame,
            config.overlay.animEnabled,
-           config.effect.narrow != .none {
+           effectiveNarrow() != .none {
             let newKeys = Set(hints.map { $0.keys })
             for old in pills where !newKeys.contains(old.hint.keys) {
                 eliminated.append((old.hint, old.rect))
@@ -157,7 +190,7 @@ final class OverlayCanvas: NSView {
         self.typed = typed
         self.state = .idle
         let kind = config.overlay.animEnabled
-            ? config.effect.appear.resolvingRandom() : .none
+            ? effectiveAppear().resolvingRandom() : .none
         pills = hints.enumerated().map { idx, h in
             // Cascade staggers entrance by pill index — 30ms per
             // pill is enough to read as "wave" without the last
@@ -598,7 +631,7 @@ final class OverlayCanvas: NSView {
     /// applies the `narrow` effect kind from config + the scaled
     /// per-ghost duration; the driver handles simulation.
     private func spawnGhosts(_ eliminated: [(Hint, CGRect)]) {
-        let resolved = config.effect.narrow.resolvingRandom()
+        let resolved = effectiveNarrow().resolvingRandom()
         ghostDriver.spawn(
             eliminated: eliminated,
             kind: resolved,
@@ -729,7 +762,7 @@ final class OverlayCanvas: NSView {
     private func layoutPills() {
         // Compute per-pill appear state for this tick.
         let kind = config.overlay.animEnabled
-            ? config.effect.appear.resolvingRandom() : .none
+            ? effectiveAppear().resolvingRandom() : .none
         let now = CACurrentMediaTime()
         var anyInFlight = false
         for i in pills.indices {

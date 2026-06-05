@@ -172,6 +172,9 @@ public final class OverlayWindow {
         self.onResolve = onResolve
         self.onCancel = onCancel
         self.activeBundleID = bundleID
+        // Forward to the canvas so its `effective*` lookups can
+        // resolve per-app effect overrides for this session.
+        canvas.activeBundleID = bundleID
 
         // Re-evaluate the screen union every show() so a display
         // disconnect / reconnect between shows is reflected.
@@ -375,12 +378,13 @@ public final class OverlayWindow {
         // latency is what they care about) but DON'T tear down the
         // overlay until the animation completes. The KeyTap stays
         // installed until hide() so the user can't snag stray keys.
-        if config.overlay.animEnabled, config.effect.match != .none {
+        let matchKind = canvas.effectiveMatch()
+        if config.overlay.animEnabled, matchKind != .none {
             cb?(hint, action)
             self.onResolve = nil
             canvas.animateMatch(
                 winning: hint,
-                kind: config.effect.match,
+                kind: matchKind,
                 intensity: config.effect.intensity
             ) { [weak self] in
                 self?.hide()
@@ -492,12 +496,13 @@ public final class OverlayWindow {
                  + "→ \(hint.keys)")
         sound?.playMatch()
         let cb = onResolve
-        if config.overlay.animEnabled, config.effect.match != .none {
+        let matchKind = canvas.effectiveMatch()
+        if config.overlay.animEnabled, matchKind != .none {
             cb?(hint, action)
             self.onResolve = nil
             canvas.animateMatch(
                 winning: hint,
-                kind: config.effect.match,
+                kind: matchKind,
                 intensity: config.effect.intensity
             ) { [weak self] in
                 self?.hide()
@@ -561,7 +566,7 @@ public final class OverlayWindow {
         }
         canvas.flashMiss(typed: typed)
         canvas.animateUnmatch(
-            kind: config.effect.unmatch,
+            kind: canvas.effectiveUnmatch(),
             intensity: config.effect.intensity
         ) { [weak self] in
             self?.hide()
