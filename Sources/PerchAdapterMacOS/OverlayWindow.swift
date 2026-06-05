@@ -79,6 +79,11 @@ public final class OverlayWindow {
         "o": .revealInFinder,
         "u": .copyURL,
         "s": .speakTitle,
+        // M4-ε (#70): synthetic modifier-clicks. `m` for Cmd
+        // (mnemonic: ⌘ = "command"), `h` for Shift (s already
+        // means speakTitle; h is the home-row index finger).
+        "m": .synthCmdClick,
+        "h": .synthShiftClick,
     ]
 
     public init(config: PerchConfig) {

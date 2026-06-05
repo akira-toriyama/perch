@@ -308,6 +308,8 @@ press を一時的に保留して chord suffix に振り替えられる:
 | `,o` | Finder で表示（file-URL 要素のみ）|
 | `,u` | URL をコピー（リンク / file 要素）|
 | `,s` | `AVSpeechSynthesizer` でタイトル読み上げ |
+| `,m` | 合成 **Cmd-click**（リンクを新タブで開く等）|
+| `,h` | 合成 **Shift-click**（multi-select リスト / テキスト範囲拡張）|
 
 デフォルトは **オフ** — opt-in は `config.toml` に
 `[chord].leader = ","` を設定。chord モード有効時:
@@ -319,6 +321,11 @@ press を一時的に保留して chord suffix に振り替えられる:
 - `Cmd+<label>` / `Shift+<label>` / `Alt+<label>` /
   `Cmd+Shift+<label>` は従来通り動作 — chord は modifier の
   **代替**であって置き換えではない。
+
+`,m` / `,h` (M4-ε) は AX-bypass carve-out 経路 — カーソルが
+要素にジャンプし、`CGEvent` で modifier フラグ付きクリックを
+発火。`AXPress` は modifier を honor しないので「Cmd-click で
+リンクを新タブで開く」は hint mode からこれ以外に到達できない。
 
 ### 絵文字ピッカー
 

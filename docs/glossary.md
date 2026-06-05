@@ -237,13 +237,20 @@ visible でないコマンド（Safari の `Develop > Empty Caches` 等）に ke
 - **Don't call it:** menu launcher, command palette, コマンドパレット
 
 ### chord-suffix action mode
-issue #57。bare-resolve（修飾キーなし）後に **modifier 不要の代替
-action 選択**を提供する OverlayWindow の state machine。`[chord].leader`
-（既定空 = OFF）が non-empty のとき有効化。`<leader><action-char>`
-2 phase: `c` copyTitle / `o` revealInFinder / `u` copyURL /
-`s` speakTitle。各 phase は `[chord].timeout-ms`（既定 600ms）で
-fallback to `.press`。`Esc` で press 自体を中止。修飾キー系
-（Cmd / Shift / Alt / Cmd+Shift）は影響を受けず従来通り。
+issue #57 + issue #70。bare-resolve（修飾キーなし）後に
+**modifier 不要の代替 action 選択**を提供する OverlayWindow の
+state machine。`[chord].leader`（既定空 = OFF）が non-empty の
+とき有効化。`<leader><action-char>` 2 phase。
+
+action-char マッピング:
+- `c` copyTitle / `o` revealInFinder / `u` copyURL / `s` speakTitle (#57)
+- `m` synthCmdClick / `h` synthShiftClick (#70 / M4-ε)
+
+各 phase は `[chord].timeout-ms`（既定 600ms）で fallback to
+`.press`。`Esc` で press 自体を中止。修飾キー系（Cmd / Shift /
+Alt / Cmd+Shift）は影響を受けず従来通り。`m` / `h` は AX-bypass
+carve-out（`CGEvent` で modifier フラグ付きクリック、カーソル
+ジャンプあり）。
 - **Don't call it:** keyboard chord, chord input, コード入力（一般名は可）
 
 ### AX shortcut annotation
