@@ -188,7 +188,8 @@ UI フィードバック。
 ### theme palette
 [[pill]] の bg / accent / text / miss flash 色 + フォント種別を 1 タプルで
 表現するパレット (`ThemePalette`)。21 ビルトイン + ユーザー定義
-(`[overlay.theme.<name>]`) に対応。facet の `[overlay] theme` 語彙互換。
+(`[overlay.themes.<name>]` — 詳細は [[custom palette]]) に対応。facet の
+`[overlay].theme` 語彙互換。
 - 場所: [`Sources/PerchCore/Theme.swift`](../Sources/PerchCore/Theme.swift)
 - 設定: `[overlay].theme`
 - **Don't call it:** colorway, skin, color theme
