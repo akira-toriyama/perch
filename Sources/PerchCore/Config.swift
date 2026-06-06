@@ -441,6 +441,33 @@ public struct PerchConfig: Sendable {
         self.search = search
     }
 
+    /// Return a copy of this config with `overlay.theme` (and
+    /// optionally `overlay.customThemeName`) replaced. Used by the
+    /// `--theme=<name>` session override so the Controller doesn't
+    /// have to hand-construct a full PerchConfig with one field
+    /// changed. Every other field carries over unchanged.
+    public func withTheme(
+        _ theme: Theme, customName: String?
+    ) -> PerchConfig {
+        let newOverlay = OverlayConfig(
+            theme: theme,
+            accent: overlay.accent,
+            pillShape: overlay.pillShape,
+            fontSize: overlay.fontSize,
+            blurEnabled: overlay.blurEnabled,
+            animEnabled: overlay.animEnabled,
+            showShortcuts: overlay.showShortcuts,
+            peekKey: overlay.peekKey,
+            modifierBadge: overlay.modifierBadge,
+            customPalettes: overlay.customPalettes,
+            customThemeName: customName)
+        return PerchConfig(
+            hotkey: hotkey, labels: labels, overlay: newOverlay,
+            effect: effect, border: border, sound: sound,
+            behavior: behavior, regional: regional, grid: grid,
+            chord: chord, search: search)
+    }
+
     // MARK: - Constants
 
     /// Resolved path of the user's config file.
@@ -578,19 +605,24 @@ public struct PerchConfig: Sendable {
         let peekKey = (doc["overlay"]?["peek-key"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             ?? "space"
-        // show-modifier-badge accepts:
-        //   bool (true → .glyph, false → .off — back-compat)
-        //   string ("off" / "glyph" / "action" / "true" / "false")
-        // Unknown / unset → .off.
-        let badge: ModifierBadgeStyle = {
-            if let s = doc["overlay"]?["show-modifier-badge"]?.asString {
-                return ModifierBadgeStyle.parse(s) ?? .off
-            }
-            if let b = doc["overlay"]?["show-modifier-badge"]?.asBool {
-                return b ? .glyph : .off
-            }
-            return .off
-        }()
+        // show-modifier-badge is a string enum: "off" / "glyph" /
+        // "action". The PR #92 transitional bool support ("true" →
+        // .glyph) is gone — config edited after PR #96 must use the
+        // string form. The string parser still accepts "true" /
+        // "false" / "yes" / "no" (case-insensitive) for the people
+        // who carry over old bool literals, but a raw TOML bool
+        // (no quotes) now silently lands on .off + a warning.
+        let badge: ModifierBadgeStyle
+        if let s = doc["overlay"]?["show-modifier-badge"]?.asString {
+            badge = ModifierBadgeStyle.parse(s) ?? .off
+        } else if doc["overlay"]?["show-modifier-badge"]?.asBool != nil {
+            Log.line("config: show-modifier-badge — bare bool no longer "
+                     + "supported; use \"off\" / \"glyph\" / \"action\". "
+                     + "Falling back to \"off\".")
+            badge = .off
+        } else {
+            badge = .off
+        }
         return OverlayConfig(
             theme: theme, accent: accent, pillShape: shape,
             fontSize: size, blurEnabled: blur, animEnabled: anim,
@@ -616,6 +648,18 @@ public struct PerchConfig: Sendable {
         // both a string AND a table parent. `themes` is a separate
         // key path with no such conflict.
         let prefix = "overlay.themes."
+        // Warn anyone still using the pre-PR #95 singular form so
+        // they don't silently lose their custom palette to the
+        // typo-tolerance fallthrough.
+        let deprecatedPrefix = "overlay.theme."
+        for rawKey in doc.keys
+            where rawKey.hasPrefix(deprecatedPrefix)
+            && !rawKey.hasPrefix(prefix) {
+            let name = String(rawKey.dropFirst(deprecatedPrefix.count))
+            Log.line("config: [overlay.theme.\(name)] is deprecated — "
+                     + "rename to [overlay.themes.\(name)] (plural). "
+                     + "The singular form is silently ignored.")
+        }
         // Names reserved by built-in themes / sentinels — silently
         // ignored if the user shadows them, since the catalog
         // would never see the custom palette.
@@ -684,6 +728,17 @@ public struct PerchConfig: Sendable {
             .flatMap(UnmatchEffect.parse) ?? .none
         let narrow = (eff?["narrow"]?.asString)
             .flatMap(MatchEffect.parse) ?? .none
+        // Particle kinds in the narrow context fall through to .fade
+        // at runtime (`GhostDriver.spawn`) — warn the user once at
+        // parse-time so they know the dispatch differs from what
+        // they wrote, instead of debugging a missing burst later.
+        if narrow == .fireworks || narrow == .confetti {
+            Log.line("config: [overlay.effect].narrow = "
+                     + "\"\(narrow.rawValue)\" downgrades to "
+                     + "\"fade\" at runtime — per-pill particle "
+                     + "bursts on a dense hint set would emit "
+                     + "hundreds of simultaneous particles.")
+        }
         let intensity = (eff?["intensity"]?.asString)
             .flatMap(EffectIntensity.parse) ?? .normal
         let durScale: Double = {

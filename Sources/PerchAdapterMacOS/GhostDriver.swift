@@ -39,6 +39,9 @@ final class GhostDriver {
         intensity: EffectIntensity,
         duration: TimeInterval
     ) {
+        // Particle kinds (fireworks / confetti) downgrade to .fade
+        // for the narrow context — see Config.parseEffect for the
+        // user-facing warning. Per-event logging would spam.
         let safe: MatchEffect =
             (kind == .fireworks || kind == .confetti) ? .fade : kind
         guard safe != .none, safe != .random else { return }

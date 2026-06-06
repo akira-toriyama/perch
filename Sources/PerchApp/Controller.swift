@@ -88,6 +88,13 @@ final class Controller {
     /// completes (same lifecycle as `hotkey`).
     private var configWatcher: ConfigWatcher?
 
+    /// `perch --theme=<name>` session override. When non-nil,
+    /// `effectiveConfig()` swaps in this theme (built-in or custom
+    /// palette name) — applied to all activations until `--reload`
+    /// or `--theme=` (empty) clears it. Cleared on reload so the
+    /// user's expectation of "reload = clean slate" holds.
+    private var themeOverride: String?
+
     init(config: PerchConfig) {
         self.config = config
         self.source = AXUIElementSource(config: config)
@@ -135,13 +142,57 @@ final class Controller {
         let new = PerchConfig.load()
         let hotkeyChanged = new.hotkey.active != config.hotkey.active
         config = new
-        source.updateConfig(new)
-        overlay.updateConfig(new)
-        sound.updateConfig(new)
+        // Reload = clean slate. A live `--theme=` override doesn't
+        // survive a config reload — matches the "reload resets state"
+        // user expectation, and prevents the surprising scenario of
+        // editing `theme = "hacker"` in the file and not seeing
+        // hacker take effect because an old override still wins.
+        themeOverride = nil
+        let eff = effectiveConfig()
+        source.updateConfig(eff)
+        overlay.updateConfig(eff)
+        sound.updateConfig(eff)
         if hotkeyChanged {
             hotkey?.install(combo: new.hotkey.active)
         }
         writeStatus(reason: "reload")
+    }
+
+    /// Set / clear the runtime theme override. Empty `name` clears.
+    /// Resolves the override (built-in or custom palette name) and
+    /// pushes the modified config to source / overlay / sound so
+    /// the next activation paints with the new theme.
+    private func applyThemeOverride(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces).lowercased()
+        themeOverride = trimmed.isEmpty ? nil : trimmed
+        let eff = effectiveConfig()
+        source.updateConfig(eff)
+        overlay.updateConfig(eff)
+        sound.updateConfig(eff)
+        if let t = themeOverride {
+            writeStatus(reason: "theme override → \(t)")
+        } else {
+            writeStatus(reason: "theme override cleared")
+        }
+    }
+
+    /// Apply `themeOverride` (when set) on top of `config`, returning
+    /// the snapshot the adapter layer should see. When the override
+    /// matches a custom palette name, the override wins by setting
+    /// `overlay.customThemeName`; otherwise it tries the built-in
+    /// `Theme.parse` path. Unknown names log + return config as-is.
+    private func effectiveConfig() -> PerchConfig {
+        guard let override = themeOverride else { return config }
+        if config.overlay.customPalettes[override] != nil {
+            return config.withTheme(.system, customName: override)
+        }
+        if let theme = Theme.parse(override) {
+            return config.withTheme(theme, customName: nil)
+        }
+        Log.line("controller: --theme=\"\(override)\" — no matching "
+                 + "built-in or [overlay.themes.\(override)] palette; "
+                 + "ignoring.")
+        return config
     }
 
     // MARK: - Hot flow
@@ -717,6 +768,10 @@ final class Controller {
                     // = true` past its own lifetime (#33).
                     self.source.clearRendererWake()
                     exit(0)
+                case let s where s.hasPrefix("theme:"):
+                    let name = String(s.dropFirst("theme:".count))
+                    Log.line("controller: --theme=\(name) received")
+                    self.applyThemeOverride(name)
                 default:
                     Log.line("controller: unknown ipc command \"\(cmd)\"")
                 }
