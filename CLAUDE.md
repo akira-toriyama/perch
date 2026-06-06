@@ -59,12 +59,18 @@ facet / ws-tabs.
 ### Layer rules (the spine of the project)
 
 - **3 layers are non-negotiable**: `PerchCore` is pure logic
-  (CoreGraphics OK, NO AppKit / NO AX / NO Carbon).
-  `PerchAdapterMacOS` wraps the OS (AX enumeration, Carbon
-  RegisterEventHotKey, NSPanel overlay, AXPress) and is the
-  *only* place those types appear. `PerchAdapterTest` is the
-  synthetic counterpart for end-to-end labeling tests.
-  Crossing layers always means there's a missing protocol.
+  (CoreGraphics OK, NO AppKit / NO AX / NO Carbon). Today that
+  includes `Config` (the typed view of `~/.config/perch/config.toml`),
+  `Theme` (palette catalog + ThemePalette + PillShape +
+  AppearEffect / MatchEffect / UnmatchEffect / BorderEffect /
+  EffectIntensity / ModifierBadgeStyle / ThemeFont), `Labeler`,
+  `TOML`, `Models`, `UIElementSource`, `SearchFilter`,
+  `EmojiTable`, `Log`. `PerchAdapterMacOS` wraps the OS (AX
+  enumeration, Carbon RegisterEventHotKey, NSPanel overlay,
+  AXPress, NSSound) and is the *only* place those types appear.
+  `PerchAdapterTest` is the synthetic counterpart for end-to-end
+  labeling tests. Crossing layers always means there's a
+  missing protocol.
 - **`UIElementSource` is the seam**:
   [Sources/PerchCore/UIElementSource.swift](Sources/PerchCore/UIElementSource.swift)
   declares the protocol; the Controller only ever sees
@@ -139,6 +145,22 @@ frontmost app's focused window**. The seam is captured at
   rather than rejecting. A typo can never break hint mode — the
   key with the typo silently uses the default. `perch --validate`
   is the explicit verification path.
+- **`PerchConfig` is grouped into 11 sub-structs** (PR #89):
+  `hotkey` / `labels` / `overlay` / `effect` / `border` / `sound`
+  / `behavior` / `regional` / `grid` / `chord` / `search` — 1:1
+  with TOML sections. Every accessor goes through one of them
+  (e.g. `config.effect.match`, `config.behavior.effectiveRoles(...)`,
+  `config.grid.maxDepth`). The flat layout was retired after the
+  synthesized memberwise-init kept tripping argument-order bugs at
+  40+ fields. Each sub-struct has an explicit `public init` so
+  field order is no longer load-bearing.
+- **`~/.config/perch/config.toml` is watched live** via
+  `DispatchSourceFileSystemObject` in
+  [`Sources/PerchApp/ConfigWatcher.swift`](Sources/PerchApp/ConfigWatcher.swift)
+  (PR #86). Edits to the file fire `Controller.reload(cause: "fs")`
+  with a 150ms debounce + atomic-rename re-open. `perch --reload`
+  IPC still works as the explicit path. Don't bypass the watcher
+  for "convenience" — `--reload` is the manual override.
 
 ### TOML parser
 
@@ -219,28 +241,76 @@ frontmost app's focused window**. The seam is captured at
   simulation state and tick loop. Add new particle-style effects
   by extending `ParticleDriver` or creating a sibling, not by
   growing OverlayCanvas.
-- **Pill style**: 10pt corner radius via
+- **Pill style baseline**: 10pt corner radius via
   `NSBezierPath(roundedRect:xRadius:yRadius:)` (not layer-level
   `cornerRadius`, which clips poorly under HiDPI scaling). 1pt
   accent-tinted hairline border (α=0.55) for idle; 2pt accent
   border + `NSShadow` glow (blur 7pt, accent α=0.5) for matched
-  pills once the user starts typing. Monospaced semibold 15pt,
-  12 × 9pt padding, drop shadow under every pill for the
-  "floating card" feel.
-- **Scale-in animation**: 150ms `0.85 → 1.0`, ease-out cubic
-  (`1 - pow(1-p, 3)`). Re-layouts every 1/60s while elapsed
-  < 150ms so the blur mask scales in lockstep with the painter
-  — otherwise the frost briefly extends past the visible pill
-  border. Opt-out via `[overlay].anim-enabled = false`.
-- **Miss flash**: a keypress that matches no label is held in
-  `typed` so the user sees which letter went unmatched, then
-  the overlay flashes red for 200ms before dismissing. Drives
-  `flashThenCancel` in OverlayWindow. Same opt-out knob as
-  scale-in.
-- **Accent colour**: `[overlay].accent` accepts `"system"` (the
-  user's macOS accent — `NSColor.controlAccentColor`) or a
-  `#rrggbb` literal. Anything else falls back to `"system"`
-  silently per the typo-tolerance policy.
+  pills. **Font / padding / shape now flex** under the visual
+  surface added in PR #86-93:
+  - **Font**: `[overlay].font-size` (clamped 8..32, default 15)
+    in the family `[overlay].theme.palette().font` picks (mono /
+    rounded / system).
+  - **Shape**: `[overlay].pill-shape` (`pill` / `square` /
+    `circle` / `underline` / `tag`) — body path resolved in
+    `HintPainter.shapeFor(cfg:hint:rect:)`. `.underline`
+    suppresses the body entirely.
+  - **Palette**: `[overlay].theme` selects from 21 built-ins +
+    `[overlay.themes.<name>]` custom palettes. The default
+    `.system` keeps `NSColor.controlAccentColor` + dark pill
+    tint (historical look). `[overlay].accent` overrides the
+    palette accent so users can layer a personal highlight on
+    any theme body. See [docs/glossary.md](docs/glossary.md) →
+    "theme palette" / "custom palette" / "pill shape".
+- **Effect channels** (PR #86 / #87 / #93): 4 directions share
+  one kind vocabulary (none / fade / explode / drop / rise /
+  slide-* / vibrate / fireworks / confetti / random):
+  - `[overlay.effect].appear` — entrance (default `pop` = the
+    historical 150ms `0.85 → 1.0` scale-in).
+  - `[overlay.effect].match` — winning pill on resolve.
+    AXPress fires in parallel so click latency is unchanged.
+  - `[overlay.effect].unmatch` — layered on the 200ms red flash.
+  - `[overlay.effect].narrow` — per-pill exit when typed-prefix
+    filters a pill out (PR #93). `.fireworks` / `.confetti`
+    silently downgrade to `.fade` here (per-pill particle bursts
+    on a dense set would emit hundreds simultaneously).
+  - `intensity` (subtle/normal/bold/wild) scales amplitude;
+    `duration-scale` (0.1..5.0) scales tempo. The "150ms" /
+    "200ms" timings are baselines — both multiply through.
+  - Particle drivers live in
+    [`Sources/PerchAdapterMacOS/ParticleDriver.swift`](Sources/PerchAdapterMacOS/ParticleDriver.swift)
+    and
+    [`Sources/PerchAdapterMacOS/GhostDriver.swift`](Sources/PerchAdapterMacOS/GhostDriver.swift),
+    extracted out of OverlayCanvas in PR #90.
+- **Per-app effect overrides** (PR #92):
+  `[behavior."<bundle>"]` accepts `appear-effect` /
+  `match-effect` / `unmatch-effect` / `narrow-effect` in
+  addition to the AX-walk knobs. `BehaviorConfig.effective*(for:
+  fallback:)` resolvers consult per-app first then fall through
+  to the global `[overlay.effect]`. OverlayCanvas reads them via
+  `effectiveAppear()` / `effectiveMatch()` / `effectiveUnmatch()`
+  / `effectiveNarrow()` keyed by `activeBundleID`.
+- **Modifier badge** (PR #92): `[overlay].show-modifier-badge`
+  is a string enum (`"off"` / `"glyph"` / `"action"`), not a
+  bool. PR #96 dropped the bool back-compat — a bare TOML bool
+  now logs + falls back to `"off"`. `"action"` paints `⌘ Copy`
+  / `⇧ Right` / `⌥ Focus` / `⌘⇧ Chain` so the user reads what
+  the resolve will do; `"glyph"` is just `⌃⌥⇧⌘`.
+- **Border neon** (PR #91): `[overlay.border]` (`effect` /
+  `glow` / `width` / `cycle-seconds`). 30Hz hue tick driven by
+  `OverlayCanvas.startBorderCycle` while the overlay is up.
+- **Sound** (PR #91):
+  [`Sources/PerchAdapterMacOS/SoundPlayer.swift`](Sources/PerchAdapterMacOS/SoundPlayer.swift)
+  plays `[overlay.sound].match / unmatch / activate`. Accepts
+  macOS system-sound names OR `~/foo.mp3` paths (tilde-expanded
+  + AVFoundation-decoded — mp3 / m4a / wav / aiff). Empty /
+  `"none"` silences.
+- **Theme override (CLI session)** (PR #96): `perch --theme=<name>`
+  posts a `theme:<name>` IPC; Controller stores
+  `themeOverride: String?` and rebuilds the effective config via
+  `PerchConfig.withTheme(_:customName:)` on every push to source
+  / overlay / sound. Cleared on `--reload` or empty `--theme=`.
+  The one `=value` arg in the CLI surface.
 - **Keyboard capture uses a `KeyTap` (CGEventTap)**, not
   `NSEvent.addLocalMonitorForEvents`. The first attempt at this
   module used the local monitor + a transient
@@ -409,7 +479,8 @@ frontmost app's focused window**. The seam is captured at
 - **Regional mode (issue #34)** is a hint-mode variant, not a
   parallel mode object. `UIElementSource.enumerateRegions()`
   walks the same AX tree with a different `WalkPolicy`
-  (`regionalRoles` allow-list, 200×100 frame floor,
+  (`regionalRoles` allow-list, default 200×100 frame floor —
+  user-tuneable via `[regional].min-width` / `min-height`,
   `requirePress = false`) and `Controller.runHintFlow(…)`
   feeds the result through the existing label / overlay /
   dispatch pipeline. Action-mode modifiers apply unchanged —
@@ -474,19 +545,35 @@ frontmost app's focused window**. The seam is captured at
   fallback** for UIs that hint mode can't see (Figma canvas,
   Photoshop, web `<canvas>`, custom-drawn views). Owns its own
   KeyTap + NSPanel (mirrors `SearchMode` / `ScrollMode`), divides
-  the screen union into `[grid].cols × [grid].rows` cells, and
-  feeds synthetic `UIElement`s (id `"grid:<r>:<c>"`, role
-  `"GridCell"`) through the existing `Labeler.assign(...)` so the
-  alphabet matches hint mode. **Dispatch is `CGEvent` mouse
-  events**, NOT `AXUIElementSource.act(...)` — there's no AX
-  target for a cell. The cursor WILL visibly jump; that's the
-  accepted trade-off (see "Mouse synthesis carve-out" above).
-  Action mapping: bare → left click, Shift → right, Cmd → warp
-  only (for the `--drag` workflow), Cmd+Shift → left click +
-  re-enter for chained operations. **Don't promote grid cells
-  to AX-anchored UIElements** — the whole point is that no AX
+  the screen union into cells, and feeds synthetic `UIElement`s
+  (id `"grid:<r>:<c>"`, role `"GridCell"`) through the existing
+  `Labeler.assign(...)` so the alphabet matches hint mode.
+  **Dispatch is `CGEvent` mouse events**, NOT
+  `AXUIElementSource.act(...)` — there's no AX target for a
+  cell. The cursor WILL visibly jump; that's the accepted
+  trade-off (see "Mouse synthesis carve-out" above). Action
+  mapping: bare → left click, Shift → right, Cmd → warp only
+  (for the `--drag` workflow), Cmd+Shift → left click + re-enter
+  for chained operations. **Don't promote grid cells to
+  AX-anchored UIElements** — the whole point is that no AX
   layer exists; the synthetic id is a marker, not a side-table
   key.
+- **`--grid` vs `--rgrid` density** (PR #87 / #88): `--grid`
+  (single-pass) uses `[grid].cols × [grid].rows` (default 12×8);
+  `--rgrid` (recursive) uses `[grid].recursive-cols × .recursive-rows`
+  (default **3×3**) **at every drill level**. Smaller per-step
+  density keeps each pick a single-letter label. `[grid].max-depth`
+  clamps to **1..10** (raised from 5 in PR #88 so 3×3 has
+  headroom for pixel precision — 3⁷≈2pt cells on 4K, 3¹⁰≈59k
+  cells per axis). Grid mode shares `OverlayCanvas` via
+  `PillPlacement.elementCenter` (PR #87) so it picks up every
+  visual surface (theme / shape / effects / border / sound /
+  modifier-badge) hint mode has.
+- **Hold-to-peek in grid** (PR #87): `[overlay].peek-key`
+  (default `"space"`) also works in `--grid` / `--rgrid`.
+  Space's old "click center at current depth" role moved to
+  `Return` / `KeypadEnter` exclusively so peek doesn't shadow
+  the terminal-click shortcut.
 - **Window switcher (issue #54)** is another `SearchMode`
   variant — same shared `startSearchSession` seam, with
   `enumerateWindows()` walking `NSWorkspace.runningApplications`
@@ -621,11 +708,15 @@ stray instances before relaunching.
 - **Flags**: `--validate` / `--doctor` / `--dump-ax` /
   `--dump-ax-tree` / `--dump-regions` / `--help` (standalone),
   `--activate` / `--scroll` / `--search` / `--regional` /
-  `--menu` / `--cancel` / `--reload` / `--quit` / `--status`
-  (client). There is no `--debug` flag — verbose
-  logging is driven by the `PERCH_DEBUG` env var (see Logging).
-  Any unrecognised flag exits `2` with a stderr message (no
-  silent fallback — facet's *Rule of Repair* discipline).
+  `--menu` / `--windows` / `--emoji` / `--grid` / `--rgrid` /
+  `--nudge` / `--drag` / `--vision` / `--cancel` / `--reload` /
+  `--quit` / `--status` / `--theme=<name>` (client). There is no
+  `--debug` flag — verbose logging is driven by the `PERCH_DEBUG`
+  env var (see Logging). Any unrecognised flag exits `2` with a
+  stderr message (no silent fallback — facet's *Rule of Repair*
+  discipline). **`--theme=<name>` is the lone `=value` flag** —
+  Main.swift's recognition loop branches on it explicitly so the
+  bare-name unknown-flag check doesn't trip.
 - **`--doctor`** reports Accessibility (`AXTrust.isTrusted()`),
   config, daemon liveness, configured hotkey, and alphabet length.
   Exit 1 if AX fails.
