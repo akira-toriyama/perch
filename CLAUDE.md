@@ -145,6 +145,44 @@ frontmost app's focused window**. The seam is captured at
   rather than rejecting. A typo can never break hint mode — the
   key with the typo silently uses the default. `perch --validate`
   is the explicit verification path.
+- **Prefer fully-nested TOML when adding new knobs** — every key
+  should live under a `[section]` header. A top-level scalar mixed
+  with sections looks like an orphan and is the user's stated
+  dislike (memory `user-collaboration-style`):
+
+  ```toml
+  # 好き — everything under a section
+  [foo]
+  color = "red"
+  length = "short"
+
+  [bar]
+  color = "red"
+  size = "xl"
+
+  # 嫌い — top-level scalar floating above sections
+  color = "red"
+  [foo]
+  length = "short"
+  ```
+
+  This is a *want* / *better*, not a *must* — break it when the
+  alternative is clearly worse (a global toggle that has no natural
+  section would be one). The reason the rule is loose: TOML allows
+  the floating form, and forcing a one-key `[global]` section just
+  to satisfy the rule reads as ceremony. When in doubt, group with
+  the closest sibling and prefer one extra section over an orphan.
+- **Breaking config changes are OK when they buy consistency.**
+  The user's repeated stance during the visual-surface wave was
+  "破壊的変更OK / 一貫性の方が重要だから" (see memory
+  `user-collaboration-style`). Examples that landed by breaking:
+  PerchConfig sub-struct refactor (PR #89), `show-modifier-badge`
+  Bool → string enum (PR #92/#96), `[overlay.theme.<name>]` →
+  `[overlay.themes.<name>]` plural (PR #95). The typo-tolerance
+  policy above protects against silent breakage on the OLD key —
+  the renamed key falls back to the default + a `Log.line` warning
+  pointing at the new name, instead of erroring out. Land breaking
+  renames with the warning path in the same PR.
 - **`PerchConfig` is grouped into 11 sub-structs** (PR #89):
   `hotkey` / `labels` / `overlay` / `effect` / `border` / `sound`
   / `behavior` / `regional` / `grid` / `chord` / `search` — 1:1
@@ -743,6 +781,34 @@ stray instances before relaunching.
   so the daemon rewrites a small status file (`statusPath` =
   `/tmp/perch.status`) on start / reload / each hint press, and
   `--status` just reads it.
+- **CLI surface conventions when adding new flags** — same shape
+  as the Configuration rules (memory `user-collaboration-style`):
+  - **Prefer the dominant style.** The current surface is
+    overwhelmingly bare `--<name>`; `--theme=<name>` is the lone
+    `=value` flag and pays for itself by giving the user a
+    one-shot string. Don't introduce a *second* `=value` flag, a
+    `--<verb>-<noun>` style, or a positional argument without a
+    real need. Mode entries are always `--<mode-name>` (no
+    `--enter-<mode>` / `--start-<mode>` ceremony).
+  - **Match the existing family naming.** Diagnostics start with
+    `--dump-` (`--dump-ax` / `--dump-ax-tree` / `--dump-regions`).
+    Mode entries are bare nouns (`--grid` / `--vision`).
+    Daemon-control verbs are bare imperatives (`--reload` /
+    `--quit` / `--cancel`). Pick the matching family before
+    inventing a new prefix.
+  - **Breaking renames are OK when they buy consistency.** Same
+    stance as the config-knob rule (the user's repeated
+    "破壊的変更OK / 一貫性の方が重要だから"). Unrecognised flags
+    exit `2` — there's no typo-tolerance fallback to silently mask
+    a renamed flag — so the rename is loud by default. Land the
+    rename + a short README delta in the same PR, and (if the old
+    name was advertised) keep an alias for one release before
+    dropping it.
+  - **No nested-flag forms** (`--overlay.theme=<name>`,
+    `--effect:appear=<kind>`). The TOML file is the right surface
+    for nested knobs; the CLI is for *modes* + *one-shot session
+    overrides* (`--theme=<name>`). If the urge to nest comes up,
+    add a TOML knob and reload, don't invent CLI namespacing.
 
 ## Conventions
 
