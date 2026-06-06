@@ -209,23 +209,25 @@ ax: de-dup M → N
 — invaluable when triaging "pills outside / over wrong elements"
 reports.
 
-## CLI surface (M1)
+## CLI surface
 
-| Flag | Mode | Purpose |
-|---|---|---|
-| *(none)* | server | run the daemon (hotkey loop) |
-| `--validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
-| `--doctor` | standalone | health check; exit 0/1 |
-| `--dump-ax` | standalone | print every AX element perch's filter chain would label (one line each) |
-| `--dump-ax-tree` | standalone | print the raw AX tree depth-first, pre-filter (for "doesn't even reach the filter chain" triage — web view content, Electron content areas) |
-| `--activate` | client | show hint overlay now (CLI mirror of the hotkey) |
-| `--scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
-| `--search` | client | enter search mode (type, `1-9` to pick a match) |
-| `--cancel` | client | dismiss whichever mode is up |
-| `--reload` | client | tell running daemon to re-read config |
-| `--quit` | client | terminate running daemon |
-| `--status` | client | dump active hotkey + last activation |
-| `--help` | standalone | show help |
+`Main.swift` is the single source of truth (the recognition loop +
+the `--theme=<name>` special-case prefix); the full README CLI
+table is authoritative for end-user copy. The architectural cut:
+
+| Mode | Flags |
+|---|---|
+| server | *(no flag)* — run the daemon (hotkey loop) |
+| standalone | `--validate` (exit 0/2) · `--doctor` (exit 0/1) · `--help` |
+| standalone diagnostics | `--dump-ax` · `--dump-ax-tree` (raw, pre-filter) · `--dump-regions` (regional-mode candidates) |
+| client (mode entry) | `--activate` · `--scroll` · `--search` · `--regional` · `--menu` · `--windows` · `--emoji` · `--grid` · `--rgrid` · `--nudge` · `--drag` · `--vision` |
+| client (control) | `--cancel` · `--reload` · `--quit` · `--status` · `--theme=<name>` |
+
+`--theme=<name>` is the lone `=value` flag — every other client
+command is bare. Main.swift's recognition loop branches on the
+`themePrefix` explicitly so the bare-name unknown-flag check
+doesn't trip on `--theme=neon`. Unknown flags exit 2 (Rule of
+Repair: loud + immediate failure, never silent fallback).
 
 Verbose logging is not a flag: set the `PERCH_DEBUG` env var
 (e.g. `PERCH_DEBUG=1 perch`) to mirror logs to stderr and enable
@@ -236,14 +238,15 @@ Client commands all talk to the running daemon via
 `DistributedNotificationCenter` (notification name
 `com.perch.app.control` — deliberately distinct from the bundle
 id so the bundle id can change without breaking clients).
-Refuse with exit 3 if no daemon is running. `--activate` /
-`--scroll` / `--search` / `--cancel` exist so external triggers
-(Karabiner, skhd, Raycast script commands) can drive any mode
-without giving up perch's built-in Carbon hotkey, and so
-shell-script triggers are cheap. All three modes (hint, scroll,
-search) are **mutually exclusive** — Controller tears down
-whichever is active before starting a new one so the single
-session-level KeyTap installs cleanly.
+Refuse with exit 3 if no daemon is running. The mode-entry
+client flags exist so external triggers (Karabiner, skhd,
+Raycast script commands) can drive any mode without giving up
+perch's built-in Carbon hotkey, and so shell-script triggers are
+cheap. **Every interactive mode is mutually exclusive** — hint /
+scroll / search / regional / menu / windows / emoji / grid /
+rgrid / nudge / drag / vision — Controller tears down whichever
+is active before starting a new one so the single session-level
+KeyTap installs cleanly.
 
 `--status` is one-way the other direction: DNC can't reply, so
 the daemon maintains a small status file at `/tmp/perch.status`
@@ -302,53 +305,84 @@ it.
 
 ## Roadmap
 
-- **M1** *(shipped)* — native AppKit / SwiftUI apps, vim-style
-  hint pills with frosted-glass styling, AXPress dispatch,
-  CGEventTap key capture (focus-preserving), CLI activation,
-  action-mode modifiers (Shift / Cmd / Alt), scroll mode,
-  search mode, multi-screen support.
-- **M2** — additional AX role coverage (treat
-  `kAXChildren`-less custom views as labelable when they
-  expose `kAXPressAction`); per-app behavior config
-  (issue #37, shipped — `[behavior."<bundle-id>"]` overrides
-  `roles`, `min-size`, `auto-click-on-unique` per frontmost
-  bundle, falling through to the global `[behavior]` for
-  unset keys).
-- **M3** — regional hints (issue #34, shipped) — `perch --regional`
-  enters a hint-mode variant whose `UIElementSource.enumerateRegions()`
-  walks the AX tree with `regionalRoles` (Group / Article / Section
-  / SplitGroup / ScrollArea / Outline / Image), a 200×100 frame
-  floor, and no `kAXPressAction` requirement. Same overlay +
-  label-resolution pipeline as hint mode; action-mode modifiers
-  apply (Cmd → copyTitle is the headline use). `AXUIElementSource`
-  shares the AX walk between hint and regional via a `WalkPolicy`
-  struct.
-- **M4** — menu-bar search (issue #52, shipped) — `perch --menu`
-  reuses `SearchMode` against `UIElementSource.enumerateMenu()`,
-  which walks `kAXMenuBarAttribute` recursively and emits each
+All milestones below are **shipped**. Issue numbers link to the
+canonical PR(s) on the GitHub project board (`perch roadmap`).
+
+- **M1** — native AppKit / SwiftUI apps, vim-style hint pills
+  with frosted-glass styling, AXPress dispatch, CGEventTap key
+  capture (focus-preserving), CLI activation, action-mode
+  modifiers (Shift / Cmd / Alt + Cmd+Shift continuous-follow),
+  scroll mode, search mode, multi-screen support.
+- **M2** — additional AX role coverage (treat `kAXChildren`-less
+  custom views as labelable when they expose `kAXPressAction`);
+  per-app behavior config (#37 — `[behavior."<bundle-id>"]`
+  overrides `roles` / `min-size` / `auto-click-on-unique` per
+  frontmost bundle, falling through to the global `[behavior]`
+  for unset keys).
+- **M2+** — Chrome / Electron / WKWebView coverage via the
+  Chromium AX shim (#26 / #27): the walker lifts its depth
+  ceiling once it crosses into an `AXWebArea`; the Controller
+  pre-warms renderer-AX on Chromium app activation (#28) so the
+  first hotkey after focus-change sees the populated page tree
+  rather than just the browser chrome; `--dump-ax-tree` exposes
+  the raw tree for diagnosing what AX actually reports for a
+  given web shell. #38 generalises the bundle-id allow-list with
+  *observation-based discovery*: when the walker encounters an
+  `AXWebArea` in a bundle outside `chromiumPrefixes` (Books, Mac
+  App Store, Slack notification flyouts, native apps with embedded
+  WKWebView marketing panes), the bundle is promoted in-memory
+  for the rest of the daemon lifetime so subsequent activations
+  get the wake / prewarm path too.
+- **M3** — regional hints (#34) — `perch --regional` enters a
+  hint-mode variant whose `UIElementSource.enumerateRegions()`
+  walks the AX tree with `regionalRoles` (Group / Article /
+  Section / SplitGroup / ScrollArea / Outline / Image), a
+  200×100 frame floor, and no `kAXPressAction` requirement.
+  Same overlay + label-resolution pipeline as hint mode;
+  action-mode modifiers apply (Cmd → copyTitle is the headline
+  use). `AXUIElementSource` shares the AX walk between hint and
+  regional via a `WalkPolicy` struct.
+- **M3+** — menu-bar search (#52) — `perch --menu` reuses
+  `SearchMode` against `UIElementSource.enumerateMenu()`, which
+  walks `kAXMenuBarAttribute` recursively and emits each
   pressable menu item with its full `"File > Save As…"` path as
   the label. Renders matches as a centred vertical list (menu
   items have no on-screen frame until opened — the `.zero` frame
   rules out pill-over-element placement). The `SearchRenderMode`
-  enum gates between pills and list at draw time.
-- **M4+** — Chrome / Electron / WKWebView support via the
-  Chromium AX shim. First pass (issue #26): the AX walker
-  lifts its depth ceiling once it crosses into an `AXWebArea`;
-  the Controller pre-warms the renderer-AX on Chromium app
-  activation (issue #28) so the first hotkey after focus-
-  change sees the populated page tree rather than just the
-  browser chrome; `--dump-ax-tree` exposes the raw tree for
-  diagnosing what AX actually reports for a given web shell.
-  Issue #38 generalises the bundle-id allow-list with
-  *observation-based discovery*: when the walker encounters
-  an `AXWebArea` in a bundle outside `chromiumPrefixes`
-  (Books, Mac App Store, Slack notification flyouts, native
-  apps with embedded WKWebView marketing panes), the bundle
-  is promoted in-memory for the rest of the daemon lifetime
-  so subsequent activations get the wake / prewarm path too.
-  Later iterations may add per-backend adapters (a
-  `PerchAdapterChrome` would converse with Chrome via its
-  WebDriver-style protocol) when AX coverage falls short.
+  enum gates between pills and list at draw time. Companion
+  ports: `--windows` (#54, cross-app window switcher), `--emoji`
+  (#55, curated emoji picker), `--search` fuzzy + synonyms (#53),
+  scroll mode count-prefix + half/full-page bindings (#56), chord
+  suffix actions (#57), AX shortcut annotation on `--menu` pills
+  (#58).
+- **M4** — explicit AX-bypass dispatch family. `--grid` (#66,
+  M4-α) divides the screen into a labelled `cols × rows` grid;
+  `--rgrid` (#67, M4-β) drills recursively up to `max-depth`
+  levels per pick; `--nudge` (#68, M4-γ) is the arrow-key cursor
+  walker for last-mile precision; `--drag` (#69, M4-δ) does
+  keyboard-driven mouseDown / move / mouseUp. The chord suffix
+  family gained modifier-held synthetic clicks (`,m` / `,h` —
+  #70, M4-ε), sticky modifiers (#71, M4-ζ), and multi-click
+  (`,d` / `,t` — #72, M4-η). Dispatch is synthetic `CGEvent`
+  mouse events — the cursor visibly jumps; that's the carve-out
+  for reaching AX-invisible UI (Figma canvas, Photoshop, web
+  `<canvas>`).
+- **M5** — Vision-OCR hint mode (#73): `--vision` runs Apple
+  Vision's `VNRecognizeTextRequest` on the main display capture
+  and emits one `UIElement` per recognised string. Click is
+  synthetic `CGEvent` at the centroid (no AX target). Requires
+  the Screen Recording grant; latency 100-400ms on Apple Silicon.
+- **M5+** — element-nested grid (#74): the `,g` chord, instead of
+  clicking the resolved element, subdivides the element's frame
+  with a `GridMode` instance. Small elements (under
+  `[grid].nest-min-size`) fall back to AXPress.
+- **Visual surface** (PRs #84-98, 2026-06) — theme palette
+  (`[overlay].theme` — 21 built-ins + `[overlay.themes.<name>]`
+  custom palettes); pill shape; 4 effect channels (appear / match
+  / unmatch / narrow); neon border; sound; modifier badge
+  (off / glyph / action); hot-reload of `~/.config/perch/config.toml`;
+  hold-to-peek; per-app effect overrides; `--theme=<name>` CLI
+  session override; `PerchConfig` sub-struct refactor (PR #89).
 
 ## References
 

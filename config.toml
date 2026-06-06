@@ -208,11 +208,13 @@ show-modifier-badge = "off"
 # historical immediate-hide / 200ms-red-flash baseline.
 [overlay.effect]
 
-# What pills do as the overlay APPEARS. Symmetric with `match` /
-# `unmatch` / `narrow` below — same kind vocabulary, fires on
-# entrance. Default `"pop"` keeps the historical 150ms scale-in
-# 0.85 → 1.0; pick another kind to pair an entrance with a
-# matching exit (e.g. `appear = "drop-in"` + `match = "rise"`).
+# What pills do as the overlay APPEARS. `appear` has its OWN kind
+# set (entry-side) — distinct from the exit-side kinds the other
+# three channels use. Default `"pop"` keeps the historical 150ms
+# scale-in 0.85 → 1.0; pick another kind to pair an entrance with
+# a matching exit (e.g. `appear = "drop-in"` + `match = "rise"`).
+# Exit-side kinds (`fade` / `explode` / `drop` / etc.) silently
+# fall back to `"pop"` here — `appear` does not accept them.
 #
 #   "none"      — pills paint at full size, no delay.
 #   "pop"       — historical 150ms scale-in (default).
@@ -254,8 +256,16 @@ match = "none"
 # is the baseline — this knob layers ADDITIONAL motion on top so
 # the user FEELS the miss (motion is faster to read than color).
 #
-# Same vocabulary as `match` (every kind works on both directions).
-# Differences on `unmatch`:
+# Almost the same vocabulary as `match`, but `unmatch` swaps the
+# one kind that doesn't read as a miss for a horizontal shake:
+#   - `unmatch` has `shake` (NOT `explode`) — ±4pt horizontal jitter
+#     over the 200ms red-flash window, the classic "no!" head-shake.
+#   - `match` has `explode` (NOT `shake`) — `explode` reads as a
+#     celebratory pop and doesn't fit a miss.
+# All other kinds (fade / drop / rise / slide-* / vibrate / fireworks /
+# confetti / random) work in both directions.
+#
+# Differences on `unmatch` for the shared kinds:
 #   - `vibrate` reads like a "no!" buzz over the red flash.
 #   - `fireworks` / `confetti` emit from EVERY visible pill (vs
 #     the winning-only emission on `match`) so the miss feedback

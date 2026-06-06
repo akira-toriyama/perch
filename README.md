@@ -33,11 +33,15 @@ action:
 | **Shift** | right-click / context menu | `AXShowMenu` |
 | **Cmd** | copy the element's title to the clipboard | pasteboard |
 | **Alt** | focus only — don't fire | `AXFocused = true` |
+| **Cmd+Shift** | click + re-enter hint mode for chained operations | `AXPress` + Controller re-arms |
 
 Cmd-copy is useful for grabbing the visible name of a control
 without retyping. Alt-focus is right for text fields you intend
-to type into. Ctrl is left alone so system shortcuts (Ctrl-A
-etc.) still work — pressing Ctrl while the overlay is up cancels.
+to type into. Cmd+Shift is the continuous-follow chain mode —
+open 5 PRs in a row, close 8 notifications, without re-pressing
+the hotkey between each. Ctrl is left alone so system shortcuts
+(Ctrl-A etc.) still work — pressing Ctrl while the overlay is up
+cancels.
 
 Roles covered out of the box: `Button`, `MenuItem`, `Link`,
 `Tab`, `CheckBox`, `RadioButton`, `PopUpButton`, `TextField`,
@@ -134,7 +138,7 @@ match-effect = "none"            # silence flashy effects inside Figma
 
 ### Themes
 
-`[overlay] theme` picks pill background, accent, text, miss-flash color,
+`[overlay].theme` picks pill background, accent, text, miss-flash color,
 and font family in one knob. Ports facet's vocabulary:
 
 - **Dark / mono**: `terminal`, `nord`, `dracula`, `gruvbox`, `catppuccin`,
@@ -160,16 +164,25 @@ theme = "my-theme"
 
 ### Effects
 
-`[overlay.effect]` has four channels — all share the same kind vocab:
+`[overlay.effect]` has four channels, each with its own kind set —
+entry kinds are distinct from exit kinds, and `match` / `unmatch`
+swap one kind apiece (so the two read differently at a glance):
 
-- **`appear`** — pills entering (`pop` is the default scale-in)
-- **`match`** — winning pill on resolve
-- **`unmatch`** — missed-key feedback (layered on red flash)
-- **`narrow`** — pill exiting when filtered by the typed prefix
-
-Kinds: `none` / `fade` / `explode` / `drop` / `rise` / `slide-left` /
-`slide-right` / `vibrate` / `fireworks` / `confetti` / `random`
-(plus `pop` / `cascade` / `fade-in` / `drop-in` / `bloom` for entry).
+- **`appear`** — pills entering. Kinds: `none` / `pop` /
+  `cascade` / `fade-in` / `drop-in` / `bloom` / `random`. Default
+  `pop` (150ms scale-in). Exit-side kinds (`fade`, `explode`, …)
+  silently fall back to `pop`.
+- **`match`** — winning pill on resolve. Kinds: `none` / `fade` /
+  **`explode`** / `drop` / `rise` / `slide-left` / `slide-right` /
+  `vibrate` / `fireworks` / `confetti` / `random`.
+- **`unmatch`** — missed-key feedback (layered on red flash).
+  Same as `match` except **`shake`** replaces `explode`:
+  `none` / **`shake`** / `fade` / `drop` / `rise` / `slide-left` /
+  `slide-right` / `vibrate` / `fireworks` / `confetti` / `random`.
+- **`narrow`** — pill exiting when filtered by the typed prefix.
+  Same kinds as `match`. `fireworks` / `confetti` downgrade to
+  `fade` at runtime (per-pill particle bursts on a dense set
+  would emit hundreds simultaneously).
 
 `intensity` (subtle/normal/bold/wild) scales amplitude.
 `duration-scale` (0.1..5.0) scales tempo. Use ~2.5 for screencasts.
