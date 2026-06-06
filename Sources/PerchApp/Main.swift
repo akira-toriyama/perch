@@ -87,6 +87,17 @@ enum PerchApp {
           perch --status              print active hotkey, alphabet, last event
           perch --quit                terminate the running daemon
 
+        SESSION OVERRIDE
+          perch --theme=<name>        live theme override (applies to all
+                                      activations until --reload or
+                                      --theme= clears it). Accepts any
+                                      built-in name (terminal / nord /
+                                      dracula / ... / system / random) or
+                                      a [overlay.themes.<name>] custom.
+                                      Combine with --activate to apply
+                                      immediately:
+                                          perch --theme=neon --activate
+
         STANDALONE COMMANDS — no daemon required
           perch --validate            parse config.toml; exit 0 if valid
           perch --doctor              health check: Accessibility, config,
@@ -145,7 +156,17 @@ enum PerchApp {
             "--grid", "--rgrid", "--nudge", "--drag", "--vision",
             "--reload", "--quit", "--status",
         ]
+        // `--theme=<name>` is the one `=value` arg in the CLI;
+        // recognise it separately so the bare-name unknown-flag
+        // check doesn't reject it. Empty name (`--theme=`) clears
+        // the override and falls back to the config's theme.
+        var themeOverride: String?
+        let themePrefix = "--theme="
         for a in argv where !recognised.contains(a) {
+            if a.hasPrefix(themePrefix) {
+                themeOverride = String(a.dropFirst(themePrefix.count))
+                continue
+            }
             let msg = "perch: unknown flag \"\(a)\" — see "
                 + "`perch --help`\n"
             FileHandle.standardError.write(Data(msg.utf8))
@@ -178,6 +199,15 @@ enum PerchApp {
         }
 
         // Client commands — require a running daemon.
+        //
+        // Theme override is its own dispatch path because the
+        // payload (theme name) doesn't fit the bare-verb shape of
+        // the other commands. Posted as "theme:<name>" so the
+        // daemon's existing string-prefix handler can pull the
+        // name back out. Empty name clears the override.
+        if let name = themeOverride {
+            runClient(cmd: "theme:\(name)")
+        }
         if argv.contains("--status")   { runStatus() }
         if argv.contains("--activate") { runClient(cmd: "activate") }
         if argv.contains("--scroll")   { runClient(cmd: "scroll") }

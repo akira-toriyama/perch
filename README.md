@@ -189,6 +189,13 @@ volume   = 0.5
 Reload after edits: `perch --reload` (or just save — perch
 watches the file for changes when running as a daemon).
 
+The snippet above covers the most-edited knobs. The full reference
+— including `[behavior].min-size`, `[behavior.web].roles` (web-context
+role override), `[search.synonyms]` (fuzzy-match expansion), `[grid]`
+density / depth / nest-min-size, `[chord]` leader + timeout, and
+`[overlay].show-shortcuts` — lives in [config.toml](config.toml).
+Every knob has a heredoc explaining what it does + the clamp range.
+
 ## CLI
 
 | Flag | Mode | Purpose |
@@ -209,9 +216,13 @@ watches the file for changes when running as a daemon).
 | `--drag` | client | enter keyboard drag — nudge to A, press `d` to grab (mouseDown), nudge to B, press `d` again to release (mouseUp). For drag-and-drop, splitter resize, reorder, etc. |
 | `--vision` | client | enter Vision-OCR hint mode — Apple Vision text recognition on the main display, every visible word becomes a hint. Requires the Screen Recording grant. Use when AX is blind AND grid is too coarse (Figma layer panel labels, web canvas text). |
 | `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge / drag / vision) |
-| `--reload` | client | tell running daemon to re-read config |
+| `--reload` | client | tell running daemon to re-read config (clears any `--theme=` override) |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
+| `--theme=<name>` | client | live theme override (built-in or `[overlay.themes.<name>]` custom) — persists until `--reload` or `--theme=` clears it. Combine with `--activate` to apply immediately: `perch --theme=neon --activate` |
+| `--dump-ax` | standalone | print every AX element perch would label in the frontmost app — for bug reports |
+| `--dump-ax-tree` | standalone | print the raw AX tree of the focused window (depth-first, pre-filter) — for diagnosing web/Electron blind spots |
+| `--dump-regions` | standalone | same shape as `--dump-ax` but for `--regional` containers |
 | `--help` | standalone | show help |
 
 `--activate` / `--scroll` / `--cancel` let you bind a different

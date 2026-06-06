@@ -194,6 +194,14 @@ volume   = 0.5
 編集後の反映: `perch --reload` (デーモン稼働中ならファイル保存
 で自動再読み込み)。
 
+上記スニペットは編集頻度が高い knob のみ。`[behavior].min-size` /
+`[behavior.web].roles` (web context での role 上書き) /
+`[search.synonyms]` (fuzzy 拡張) / `[grid]` 密度 / depth /
+nest-min-size / `[chord]` leader + timeout /
+`[overlay].show-shortcuts` を含む完全リファレンスは
+[config.toml](config.toml) 参照。各 knob にヒアドキュメントと
+clamp 範囲が併記されている。
+
 ## CLI
 
 | フラグ | モード | 用途 |
@@ -214,10 +222,19 @@ volume   = 0.5
 | `--drag` | client | キーボードドラッグ — A まで nudge → `d` で grab（mouseDown）→ B まで nudge → `d` で release（mouseUp）。スプリッタ resize / 並び替え等の UI ドラッグ用 |
 | `--vision` | client | Vision-OCR hint モード — Apple Vision で表示中のテキストを認識、各 word を hint 化。Screen Recording 権限が必要。AX が無効でかつ grid では粗すぎる場面（Figma レイヤパネル / web canvas テキスト）用 |
 | `--cancel` | client | hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge / drag / vision のうち動いてるモードをキャンセル |
-| `--reload` | client | デーモンに設定再読み込みを通知 |
+| `--reload` | client | デーモンに設定再読み込みを通知 (`--theme=` セッション override もクリア) |
 | `--quit` | client | デーモンを終了 |
 | `--status` | client | 現在のホットキー / 最終アクティベーションを表示 |
+| `--theme=<name>` | client | テーマのライブ override (built-in 名 or `[overlay.themes.<name>]` カスタム名)。`--reload` か `--theme=` で解除されるまで全 activation に適用。即時反映には `--activate` と併用: `perch --theme=neon --activate` |
+| `--dump-ax` | standalone | 前面アプリの perch がラベリングする AX 要素を全 dump — バグレポート用 |
+| `--dump-ax-tree` | standalone | フォーカスウィンドウの生 AX tree (深さ優先、フィルタ前)。web/Electron で見えない領域の調査用 |
+| `--dump-regions` | standalone | `--dump-ax` と同じ形式で `--regional` のコンテナを dump |
 | `--help` | standalone | ヘルプ |
+
+すべての client フラグは Karabiner / skhd / Raycast 等の外部キー
+マッパからも呼び出せる。perch 標準のホットキーを残したまま別トリガーを
+併用可。終了コード: 0 = 成功 / 1 = `--doctor` が赤 / 2 = 不正な
+フラグ・設定 / 3 = デーモン未起動。
 
 ### スクロールモード
 
@@ -494,13 +511,8 @@ press を一時的に保留して chord suffix に振り替えられる:
 × `min-height` (デフォルト 200×100 pt、両軸別々に設定可、`>= 0` に clamp)。
 `kAXPressAction` は **不要** (regional pick は copy / focus が主)。
 
-`--activate` / `--cancel` があるので Karabiner / skhd / Raycast の
-スクリプトコマンドからも起動でき、perch 標準のホットキーを残した
-まま別トリガーを併用できる。overlay 表示中は `Esc` で常にキャンセル、
-ラベルにマッチしない文字をタイプしてもキャンセル。
-
-終了コード: 0 = 成功 · 1 = `--doctor` が赤 · 2 = 不正な
-フラグ / 設定 · 3 = デーモン未起動。
+overlay 表示中は `Esc` で常にキャンセル、ラベルにマッチしない文字を
+タイプしてもキャンセル。
 
 ### 詳細ログ
 
