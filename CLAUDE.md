@@ -781,6 +781,34 @@ stray instances before relaunching.
   so the daemon rewrites a small status file (`statusPath` =
   `/tmp/perch.status`) on start / reload / each hint press, and
   `--status` just reads it.
+- **CLI surface conventions when adding new flags** — same shape
+  as the Configuration rules (memory `user-collaboration-style`):
+  - **Prefer the dominant style.** The current surface is
+    overwhelmingly bare `--<name>`; `--theme=<name>` is the lone
+    `=value` flag and pays for itself by giving the user a
+    one-shot string. Don't introduce a *second* `=value` flag, a
+    `--<verb>-<noun>` style, or a positional argument without a
+    real need. Mode entries are always `--<mode-name>` (no
+    `--enter-<mode>` / `--start-<mode>` ceremony).
+  - **Match the existing family naming.** Diagnostics start with
+    `--dump-` (`--dump-ax` / `--dump-ax-tree` / `--dump-regions`).
+    Mode entries are bare nouns (`--grid` / `--vision`).
+    Daemon-control verbs are bare imperatives (`--reload` /
+    `--quit` / `--cancel`). Pick the matching family before
+    inventing a new prefix.
+  - **Breaking renames are OK when they buy consistency.** Same
+    stance as the config-knob rule (the user's repeated
+    "破壊的変更OK / 一貫性の方が重要だから"). Unrecognised flags
+    exit `2` — there's no typo-tolerance fallback to silently mask
+    a renamed flag — so the rename is loud by default. Land the
+    rename + a short README delta in the same PR, and (if the old
+    name was advertised) keep an alias for one release before
+    dropping it.
+  - **No nested-flag forms** (`--overlay.theme=<name>`,
+    `--effect:appear=<kind>`). The TOML file is the right surface
+    for nested knobs; the CLI is for *modes* + *one-shot session
+    overrides* (`--theme=<name>`). If the urge to nest comes up,
+    add a TOML knob and reload, don't invent CLI namespacing.
 
 ## Conventions
 
