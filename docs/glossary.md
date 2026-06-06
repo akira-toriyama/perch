@@ -289,6 +289,29 @@ debounce + editor rename 対応の fd 再オープン。
 - 場所: [`Sources/PerchAdapterMacOS/OverlayCanvas.swift`](../Sources/PerchAdapterMacOS/OverlayCanvas.swift)
 - **Don't call it:** pill anchor, label placement
 
+### custom palette
+ユーザーが `[overlay.themes.<name>]` セクションで定義する独自の
+[[theme palette]]。built-in カタログより先に検索されるので、PR #95 以降は
+**plural `themes`** を使う必要がある（singular `theme` はスカラー
+selector と衝突するため strict TOML 1.0 で弾かれる + perch も
+deprecation warning を出して silently 無視）。
+- 設定: `[overlay.themes.<name>]` の pill-bg / accent / text /
+  miss / pill-bg-alpha / font フィールド
+- 解決順: custom → built-in → `[[Theme]].system`
+- **Don't call it:** user theme, custom theme (英版でも custom palette が正式)
+
+### theme override
+`perch --theme=<name>` で動的にテーマを差し替える **セッション
+override**。built-in 名 or [[custom palette]] 名を受け付ける。
+`--reload` か `--theme=` (空) で解除されるまで全 activation に適用。
+Controller の `themeOverride: String?` + `effectiveConfig()` +
+`PerchConfig.withTheme(_:customName:)` が連携して、override 中だけ
+動的に config snapshot を組み替える。
+- 場所: [`Sources/PerchApp/Controller.swift`](../Sources/PerchApp/Controller.swift)
+  `applyThemeOverride` / `effectiveConfig`
+- 用途: screencast / プレゼンで一時的に派手モード切替
+- **Don't call it:** runtime theme, theme flag
+
 ---
 
 ## AX walk
@@ -310,6 +333,19 @@ AX 列挙の 5 段フィルタ。各段は web-shell apps の **具体的な fai
 すべてを列挙して print** する診断コマンド。"見えるはずの要素が出ない" 系
 バグの triage 一発目。
 - **Don't call it:** ax debug, dump elements, AX ダンプ
+
+### `--dump-ax-tree`
+**フォーカスウィンドウの raw AX tree** (深さ優先、5-stage フィルタ前)
+を print する診断コマンド。`--dump-ax` で予期した要素が出てこない時、
+そもそも AX 層に届いてないのか / フィルタで落ちてるのかを切り分ける。
+web shells (Chrome / Electron / WKWebView) の調査で必須。
+- **Don't call it:** raw ax dump, full tree dump
+
+### `--dump-regions`
+[[regional]] モードがラベリング対象とする large container を `--dump-ax` と
+同じフォーマットで列挙。`[regional].min-width / min-height` のチューニング
+時にどのコンテナが拾われるか確認する用途。
+- **Don't call it:** regional debug, container dump
 
 ---
 
