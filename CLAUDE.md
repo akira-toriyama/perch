@@ -145,6 +145,44 @@ frontmost app's focused window**. The seam is captured at
   rather than rejecting. A typo can never break hint mode — the
   key with the typo silently uses the default. `perch --validate`
   is the explicit verification path.
+- **Prefer fully-nested TOML when adding new knobs** — every key
+  should live under a `[section]` header. A top-level scalar mixed
+  with sections looks like an orphan and is the user's stated
+  dislike (memory `user-collaboration-style`):
+
+  ```toml
+  # 好き — everything under a section
+  [foo]
+  color = "red"
+  length = "short"
+
+  [bar]
+  color = "red"
+  size = "xl"
+
+  # 嫌い — top-level scalar floating above sections
+  color = "red"
+  [foo]
+  length = "short"
+  ```
+
+  This is a *want* / *better*, not a *must* — break it when the
+  alternative is clearly worse (a global toggle that has no natural
+  section would be one). The reason the rule is loose: TOML allows
+  the floating form, and forcing a one-key `[global]` section just
+  to satisfy the rule reads as ceremony. When in doubt, group with
+  the closest sibling and prefer one extra section over an orphan.
+- **Breaking config changes are OK when they buy consistency.**
+  The user's repeated stance during the visual-surface wave was
+  "破壊的変更OK / 一貫性の方が重要だから" (see memory
+  `user-collaboration-style`). Examples that landed by breaking:
+  PerchConfig sub-struct refactor (PR #89), `show-modifier-badge`
+  Bool → string enum (PR #92/#96), `[overlay.theme.<name>]` →
+  `[overlay.themes.<name>]` plural (PR #95). The typo-tolerance
+  policy above protects against silent breakage on the OLD key —
+  the renamed key falls back to the default + a `Log.line` warning
+  pointing at the new name, instead of erroring out. Land breaking
+  renames with the warning path in the same PR.
 - **`PerchConfig` is grouped into 11 sub-structs** (PR #89):
   `hotkey` / `labels` / `overlay` / `effect` / `border` / `sound`
   / `behavior` / `regional` / `grid` / `chord` / `search` — 1:1
