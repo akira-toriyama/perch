@@ -10,34 +10,45 @@
 #
 # Launch the daemon via run.sh or `open Perch.app`.
 #
-#   ./install-cli.sh [--dry-run] [--silent]
-#   --dry-run  print what would be linked, change nothing
-#   --silent   don't tee output to /tmp/install-cli.log (tee on by default)
+#   ./install-cli.sh [--dry-run] [--silent] [--app=<Name>.app]
+#   --dry-run     print what would be linked, change nothing
+#   --silent      don't tee output to /tmp/install-cli.log (tee on by default)
+#   --app=<Name>  link this specific bundle instead of auto-detecting
+#                 (run.sh passes the bundle it just built, so the link
+#                  always tracks the freshest build).
 #
-# Prefers `Perch.app` (release) if it exists, falls back to
-# `Perch-dev.app` (the dev bundle ./run.sh produces). Both share
-# the same client binary — IPC routes to whichever daemon is
+# Without --app, prefers the dev bundle `Perch-dev.app` (./run.sh's
+# default — the everyday dev loop), falling back to release `Perch.app`.
+# Both share the same client binary — IPC routes to whichever daemon is
 # running via DNC, so either link works for client commands.
 set -e
 cd "$(dirname "$0")"
 
-DRY_RUN=0; SILENT=0
+DRY_RUN=0; SILENT=0; APP_OVERRIDE=""
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --silent)  SILENT=1 ;;
-    -h|--help) echo "usage: $0 [--dry-run] [--silent]"; exit 0 ;;
-    *) echo "install-cli: unknown option \"$arg\" (try --dry-run / --silent)" >&2; exit 2 ;;
+    --app=*)   APP_OVERRIDE="${arg#--app=}" ;;
+    -h|--help) echo "usage: $0 [--dry-run] [--silent] [--app=<Name>.app]"; exit 0 ;;
+    *) echo "install-cli: unknown option \"$arg\" (try --dry-run / --silent / --app=<Name>.app)" >&2; exit 2 ;;
   esac
 done
 if (( ! SILENT )); then exec > >(tee "/tmp/install-cli.log") 2>&1; fi
 
-# Prefer the dev bundle (./run.sh's default — the everyday dev
-# loop), fall back to release. Opposite preference from facet's
-# install-cli.sh because perch's run.sh defaults to dev too;
-# matching that here means `./run.sh && ./install-cli.sh` Just
-# Works without a re-link after every dev rebuild.
-if [[ -x "$PWD/Perch-dev.app/Contents/MacOS/perch" ]]; then
+# Pick the bundle to link. An explicit --app (run.sh passes the one it
+# just built) wins; otherwise prefer the dev bundle, then release.
+# Dev-first auto-detect (opposite of facet's) matches perch's run.sh
+# default so `./run.sh && ./install-cli.sh` Just Works with no re-link.
+if [[ -n "$APP_OVERRIDE" ]]; then
+  if [[ -x "$PWD/$APP_OVERRIDE/Contents/MacOS/perch" ]]; then
+    BIN="$PWD/$APP_OVERRIDE/Contents/MacOS/perch"
+    APP="$APP_OVERRIDE"
+  else
+    echo "install-cli: --app=$APP_OVERRIDE not built at $PWD/$APP_OVERRIDE"
+    exit 1
+  fi
+elif [[ -x "$PWD/Perch-dev.app/Contents/MacOS/perch" ]]; then
   BIN="$PWD/Perch-dev.app/Contents/MacOS/perch"
   APP="Perch-dev.app"
 elif [[ -x "$PWD/Perch.app/Contents/MacOS/perch" ]]; then
