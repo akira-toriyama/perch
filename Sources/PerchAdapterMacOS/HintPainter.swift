@@ -189,8 +189,6 @@ final class HintPainter: NSView {
         let pillBgIdle = Self.color(
             hex: palette.pillBgHex,
             alpha: frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
-        let pillBgMatched = palette.accentColor.withAlphaComponent(
-            frosted ? 0.55 : 0.85)
         let pillBgMiss = palette.missColor.withAlphaComponent(
             frosted ? 0.55 : 0.85)
 
@@ -265,14 +263,16 @@ final class HintPainter: NSView {
                 path.stroke()
                 NSGraphicsContext.restoreGraphicsState()
 
-                // Fill. Theme palette provides the pill bg; matched /
-                // miss states swap to accent / red tints respectively.
+                // Fill. Idle pills (matched or not) keep the theme pill
+                // bg — a narrowed/matched pill is NOT re-tinted with the
+                // accent; it stands out via the glow + accent border +
+                // typed-prefix highlight below. Only a miss swaps the fill.
                 let fill: NSColor
                 switch state {
                 case .miss:
                     fill = pillBgMiss
                 case .idle:
-                    fill = p.matched ? pillBgMatched : pillBgIdle
+                    fill = pillBgIdle
                 }
                 fill.setFill()
                 path.fill()
