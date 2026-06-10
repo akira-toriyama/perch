@@ -34,9 +34,30 @@ let package = Package(
         .executable(name: "perch", targets: ["PerchApp"]),
         .library(name: "PerchCore", targets: ["PerchCore"]),
     ],
+    dependencies: [
+        // Shared theming foundation (plan atelier). perch is the
+        // "pure twin": PerchCore consumes only the AppKit-free `Palette`
+        // module (ThemeSpec / paletteFor / FontKind / canonicalThemeNames),
+        // proving the pure layer is reusable outside facet's View. The
+        // adapter resolves the spec to NSColors itself (perch keeps its own
+        // `[overlay].accent` override + pill-surface treatment), so it does
+        // NOT link PaletteKit. Pinned to a SemVer tag for release/CI
+        // reproducibility; `.upToNextMinor` keeps it on 0.1.x. For local,
+        // atomic sill↔perch editing, temporarily swap this line for
+        // `.package(path: "../sill")`.
+        .package(url: "https://github.com/akira-toriyama/sill.git",
+                 .upToNextMinor(from: "0.1.0")),
+    ],
     targets: [
-        .target(name: "PerchCore"),
-        .target(name: "PerchAdapterMacOS", dependencies: ["PerchCore"]),
+        .target(
+            name: "PerchCore",
+            dependencies: [.product(name: "Palette", package: "sill")]),
+        .target(
+            name: "PerchAdapterMacOS",
+            dependencies: [
+                "PerchCore",
+                .product(name: "Palette", package: "sill"),
+            ]),
         .target(name: "PerchAdapterTest", dependencies: ["PerchCore"]),
         .executableTarget(
             name: "PerchApp",
@@ -44,7 +65,12 @@ let package = Package(
                 "PerchCore",
                 "PerchAdapterMacOS",
             ]),
-        .testTarget(name: "PerchCoreTests", dependencies: ["PerchCore"]),
+        .testTarget(
+            name: "PerchCoreTests",
+            dependencies: [
+                "PerchCore",
+                .product(name: "Palette", package: "sill"),
+            ]),
         // Drives the synthetic UIElementSource end-to-end through Core's
         // label assignment + match resolution — the real consumer of
         // PerchAdapterTest that the docs describe.

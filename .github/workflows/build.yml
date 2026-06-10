@@ -25,16 +25,17 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      # SPM cache. Zero external deps, but caching `.build/` keeps
-      # compiled module artefacts warm and shaves the cold-build cost.
-      # Key invalidates on Package.swift edits; the restore-key still
+      # SPM cache. Keeps the resolved `sill` dependency checkout +
+      # compiled module artefacts warm, shaving the cold-build cost.
+      # Key invalidates on Package.swift / Package.resolved edits (a
+      # sill bump changes the lockfile); the restore-key still
       # warm-starts across minor toolchain changes.
       - uses: actions/cache@v5
         with:
           path: |
             .build
             ~/Library/Caches/org.swift.swiftpm
-          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift') }}
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: ${{ runner.os }}-spm-
 
       - name: Show toolchain

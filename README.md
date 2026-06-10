@@ -138,15 +138,19 @@ match-effect = "none"            # silence flashy effects inside Figma
 
 ### Themes
 
-`[overlay].theme` picks pill background, accent, text, miss-flash color,
-and font family in one knob. Ports facet's vocabulary:
+`[overlay].theme` picks pill background, accent, text, and font family
+in one knob. The catalog is **shared with facet** (the [`sill`](https://github.com/akira-toriyama/sill)
+theming library) — identical accent / text / font, so a theme name
+carried over from a facet config paints the same. perch layers its own
+pill translucency and themed miss-flash colors on top.
 
 - **Dark / mono**: `terminal`, `nord`, `dracula`, `gruvbox`, `catppuccin`,
   `rosepine`, `everforest`, `solarized`, `onedark`, `monokai`, `hacker`
 - **Neon**: `neon`, `cyber`, `vapor`
 - **Light**: `cute`, `kawaii`, `paper`
 - **Monochrome**: `mono-light`, `mono-dark`, `monotone`
-- **Adaptive**: `system` (default — follows macOS accent + light/dark)
+- **Cross-app**: `rainbow` (static loud-pink palette), `chomp` (arcade Pac-Man)
+- **Adaptive**: `system` (default — follows the macOS accent; the pill itself stays a dark frosted chip)
 - **Special**: `random` (picks a built-in per `--reload`)
 
 Define your own under `[overlay.themes.<name>]`:

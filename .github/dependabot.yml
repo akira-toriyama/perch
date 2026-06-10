@@ -4,9 +4,10 @@
 #   update-tap) pin third-party actions (checkout, setup-xcode,
 #   install-action, etc) by major version. Weekly update PRs keep
 #   them honest without flooding the inbox.
-# - Swift Package Manager intentionally omitted: perch pulls zero
-#   external SwiftPM dependencies (Apple frameworks only); same
-#   dependency policy stroke / facet follow.
+# - swift: perch depends on the shared `sill` theming library (plan
+#   atelier), pinned by url + SemVer in Package.swift with the lockfile
+#   committed. Weekly PRs bump it within the `.upToNextMinor` range;
+#   grouped so a multi-module sill release is one PR.
 #
 # Commit messages follow the gitmoji + Conventional Commits
 # convention in docs/commit-convention.md so commit-lint.yml stays
@@ -25,3 +26,18 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+  - package-ecosystem: "swift"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      swift:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ":arrow_up: chore"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "swift"

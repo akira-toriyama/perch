@@ -16,6 +16,7 @@
 
 import CoreGraphics
 import Foundation
+import Palette
 
 // MARK: - Sub-structs
 
@@ -52,10 +53,13 @@ public struct LabelsConfig: Sendable {
 /// behaviour flags that affect the overlay specifically).
 public struct OverlayConfig: Sendable {
 
-    /// Theme palette — picks pill bg / accent / text / font kind
-    /// in one knob. Default `.system` keeps the historical adaptive
-    /// look (`NSColor.controlAccentColor` + dark pill tint).
-    public let theme: Theme
+    /// Canonical theme name (sill `canonicalThemeNames`, validated +
+    /// `random`-resolved at parse). Picks pill bg / accent / text /
+    /// font in one knob. Default `"system"` keeps the historical
+    /// adaptive look (`NSColor.controlAccentColor` + dark pill tint).
+    /// When a `[overlay.themes.<name>]` custom palette is selected this
+    /// stays `"system"` and `customThemeName` carries the name.
+    public let theme: String
 
     /// Accent override. When set to anything other than `"system"`,
     /// wins over the theme's accent — lets users mix a body theme
@@ -80,10 +84,12 @@ public struct OverlayConfig: Sendable {
     /// Show AX-bound keyboard shortcut annotations on `--menu` pills.
     public let showShortcuts: Bool
 
-    /// User-defined palettes from `[overlay.themes.<name>]` sections.
-    /// Keyed by the section name (e.g. `"my-theme"`). When
-    /// `[overlay].theme = "<name>"` matches a key here, the custom
-    /// palette wins over the built-in catalog.
+    /// User-defined palettes from `[overlay.themes.<name>]` sections,
+    /// each a full sill `ThemeSpec` (pill-bg → `bg`, accent, text,
+    /// miss → `error`, pill-bg-alpha → `bgAlpha`, font). Keyed by the
+    /// section name (e.g. `"my-theme"`). When `[overlay].theme =
+    /// "<name>"` matches a key here, the custom palette wins over the
+    /// built-in catalog.
     ///
     /// Example:
     /// ```toml
@@ -96,7 +102,7 @@ public struct OverlayConfig: Sendable {
     /// [overlay]
     /// theme = "my-theme"
     /// ```
-    public let customPalettes: [String: ThemePalette]
+    public let customPalettes: [String: ThemeSpec]
 
     /// When `[overlay].theme` matches a `[overlay.themes.<name>]`
     /// section, this is the name; otherwise nil. The resolver
@@ -116,11 +122,11 @@ public struct OverlayConfig: Sendable {
     public let modifierBadge: ModifierBadgeStyle
 
     public init(
-        theme: Theme, accent: String, pillShape: PillShape,
+        theme: String, accent: String, pillShape: PillShape,
         fontSize: Double, blurEnabled: Bool, animEnabled: Bool,
         showShortcuts: Bool, peekKey: String,
         modifierBadge: ModifierBadgeStyle,
-        customPalettes: [String: ThemePalette] = [:],
+        customPalettes: [String: ThemeSpec] = [:],
         customThemeName: String? = nil
     ) {
         self.theme = theme
@@ -447,7 +453,7 @@ public struct PerchConfig: Sendable {
     /// have to hand-construct a full PerchConfig with one field
     /// changed. Every other field carries over unchanged.
     public func withTheme(
-        _ theme: Theme, customName: String?
+        _ theme: String, customName: String?
     ) -> PerchConfig {
         let newOverlay = OverlayConfig(
             theme: theme,
@@ -493,7 +499,7 @@ public struct PerchConfig: Sendable {
         labels: LabelsConfig(
             alphabet: defaultAlphabet, prioritiseCenter: true),
         overlay: OverlayConfig(
-            theme: .system, accent: "system", pillShape: .pill,
+            theme: "system", accent: "system", pillShape: .pill,
             fontSize: 15, blurEnabled: true, animEnabled: true,
             showShortcuts: true, peekKey: "space",
             modifierBadge: .off),
@@ -573,26 +579,29 @@ public struct PerchConfig: Sendable {
         // [overlay.themes.<name>] user-defined palettes — same flat-
         // key shape as [behavior."<bundle>"]. Each section is a
         // (pill-bg, accent, text, miss, pill-bg-alpha, font) tuple
-        // matching ThemePalette.
+        // resolved into a sill ThemeSpec.
         let customPalettes = parseCustomPalettes(doc)
 
-        // Resolve [overlay].theme: raw string first, then check
-        // custom palettes, then the built-in enum. `.random`
-        // resolves to a concrete built-in here.
+        // Resolve [overlay].theme: raw string first, then check custom
+        // palettes, then sill's canonical name set. `random` resolves
+        // to a concrete name HERE (session-stable); an unknown name
+        // clamps silently to "system" per the TOML clamp-don't-reject
+        // rule (the loud-rejection path is the `--theme=` CLI override
+        // in Controller).
         let rawTheme = (doc["overlay"]?["theme"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             ?? ""
-        let theme: Theme
+        let theme: String
         let customThemeName: String?
         if !rawTheme.isEmpty, customPalettes[rawTheme] != nil {
-            // Custom palette wins — store the name, leave Theme on
-            // .system so the built-in resolver can't accidentally
+            // Custom palette wins — store the name, leave theme on
+            // "system" so the built-in resolver can't accidentally
             // hide the custom palette later.
             customThemeName = rawTheme
-            theme = .system
+            theme = "system"
         } else {
             customThemeName = nil
-            theme = Theme.parse(rawTheme)?.resolvingRandom() ?? .system
+            theme = perchCanonicalThemeName(rawTheme) ?? "system"
         }
         let shape = (doc["overlay"]?["pill-shape"]?.asString)
             .flatMap(PillShape.parse) ?? .pill
@@ -633,15 +642,15 @@ public struct PerchConfig: Sendable {
     }
 
     /// Walk every `[overlay.themes.<name>]` section and assemble a
-    /// `[name: ThemePalette]` dict. The TOML parser lands these as
-    /// flat keys (`"overlay.themes.my-theme"`), same as
+    /// `[name: ThemeSpec]` dict (sill's pure spec). The TOML parser
+    /// lands these as flat keys (`"overlay.themes.my-theme"`), same as
     /// `[behavior."<bundle>"]`. Unknown / malformed values fall
     /// back to system defaults per typo-tolerance — a typo never
     /// kills the palette.
     private static func parseCustomPalettes(
         _ doc: TOML.Document
-    ) -> [String: ThemePalette] {
-        var out: [String: ThemePalette] = [:]
+    ) -> [String: ThemeSpec] {
+        var out: [String: ThemeSpec] = [:]
         // Plural `themes` (not `theme`) because `[overlay].theme` is
         // a scalar (the selector); strict TOML 1.0 parsers reject
         // `[overlay.themes.<name>]` since `theme` would have to be
@@ -663,8 +672,7 @@ public struct PerchConfig: Sendable {
         // Names reserved by built-in themes / sentinels — silently
         // ignored if the user shadows them, since the catalog
         // would never see the custom palette.
-        let reserved: Set<String> = Set(
-            Theme.allCases.map { $0.rawValue })
+        let reserved: Set<String> = Set(canonicalThemeNames)
         for (rawKey, section) in doc {
             guard rawKey.hasPrefix(prefix) else { continue }
             let name = String(rawKey.dropFirst(prefix.count))
@@ -682,12 +690,12 @@ public struct PerchConfig: Sendable {
                 ?? 0xFFFFFF
             let miss = parseHexValue(section["miss"]?.asString)
                 ?? 0xEF4444
-            let alpha: CGFloat = {
+            let alpha: Double = {
                 guard let raw = section["pill-bg-alpha"]?.asDouble
                 else { return 0.55 }
-                return CGFloat(max(0, min(1, raw)))
+                return max(0, min(1, raw))
             }()
-            let font: ThemeFont = {
+            let font: FontKind = {
                 guard let raw = section["font"]?.asString
                 else { return .mono }
                 switch raw.trimmingCharacters(in: .whitespaces).lowercased() {
@@ -697,10 +705,18 @@ public struct PerchConfig: Sendable {
                 default:        return .mono
                 }
             }()
-            out[name] = ThemePalette(
-                pillBgHex: pillBg, accentHex: accent,
-                textHex: text, missHex: miss,
-                pillBgAlpha: alpha, font: font)
+            // Map perch's custom-palette keys onto a sill ThemeSpec:
+            // pill-bg → bg, miss → error, pill-bg-alpha → bgAlpha. perch
+            // doesn't read dim/accent2/divider/hover/sel for pills, so
+            // dim is a placeholder (= text) and the rest stay nil.
+            out[name] = ThemeSpec(
+                bg: HexColor(pillBg),
+                text: HexColor(text),
+                dim: HexColor(text),
+                accent: HexColor(accent),
+                font: font,
+                error: HexColor(miss),
+                bgAlpha: alpha)
         }
         return out
     }

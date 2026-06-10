@@ -18,6 +18,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import Palette
 import PerchCore
 
 @MainActor
@@ -675,35 +676,38 @@ final class HintPainter: NSView {
         let accentColor: NSColor
         let textColor: NSColor
         let missColor: NSColor
-        let font: ThemeFont
+        let font: FontKind
     }
 
     /// Module-internal so OverlayCanvas's particle driver can read
     /// the accent color for tinting bursts.
     ///
     /// Resolution order:
-    /// 1. User-defined `[overlay.theme.<name>]` matching `theme = <name>`
-    /// 2. Built-in palette from `Theme.builtinPalettes`
-    /// 3. System sentinel (NSColor.controlAccentColor)
+    /// 1. User-defined `[overlay.themes.<name>]` matching `theme = <name>`
+    ///    (a full sill `ThemeSpec` parsed from config).
+    /// 2. sill's canonical palette via `perchThemeSpec(name)` (sill
+    ///    `paletteFor` + perch's translucency / themed-miss overlays).
+    /// 3. System sentinel (`spec.usesSystemAccent` → controlAccentColor).
     static func resolvePalette(cfg: PerchConfig) -> ResolvedPalette {
-        let raw: ThemePalette
+        let spec: ThemeSpec
         if let custom = cfg.overlay.customThemeName,
            let palette = cfg.overlay.customPalettes[custom] {
-            raw = palette
+            spec = palette
         } else {
-            raw = cfg.overlay.theme.palette()
+            spec = perchThemeSpec(cfg.overlay.theme)
         }
-        // `.system` palette uses `accentHex == 0` as a sentinel — fall
-        // back to NSColor.controlAccentColor so light/dark + the user's
-        // chosen macOS accent are honored.
-        let themeAccent: NSColor =
-            raw.accentHex == 0
-                ? .controlAccentColor
-                : color(hex: raw.accentHex, alpha: 1)
-        // `[overlay].accent` overrides the palette's accent when set
-        // to anything other than the default "system". Lets users mix
-        // a theme body (nord pill colors / rounded font) with a
-        // personal highlight.
+        // sill's `accent` sentinel (0) ⇒ OS control-accent (perch's
+        // `system` theme + any preset whose accent is pure black, e.g.
+        // mono-light — same collision sill itself accepts). Otherwise
+        // the spec's concrete hue.
+        let themeAccent: NSColor = spec.usesSystemAccent
+            ? .controlAccentColor
+            : color(hex: spec.accent.rgb, alpha: 1)
+        // `[overlay].accent` overrides the theme accent when set to a
+        // concrete hex (lets users mix a theme body — nord pill colors
+        // / rounded font — with a personal highlight). Layered AFTER
+        // the sentinel resolution, perch-side: sill has no per-app
+        // accent override.
         let accent: NSColor
         if cfg.overlay.accent == "system" {
             accent = themeAccent
@@ -711,12 +715,16 @@ final class HintPainter: NSView {
             accent = parseAccent(cfg.overlay.accent) ?? themeAccent
         }
         return ResolvedPalette(
-            pillBgHex: raw.pillBgHex,
-            pillBgAlpha: raw.pillBgAlpha,
+            // sill's `system` spec carries bg == nil (vibrancy panel);
+            // perch's pill needs a concrete dark fill — fall back to the
+            // historical black. Every other spec (built-in + custom) has
+            // a bg.
+            pillBgHex: spec.bg?.rgb ?? perchSystemPillBgHex,
+            pillBgAlpha: spec.bgAlpha.map { CGFloat($0) } ?? 0.30,
             accentColor: accent,
-            textColor: color(hex: raw.textHex, alpha: 1),
-            missColor: color(hex: raw.missHex, alpha: 1),
-            font: raw.font)
+            textColor: color(hex: spec.text.rgb, alpha: 1),
+            missColor: color(hex: spec.error.rgb, alpha: 1),
+            font: spec.font)
     }
 
     /// Translate a `0xRRGGBB` int + alpha into an `NSColor` in the
@@ -744,19 +752,22 @@ final class HintPainter: NSView {
         return color(hex: v, alpha: 1)
     }
 
-    /// Map `ThemeFont` → an AppKit font instance. Mono uses
+    /// Map sill's `FontKind` → an AppKit font instance. Mono uses
     /// monospacedSystemFont (the existing default), rounded asks
-    /// NSFontDescriptor for `.rounded` design, system is the
-    /// default system font. Falls back to mono on any descriptor
+    /// NSFontDescriptor for `.rounded` design, system is the default
+    /// system font. `.menu` (sill's `system` preset) renders as the
+    /// system font at perch's pill weight — pills aren't menus, so the
+    /// native menu typeface isn't wanted, and this keeps the default
+    /// theme's glyphs semibold. Falls back to mono on any descriptor
     /// failure so a misconfigured environment never breaks layout.
     /// Module-internal so `OverlayCanvas.pillRect(...)` sizes the
     /// pill width with the same font family the painter will use.
-    static func labelFont(_ kind: ThemeFont, size: Double) -> NSFont {
+    static func labelFont(_ kind: FontKind, size: Double) -> NSFont {
         let pt = CGFloat(size)
         switch kind {
         case .mono:
             return NSFont.monospacedSystemFont(ofSize: pt, weight: .semibold)
-        case .system:
+        case .system, .menu:
             return NSFont.systemFont(ofSize: pt, weight: .semibold)
         case .rounded:
             let base = NSFont.systemFont(ofSize: pt, weight: .semibold)
