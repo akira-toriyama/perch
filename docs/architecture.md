@@ -377,8 +377,9 @@ canonical PR(s) on the GitHub project board (`perch roadmap`).
   with a `GridMode` instance. Small elements (under
   `[grid].nest-min-size`) fall back to AXPress.
 - **Visual surface** (PRs #84-98, 2026-06) — theme palette
-  (`[overlay].theme` — 21 built-ins + `[overlay.themes.<name>]`
-  custom palettes); pill shape; 4 effect channels (appear / match
+  (`[overlay].theme` — the shared sill catalog `canonicalThemeNames`
+  + `[overlay.themes.<name>]` custom palettes); pill shape; 4 effect
+  channels (appear / match
   / unmatch / narrow); neon border; sound; modifier badge
   (off / glyph / action); hot-reload of `~/.config/perch/config.toml`;
   hold-to-peek; per-app effect overrides; `--theme=<name>` CLI

@@ -186,11 +186,16 @@ UI フィードバック。
 - **Don't call it:** error flash, red flash, エラーフラッシュ
 
 ### theme palette
-[[pill]] の bg / accent / text / miss flash 色 + フォント種別を 1 タプルで
-表現するパレット (`ThemePalette`)。21 ビルトイン + ユーザー定義
-(`[overlay.themes.<name>]` — 詳細は [[custom palette]]) に対応。facet の
-`[overlay].theme` 語彙互換。
+[[pill]] の bg / accent / text + フォント種別を表現するパレット。静的カタログは
+共有ライブラリ **sill** の `ThemeSpec` (`canonicalThemeNames` — terminal /
+nord / … + クロスアプリの chomp / rainbow) を、perch 側で 2 つの app 固有
+オーバーレイ (pill 半透明 = `perchPillAlpha` / テーマ別 miss flash 色 =
+`perchMissOverride`) を上乗せして解決 (`perchThemeSpec`)。`system` は perch
+独自の dark-pill spec。ユーザー定義 (`[overlay.themes.<name>]` — 詳細は
+[[custom palette]]) は full `ThemeSpec`。facet とカタログを完全共有
+(accent / text / font 一致)。
 - 場所: [`Sources/PerchCore/Theme.swift`](../Sources/PerchCore/Theme.swift)
+  (bridge) / sill `Palette` module (カタログ)
 - 設定: `[overlay].theme`
 - **Don't call it:** colorway, skin, color theme
 
@@ -297,8 +302,8 @@ debounce + editor rename 対応の fd 再オープン。
 selector と衝突するため strict TOML 1.0 で弾かれる + perch も
 deprecation warning を出して silently 無視）。
 - 設定: `[overlay.themes.<name>]` の pill-bg / accent / text /
-  miss / pill-bg-alpha / font フィールド
-- 解決順: custom → built-in → `[[Theme]].system`
+  miss / pill-bg-alpha / font フィールド（full `ThemeSpec` に解決）
+- 解決順: custom → sill カタログ (`paletteFor`) → `system`
 - **Don't call it:** user theme, custom theme (英版でも custom palette が正式)
 
 ### theme override

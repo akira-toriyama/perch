@@ -56,9 +56,11 @@ prioritise-center = true
 [overlay]
 # Color / typography theme for hint pills. Picks the pill background
 # tint, accent (border + matched-glow + typed-prefix), text color,
-# and font family (mono / rounded / system) in one knob. Mirrors
-# facet's `[overlay] theme` vocabulary — drop a familiar theme name
-# here if you carry the facet config around.
+# and font family (mono / rounded / system) in one knob. The catalog
+# is SHARED with facet (the `sill` theming library) — the exact same
+# accent / text / font, so a theme name carried over from a facet
+# config paints identically. perch layers its own pill translucency
+# and themed miss-flash colors on top.
 #
 # Dark, monospace (editor-style):
 #   "terminal"   — Tokyo-Night green accent on near-black.
@@ -88,19 +90,27 @@ prioritise-center = true
 #   "mono-dark"  — stark white-on-black / OLED, mono font.
 #   "monotone"   — soft graphite greyscale, system font.
 #
+# Cross-app playful (from the shared sill catalog):
+#   "rainbow"    — loud max-saturation pink accent on near-black,
+#                  rounded font. (The STATIC palette — perch doesn't
+#                  cycle the hue; the overlay is up for sub-seconds.)
+#   "chomp"      — arcade Pac-Man: pellet-yellow on a black maze,
+#                  ghost-red miss-flash, neon-blue secondary.
+#
 # Adaptive:
 #   "system"     — NSColor.controlAccentColor + dark pill tint —
 #                  the historical perch default; follows the user's
-#                  macOS accent + light/dark appearance.
+#                  macOS accent (text + pill stay the dark frosted
+#                  chip regardless of light/dark).
 #
 # Special:
 #   "random"     — pick a random theme at each launch / `--reload`
 #                  (excludes "system").
 #
-# Unknown names clamp to "system" silently. Animated themes
-# (rainbow / theme-cycle-seconds in facet) are NOT supported —
-# perch's overlay is typically up for sub-seconds, so cycling
-# accents adds no value.
+# Unknown names clamp to "system" silently. perch always uses the
+# STATIC palette for a theme — the animated border / hue-cycling that
+# facet & wand layer on rainbow / chomp aren't part of perch's
+# transient overlay.
 theme = "system"
 
 # Accent override. Use to layer a personal highlight color on TOP

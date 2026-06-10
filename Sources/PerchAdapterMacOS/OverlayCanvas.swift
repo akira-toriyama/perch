@@ -708,8 +708,13 @@ final class OverlayCanvas: NSView {
     /// targets). If a pill would clip against the canvas edge,
     /// AppKit clips it naturally — far better than displacing.
     private func pillRect(for hint: Hint) -> CGRect {
+        // Size with the SAME resolved font the painter draws with —
+        // routes through resolvePalette so a `[overlay.themes.<name>]`
+        // custom palette's font (rounded / system) drives pill width
+        // too, not just the built-in catalog's.
         let font = HintPainter.labelFont(
-            config.overlay.theme.palette().font, size: config.overlay.fontSize)
+            HintPainter.resolvePalette(cfg: config).font,
+            size: config.overlay.fontSize)
         let label = hint.keys.uppercased()
         let textW = (label as NSString).size(
             withAttributes: [.font: font]).width

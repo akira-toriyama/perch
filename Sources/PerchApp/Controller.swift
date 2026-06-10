@@ -179,15 +179,18 @@ final class Controller {
     /// Apply `themeOverride` (when set) on top of `config`, returning
     /// the snapshot the adapter layer should see. When the override
     /// matches a custom palette name, the override wins by setting
-    /// `overlay.customThemeName`; otherwise it tries the built-in
-    /// `Theme.parse` path. Unknown names log + return config as-is.
+    /// `overlay.customThemeName`; otherwise it validates against sill's
+    /// canonical names (`perchCanonicalThemeName`, which also resolves
+    /// `random`). Unknown names log + return config as-is — perch's
+    /// loud typo-rejection for the CLI surface (`paletteFor` itself is
+    /// silent, so the explicit validation must stay).
     private func effectiveConfig() -> PerchConfig {
         guard let override = themeOverride else { return config }
         if config.overlay.customPalettes[override] != nil {
-            return config.withTheme(.system, customName: override)
+            return config.withTheme("system", customName: override)
         }
-        if let theme = Theme.parse(override) {
-            return config.withTheme(theme, customName: nil)
+        if let name = perchCanonicalThemeName(override) {
+            return config.withTheme(name, customName: nil)
         }
         Log.line("controller: --theme=\"\(override)\" — no matching "
                  + "built-in or [overlay.themes.\(override)] palette; "

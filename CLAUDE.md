@@ -61,16 +61,30 @@ facet / ws-tabs.
 - **3 layers are non-negotiable**: `PerchCore` is pure logic
   (CoreGraphics OK, NO AppKit / NO AX / NO Carbon). Today that
   includes `Config` (the typed view of `~/.config/perch/config.toml`),
-  `Theme` (palette catalog + ThemePalette + PillShape +
-  AppearEffect / MatchEffect / UnmatchEffect / BorderEffect /
-  EffectIntensity / ModifierBadgeStyle / ThemeFont), `Labeler`,
-  `TOML`, `Models`, `UIElementSource`, `SearchFilter`,
+  `Theme` (the sill theme **bridge** — `perchThemeSpec` /
+  `perchCanonicalThemeName` + perch's translucency / themed-miss
+  overlays — plus `PillShape` / AppearEffect / MatchEffect /
+  UnmatchEffect / BorderEffect / EffectIntensity / ModifierBadgeStyle),
+  `Labeler`, `TOML`, `Models`, `UIElementSource`, `SearchFilter`,
   `EmojiTable`, `Log`. `PerchAdapterMacOS` wraps the OS (AX
   enumeration, Carbon RegisterEventHotKey, NSPanel overlay,
   AXPress, NSSound) and is the *only* place those types appear.
   `PerchAdapterTest` is the synthetic counterpart for end-to-end
   labeling tests. Crossing layers always means there's a
   missing protocol.
+- **The static theme catalog comes from `sill`** (plan atelier's
+  shared theming library), not a perch-local catalog. `PerchCore`
+  depends on sill's pure, AppKit-free `Palette` module (`ThemeSpec` /
+  `paletteFor` / `FontKind` / `canonicalThemeNames`) — perch is the
+  family's "pure twin", proving that module is reusable outside
+  facet's View. perch does NOT link `PaletteKit`: the adapter resolves
+  the spec to `NSColor`s itself (`HintPainter.resolvePalette`) because
+  perch keeps its own `[overlay].accent` override + pill-surface
+  treatment (translucency / themed miss / dark-pill `system`). Third-
+  party SwiftPM deps stay at zero; the sill dep is first-party and
+  pinned (url + `.upToNextMinor`, lockfile committed). To edit sill +
+  perch atomically, swap `Package.swift`'s url dep for
+  `.package(path: "../sill")`.
 - **`UIElementSource` is the seam**:
   [Sources/PerchCore/UIElementSource.swift](Sources/PerchCore/UIElementSource.swift)
   declares the protocol; the Controller only ever sees
@@ -287,19 +301,24 @@ frontmost app's focused window**. The seam is captured at
   pills. **Font / padding / shape now flex** under the visual
   surface added in PR #86-93:
   - **Font**: `[overlay].font-size` (clamped 8..32, default 15)
-    in the family `[overlay].theme.palette().font` picks (mono /
-    rounded / system).
+    in the family the resolved spec picks (mono / rounded / system;
+    sill's `.menu` renders as system on pills). Resolved once via
+    `HintPainter.resolvePalette` — both the painter and
+    `OverlayCanvas.pillRect` width-sizing read it, so a custom
+    palette's font drives sizing too.
   - **Shape**: `[overlay].pill-shape` (`pill` / `square` /
     `circle` / `underline` / `tag`) — body path resolved in
     `HintPainter.shapeFor(cfg:hint:rect:)`. `.underline`
     suppresses the body entirely.
-  - **Palette**: `[overlay].theme` selects from 21 built-ins +
-    `[overlay.themes.<name>]` custom palettes. The default
-    `.system` keeps `NSColor.controlAccentColor` + dark pill
-    tint (historical look). `[overlay].accent` overrides the
-    palette accent so users can layer a personal highlight on
-    any theme body. See [docs/glossary.md](docs/glossary.md) →
-    "theme palette" / "custom palette" / "pill shape".
+  - **Palette**: `[overlay].theme` selects from the shared sill
+    catalog (`canonicalThemeNames` — terminal / nord / … + the
+    cross-app `chomp` / `rainbow`) or a `[overlay.themes.<name>]`
+    custom palette. The default `"system"` keeps
+    `NSColor.controlAccentColor` + dark pill tint (historical look).
+    `[overlay].accent` overrides the palette accent so users can layer
+    a personal highlight on any theme body. See
+    [docs/glossary.md](docs/glossary.md) → "theme palette" /
+    "custom palette" / "pill shape".
 - **Effect channels** (PR #86 / #87 / #93): 4 directions share
   one kind vocabulary (none / fade / explode / drop / rise /
   slide-* / vibrate / fireworks / confetti / random):

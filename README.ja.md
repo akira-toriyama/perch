@@ -141,8 +141,11 @@ match-effect = "none"            # Figma 内では派手な演出を抑制
 
 ### テーマ
 
-`[overlay].theme` で pill 背景 / アクセント / テキスト / ミス色 / フォントを
-一括指定。facet 互換語彙:
+`[overlay].theme` で pill 背景 / アクセント / テキスト / フォントを一括指定。
+カタログは **facet と共有**（[`sill`](https://github.com/akira-toriyama/sill)
+テーマライブラリ）— accent / text / font が完全一致なので、facet の設定から
+持ち込んだテーマ名は同じ見た目で描画される。pill の半透明とテーマ別ミス色は
+perch 側で上乗せ:
 
 - **Dark / mono**: `terminal` / `nord` / `dracula` / `gruvbox` /
   `catppuccin` / `rosepine` / `everforest` / `solarized` / `onedark` /
@@ -150,7 +153,8 @@ match-effect = "none"            # Figma 内では派手な演出を抑制
 - **Neon**: `neon` / `cyber` / `vapor`
 - **Light**: `cute` / `kawaii` / `paper`
 - **Monochrome**: `mono-light` / `mono-dark` / `monotone`
-- **Adaptive**: `system`（既定 — macOS アクセント + ライト/ダーク追従）
+- **Cross-app**: `rainbow`（静的な派手ピンク）/ `chomp`（アーケード Pac-Man）
+- **Adaptive**: `system`（既定 — macOS アクセント追従。pill 自体は常にダークの摺りガラスチップ）
 - **Special**: `random`（`--reload` ごとにランダム）
 
 自分でも定義可能（`[overlay.themes.<name>]`）:
