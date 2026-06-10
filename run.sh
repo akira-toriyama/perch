@@ -19,6 +19,11 @@
 # the new bundle takes over cleanly. Quit later: ./stop.sh or
 # `perch --quit`.
 #
+# After building, links a `perch` CLI onto PATH (via install-cli.sh)
+# pointing at the bundle just built, so client commands
+# (`perch --activate`, `perch --theme=…`, …) work right away — no
+# separate install step.
+#
 # PERCH_DEBUG=1 is set on the launched app so /tmp/perch.log stays
 # verbose during the dev loop. A normal / brew launch sets nothing
 # and stays quiet.
@@ -41,6 +46,14 @@ for arg in "$@"; do
 done
 
 ./package.sh $MODE_FLAG
+
+# Keep a `perch` CLI on PATH pointing at the bundle we just built, so
+# the daemon's client works without a manual ./install-cli.sh step.
+# Non-fatal: a link failure (e.g. no writable PATH dir) shouldn't block
+# the launch.
+./install-cli.sh --app="$APP" --silent || \
+    echo "run.sh: CLI link skipped (run ./install-cli.sh manually)"
+
 ./stop.sh
 sleep 0.5
 # Truncate the log only when tailing so the visible stream starts
