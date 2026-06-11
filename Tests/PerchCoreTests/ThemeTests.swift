@@ -2,27 +2,31 @@ import XCTest
 import Palette
 @testable import PerchCore
 
-/// Regression net for the sill theme migration (plan atelier). Before
-/// this, perch had ZERO coverage of theme resolution — a hex / alpha /
-/// font drift would have shipped silently. These tests pin:
+/// Regression net for the sill theme bridge (plan atelier, Phase V
+/// block-5: perch → sill 0.3.0). These pin:
 ///   * the sill bridge (`perchThemeSpec` / `perchCanonicalThemeName`),
-///   * perch's two app-specific overlays (translucency + themed miss),
+///   * perch's one app-specific overlay — the frosted-pill translucency
+///     (`perchPillAlpha`), now DERIVED from sill's `isLight` rather than
+///     a theme-name list,
 ///   * the `system` dark-pill spec,
 ///   * config parsing (name validation, random stability, custom
 ///     palettes, reserved-name shadowing),
-/// and — the headline of the migration — that perch now serves the
-/// FACET-CANONICAL palette values from sill, not its old hand-rolled
-/// catalog.
+/// and — the headline of the 0.3.0 migration — that perch now serves the
+/// Phase V 12-theme catalog with the new Tailwind role names
+/// (background / foreground / muted / primary), not the old 0.1.0 names.
 final class ThemeTests: XCTestCase {
 
     // MARK: - Name validation (perchCanonicalThemeName)
 
     func testCanonicalNamePassthroughAndCaseTrim() {
-        XCTAssertEqual(perchCanonicalThemeName("nord"), "nord")
-        XCTAssertEqual(perchCanonicalThemeName("  NORD  "), "nord")
+        XCTAssertEqual(perchCanonicalThemeName("dracula"), "dracula")
+        XCTAssertEqual(perchCanonicalThemeName("  DRACULA  "), "dracula")
         XCTAssertEqual(perchCanonicalThemeName("system"), "system")
-        // mono-light / mono-dark keep their hyphenated rawValue.
-        XCTAssertEqual(perchCanonicalThemeName("mono-light"), "mono-light")
+        // Hyphenated catalog names keep their rawValue.
+        XCTAssertEqual(perchCanonicalThemeName("catppuccin-mocha"),
+                       "catppuccin-mocha")
+        XCTAssertEqual(perchCanonicalThemeName("shades-of-purple"),
+                       "shades-of-purple")
     }
 
     func testCanonicalNameRejectsTypoAndEmpty() {
@@ -33,6 +37,31 @@ final class ThemeTests: XCTestCase {
         XCTAssertNil(perchCanonicalThemeName("frob"))
         XCTAssertNil(perchCanonicalThemeName(""))
         XCTAssertNil(perchCanonicalThemeName("   "))
+    }
+
+    func testPhaseVCatalogCutsOldThemeNames() {
+        // The Phase V 0-based reselect dropped these (folded into
+        // terminal / rainbow, or cut outright). A user config naming one
+        // now clamps to `system` rather than silently resolving — this
+        // pins the cut so a regression that re-adds them is caught.
+        for cut in ["nord", "cute", "kawaii", "paper", "monotone",
+                    "mono-light", "mono-dark", "neon", "cyber", "vapor",
+                    "onedark", "monokai", "solarized", "everforest",
+                    "rosepine", "catppuccin", "hacker"] {
+            XCTAssertNil(perchCanonicalThemeName(cut),
+                         "\(cut) should be cut from the Phase V catalog")
+        }
+    }
+
+    func testPhaseVCatalogAcceptsAllTwelveColorThemes() {
+        // The blessed 12 color themes + system are all valid --theme= values.
+        for name in ["terminal", "chomp", "rainbow", "cobalt2",
+                     "shades-of-purple", "tokyo-hack", "github-dark",
+                     "dracula", "catppuccin-mocha", "gruvbox",
+                     "github-light", "catppuccin-latte", "system"] {
+            XCTAssertEqual(perchCanonicalThemeName(name), name,
+                           "\(name) must be a valid catalog name")
+        }
     }
 
     func testRandomResolvesToConcreteStableName() {
@@ -49,95 +78,87 @@ final class ThemeTests: XCTestCase {
         }
     }
 
-    func testGainsChompAndRainbowThemeNames() {
-        // perch's old Theme enum lacked chomp and had rainbow only as a
-        // border effect. Adopting sill's canonicalThemeNames adds both
-        // as valid --theme= values.
-        XCTAssertEqual(perchCanonicalThemeName("chomp"), "chomp")
-        XCTAssertEqual(perchCanonicalThemeName("rainbow"), "rainbow")
-    }
-
     // MARK: - sill-canonical adoption (the migration's headline)
 
     func testServesSillCanonicalValues() {
-        // terminal: accent matched perch's old value already; text +
-        // bg are sill-AUTHORITATIVE (perch's old text was 0xE6EDF3).
+        // terminal: Phase V redefined it to classic green-on-near-black
+        // (the old hacker green folds in here; the old Tokyo-Night
+        // terminal retired to tokyo-hack).
         let term = perchThemeSpec("terminal")
-        XCTAssertEqual(term.accent.rgb, 0x9ECE6A)
-        XCTAssertEqual(term.text.rgb, 0xC0CAF5)   // sill canonical, not old 0xE6EDF3
-        XCTAssertEqual(term.bg?.rgb, 0x0E0F14)    // sill canonical, not old 0x0E1117
+        XCTAssertEqual(term.primary.rgb, 0x33FF66)
+        XCTAssertEqual(term.foreground.rgb, 0x9BFEDA)
+        XCTAssertEqual(term.background?.rgb, 0x050805)
 
-        // hacker: perch's old accent was 0x00FF41 — now sill's 0x33FF66.
-        XCTAssertEqual(perchThemeSpec("hacker").accent.rgb, 0x33FF66)
+        // dracula: signature purple primary, unchanged from sill.
+        XCTAssertEqual(perchThemeSpec("dracula").primary.rgb, 0xBD93F9)
+        XCTAssertEqual(perchThemeSpec("dracula").background?.rgb, 0x282A36)
 
-        // A fully-matching theme is unchanged either way.
-        XCTAssertEqual(perchThemeSpec("nord").accent.rgb, 0x88C0D0)
+        // github-dark (a Phase V newcomer perch never had): link-blue.
+        XCTAssertEqual(perchThemeSpec("github-dark").primary.rgb, 0x2F81F7)
     }
 
     // MARK: - App-specific overlay: translucency (perchPillAlpha)
 
-    func testPillAlphaTable() {
-        XCTAssertEqual(perchPillAlpha("terminal"), 0.30)
-        XCTAssertEqual(perchPillAlpha("monotone"), 0.55)
-        XCTAssertEqual(perchPillAlpha("cute"), 0.85)
-        XCTAssertEqual(perchPillAlpha("kawaii"), 0.85)
-        XCTAssertEqual(perchPillAlpha("paper"), 0.90)
-        XCTAssertEqual(perchPillAlpha("mono-light"), 0.92)
-        XCTAssertEqual(perchPillAlpha("mono-dark"), 0.92)
-        // chomp / rainbow (new) + unknown default to the dark 0.30.
-        XCTAssertEqual(perchPillAlpha("chomp"), 0.30)
-        XCTAssertEqual(perchPillAlpha("rainbow"), 0.30)
+    func testPillAlphaDerivedFromIsLight() {
+        // perchPillAlpha is now a pure function of the spec's lightness
+        // (background luminance > 0.5), NOT a theme-name table — so new
+        // catalog light themes are handled with no perch-local list.
+        XCTAssertEqual(perchPillAlpha(for: paletteFor("terminal")), 0.30)
+        XCTAssertEqual(perchPillAlpha(for: paletteFor("dracula")), 0.30)
+        XCTAssertEqual(perchPillAlpha(for: paletteFor("chomp")), 0.30)
+        // The two surviving light themes ride higher so the pale fill is
+        // not washed out under the frost.
+        XCTAssertEqual(perchPillAlpha(for: paletteFor("github-light")), 0.85)
+        XCTAssertEqual(perchPillAlpha(for: paletteFor("catppuccin-latte")), 0.85)
     }
 
     func testThemeSpecCarriesPerchAlpha() {
-        // sill presets leave bgAlpha nil; perchThemeSpec must inject it
-        // so the frosted pill stays translucent.
-        XCTAssertEqual(perchThemeSpec("terminal").bgAlpha ?? -1, 0.30)
-        XCTAssertEqual(perchThemeSpec("cute").bgAlpha ?? -1, 0.85)
-        XCTAssertEqual(perchThemeSpec("monotone").bgAlpha ?? -1, 0.55)
+        // sill presets leave backgroundAlpha nil; perchThemeSpec must
+        // inject it so the frosted pill stays translucent.
+        XCTAssertEqual(perchThemeSpec("terminal").backgroundAlpha ?? -1, 0.30)
+        XCTAssertEqual(perchThemeSpec("github-light").backgroundAlpha ?? -1, 0.85)
+        XCTAssertEqual(perchThemeSpec("catppuccin-latte").backgroundAlpha ?? -1, 0.85)
     }
 
-    // MARK: - App-specific overlay: themed miss (perchMissOverride)
+    // MARK: - Miss color flows through spec.error (no perch override)
 
-    func testMissOverrideTable() {
-        XCTAssertEqual(perchMissOverride("neon"), 0xFF00AA)
-        XCTAssertEqual(perchMissOverride("cyber"), 0xFF1493)
-        XCTAssertEqual(perchMissOverride("vapor"), 0xFFD700)
-        XCTAssertEqual(perchMissOverride("monotone"), 0xE07070)
-        XCTAssertNil(perchMissOverride("nord"))
-        XCTAssertNil(perchMissOverride("terminal"))
-    }
-
-    func testThemeSpecBakesThemedMissIntoError() {
-        // perch's themed miss lands on spec.error.
-        XCTAssertEqual(perchThemeSpec("neon").error.rgb, 0xFF00AA)
-        XCTAssertEqual(perchThemeSpec("vapor").error.rgb, 0xFFD700)
-        // No override → sill's default error.
-        XCTAssertEqual(perchThemeSpec("terminal").error.rgb, defaultErrorHex)
-        XCTAssertEqual(perchThemeSpec("nord").error.rgb, defaultErrorHex)
-        // chomp ships its OWN error in sill (arcade ghost-red) and perch
-        // has no override, so it survives.
-        XCTAssertEqual(perchThemeSpec("chomp").error.rgb, 0xFF0000)
+    func testMissColorFlowsFromSpecError() {
+        // perch no longer overrides the miss hue per theme (the 9 old
+        // overrides all targeted now-cut themes). The miss flash reads
+        // straight from sill's `error` role: a theme's own error, or the
+        // shared default when it ships none.
+        XCTAssertEqual(perchThemeSpec("terminal").error.rgb, 0xFF3B3B)  // terminal's own
+        XCTAssertEqual(perchThemeSpec("chomp").error.rgb, 0xFF0000)     // arcade ghost-red
+        XCTAssertEqual(perchThemeSpec("dracula").error.rgb, 0xFF5555)   // dracula's own
+        // gruvbox ships no error → sill's shared default.
+        XCTAssertEqual(perchThemeSpec("gruvbox").error.rgb, defaultErrorHex)
     }
 
     // MARK: - system theme (perch's dark-pill spec, NOT sill's panel)
 
     func testSystemSpecIsPerchDarkPill() {
+        // Q6: perch's system is a local divergence — a concrete black
+        // pill with fixed white ink that does NOT flip with the OS
+        // appearance (sill's .system is an adaptive vibrancy panel with
+        // background == nil). It borrows only the OS control-accent.
         let sys = perchThemeSpec("system")
-        XCTAssertEqual(sys.bg?.rgb, perchSystemPillBgHex)   // concrete black, not nil
-        XCTAssertEqual(sys.bg?.rgb, 0x000000)
-        XCTAssertEqual(sys.text.rgb, 0xFFFFFF)              // white, not adaptive labelColor
-        XCTAssertTrue(sys.usesSystemAccent)                 // borrows OS control-accent
-        XCTAssertEqual(sys.bgAlpha ?? -1, 0.30)
+        XCTAssertEqual(sys.background?.rgb, perchSystemPillBgHex)  // concrete black, not nil
+        XCTAssertEqual(sys.background?.rgb, 0x000000)
+        XCTAssertEqual(sys.foreground.rgb, 0xFFFFFF)              // white, not adaptive labelColor
+        XCTAssertTrue(sys.usesSystemPrimary)                     // borrows OS control-accent
+        XCTAssertEqual(sys.backgroundAlpha ?? -1, 0.30)
         XCTAssertEqual(sys.font, .system)
+        // Concrete background auto-derives .fixed (atelier Q6).
+        XCTAssertEqual(sys.backgroundMode, .fixed)
+        XCTAssertFalse(sys.isLight)                              // black → dark pill
     }
 
     // MARK: - Config: theme name parsing
 
     func testConfigThemeName() {
         XCTAssertEqual(
-            PerchConfig.parse("[overlay]\ntheme = \"nord\"").overlay.theme,
-            "nord")
+            PerchConfig.parse("[overlay]\ntheme = \"dracula\"").overlay.theme,
+            "dracula")
         // Default (no key) is system.
         XCTAssertEqual(PerchConfig.parse("").overlay.theme, "system")
     }
@@ -145,8 +166,12 @@ final class ThemeTests: XCTestCase {
     func testConfigThemeTypoClampsToSystemSilently() {
         // Config-file typo clamps to system per the TOML
         // clamp-don't-reject rule (the loud path is the --theme= CLI).
+        // A now-cut name (`nord`) is just a typo to the Phase V catalog.
         XCTAssertEqual(
             PerchConfig.parse("[overlay]\ntheme = \"frob\"").overlay.theme,
+            "system")
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay]\ntheme = \"nord\"").overlay.theme,
             "system")
     }
 
@@ -180,26 +205,38 @@ final class ThemeTests: XCTestCase {
         guard let spec = cfg.overlay.customPalettes["mine"] else {
             return XCTFail("custom palette \"mine\" not parsed")
         }
-        XCTAssertEqual(spec.bg?.rgb, 0x1A1A1A)
-        XCTAssertEqual(spec.accent.rgb, 0xFF8800)
-        XCTAssertEqual(spec.text.rgb, 0xFFFFFF)
+        XCTAssertEqual(spec.background?.rgb, 0x1A1A1A)
+        XCTAssertEqual(spec.primary.rgb, 0xFF8800)
+        XCTAssertEqual(spec.foreground.rgb, 0xFFFFFF)
         XCTAssertEqual(spec.error.rgb, 0x00FF00)     // miss → error
-        XCTAssertEqual(spec.bgAlpha ?? -1, 0.7)
+        XCTAssertEqual(spec.backgroundAlpha ?? -1, 0.7)
         XCTAssertEqual(spec.font, .rounded)
+    }
+
+    func testCustomPaletteMenuFont() {
+        // FontKind gained .menu in sill 0.3.0; the custom-palette parser
+        // accepts it (defaults to .mono on anything else).
+        let src = """
+        [overlay.themes.native]
+        accent = "#abcdef"
+        font = "menu"
+        """
+        let cfg = PerchConfig.parse(src)
+        XCTAssertEqual(cfg.overlay.customPalettes["native"]?.font, .menu)
     }
 
     func testCustomPaletteCannotShadowBuiltin() {
         // A custom section named after a built-in (or a sill meta-name)
         // is skipped so it can never hide the canonical catalog.
         let src = """
-        [overlay.themes.nord]
+        [overlay.themes.dracula]
         accent = "#ff0000"
 
         [overlay.themes.chomp]
         accent = "#ff0000"
         """
         let cfg = PerchConfig.parse(src)
-        XCTAssertNil(cfg.overlay.customPalettes["nord"])
+        XCTAssertNil(cfg.overlay.customPalettes["dracula"])
         XCTAssertNil(cfg.overlay.customPalettes["chomp"])
     }
 
@@ -217,9 +254,9 @@ final class ThemeTests: XCTestCase {
         guard let spec = cfg.overlay.customPalettes["spartan"] else {
             return XCTFail("custom palette not parsed")
         }
-        XCTAssertEqual(spec.accent.rgb, 0xABCDEF)
+        XCTAssertEqual(spec.primary.rgb, 0xABCDEF)
         XCTAssertEqual(spec.error.rgb, 0xEF4444)   // miss default
-        XCTAssertEqual(spec.bgAlpha ?? -1, 0.55)   // alpha default
+        XCTAssertEqual(spec.backgroundAlpha ?? -1, 0.55)   // alpha default
         XCTAssertEqual(spec.font, .mono)           // font default
     }
 
@@ -231,8 +268,8 @@ final class ThemeTests: XCTestCase {
         accent = "#ff8800"
         """
         let cfg = PerchConfig.parse(src)
-        let switched = cfg.withTheme("nord", customName: nil)
-        XCTAssertEqual(switched.overlay.theme, "nord")
+        let switched = cfg.withTheme("dracula", customName: nil)
+        XCTAssertEqual(switched.overlay.theme, "dracula")
         XCTAssertNil(switched.overlay.customThemeName)
         XCTAssertNotNil(switched.overlay.customPalettes["mine"],
                         "custom palettes must survive a theme switch")

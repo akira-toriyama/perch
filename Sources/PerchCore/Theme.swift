@@ -1,19 +1,19 @@
 // Theme bridge + pill/effect vocabulary.
 //
-// The STATIC palette catalog (the `terminal` / `nord` / `cute` / …
-// presets, their accent / text / bg / font) now lives in the shared
-// `sill` library (plan atelier's north star: "facet の theme 真似て"
-// never said twice). perch consumes only sill's pure, AppKit-free
-// `Palette` module — `ThemeSpec`, `paletteFor`, `FontKind`,
+// The STATIC palette catalog (the `terminal` / `dracula` / `gruvbox` /
+// … presets, their primary / foreground / background / font) now lives
+// in the shared `sill` library (plan atelier's north star: "facet の
+// theme 真似て" never said twice). perch consumes only sill's pure,
+// AppKit-free `Palette` module — `ThemeSpec`, `paletteFor`, `FontKind`,
 // `canonicalThemeNames` — and is the family's "pure twin", proving the
 // pure layer is reusable by a non-facet Core.
 //
 // What stays perch-side here:
 //   * the THEME-NAME bridge (`perchThemeSpec` / `perchCanonicalThemeName`)
-//     that adapts sill's spec to perch's pill — adding two app-specific
-//     overlays sill deliberately omits: the frosted-pill translucency
-//     (`perchPillAlpha`) and the themed miss-flash color
-//     (`perchMissOverride`), plus perch's own dark-pill `system` spec;
+//     that adapts sill's spec to perch's pill — adding the one
+//     app-specific overlay sill deliberately omits: the frosted-pill
+//     translucency (`perchPillAlpha`), plus perch's own dark-pill
+//     `system` spec;
 //   * the pill geometry (`PillShape`) and the transient hint-overlay
 //     effects (`MatchEffect` / `UnmatchEffect` / `AppearEffect` /
 //     `BorderEffect` / `EffectIntensity`) and the modifier-badge style —
@@ -29,83 +29,58 @@ import Palette
 
 // MARK: - Theme name → ThemeSpec (sill bridge)
 
-/// Pill-background opacity perch paints behind the hint glyphs, keyed
-/// by canonical theme name. This is perch's app-specific pill-surface
-/// treatment (the frosted translucent pill), NOT part of the shared
-/// `sill` palette — sill's `ThemeSpec`s leave `bgAlpha` nil because
-/// facet's panels are opaque. Light themes ride higher (the pale fill
-/// would wash out under the frost otherwise); the dark editor themes
-/// keep the historical 0.30. Unknown names (incl. the cross-app
-/// additions `chomp` / `rainbow`, both dark) default to 0.30.
-public func perchPillAlpha(_ name: String) -> Double {
-    switch name.lowercased() {
-    case "cute", "kawaii":          return 0.85
-    case "paper":                   return 0.90
-    case "mono-light", "mono-dark": return 0.92
-    case "monotone":                return 0.55
-    default:                        return 0.30
-    }
-}
-
-/// Per-theme "missed key" flash color (`0xRRGGBB`), keyed by canonical
-/// name. perch keeps these themed miss hues (plan-atelier decision: the
-/// miss flash is app-specific pill feedback, like `perchPillAlpha`,
-/// rather than a shared palette atom). `nil` ⇒ inherit the spec's
-/// `error` (sill's default 0xEF4444, or a theme that ships its own —
-/// e.g. chomp's 0xFF0000).
-public func perchMissOverride(_ name: String) -> UInt32? {
-    switch name.lowercased() {
-    case "neon":       return 0xFF00AA
-    case "cyber":      return 0xFF1493
-    case "vapor":      return 0xFFD700
-    case "cute":       return 0xD63384
-    case "kawaii":     return 0xFF5C8A
-    case "paper":      return 0xDC2626
-    case "mono-light": return 0xCC0000
-    case "mono-dark":  return 0xFF3344
-    case "monotone":   return 0xE07070
-    default:           return nil
-    }
+/// Pill-background opacity perch paints behind the hint glyphs. This is
+/// perch's app-specific pill-surface treatment (the frosted translucent
+/// pill), NOT part of the shared `sill` palette — sill's `ThemeSpec`s
+/// leave `backgroundAlpha` nil because facet's panels are opaque. Light
+/// themes ride higher (the pale fill would wash out under the frost
+/// otherwise); dark themes keep the historical 0.30. Derived from sill's
+/// `isLight` luminance test (background brightness) rather than a
+/// theme-name list, so new catalog light themes (`github-light` /
+/// `catppuccin-latte`, …) are handled automatically — no perch-local
+/// theme-name list to drift out of sync with sill (atelier north star).
+public func perchPillAlpha(for spec: ThemeSpec) -> Double {
+    spec.isLight ? 0.85 : 0.30
 }
 
 /// Fallback pill background for the `system` theme. sill's `system`
-/// `ThemeSpec` carries `bg == nil` (vibrancy fall-through for facet's
-/// adaptive panel); perch's pill is a dark frosted chip regardless of
-/// the macOS appearance, so it needs a concrete fill. Black at the
-/// default translucency = the historical perch `system` look.
+/// `ThemeSpec` carries `background == nil` (vibrancy fall-through for
+/// facet's adaptive panel); perch's pill is a dark frosted chip
+/// regardless of the macOS appearance, so it needs a concrete fill.
+/// Black at the default translucency = the historical perch `system`
+/// look.
 public let perchSystemPillBgHex: UInt32 = 0x000000
 
 /// perch's `system` theme spec. NOT sill's `system` preset (an adaptive
-/// vibrancy panel with `bg == nil` + dynamic label colors): perch's
-/// surface is a dark translucent pill that does NOT flip with the OS
-/// appearance, so it keeps white text on a black fill and only borrows
-/// the OS control-accent via the `accent` sentinel (0). This is the
-/// legitimate "bg は app 別" surface difference between facet's panel
-/// and perch's pill. `dim` is a placeholder — perch never reads it.
+/// vibrancy panel with `background == nil` + dynamic label colors):
+/// perch's surface is a dark translucent pill that does NOT flip with
+/// the OS appearance, so it keeps white text on a black fill and only
+/// borrows the OS control-accent via the `primary` sentinel (0). This is
+/// the legitimate "bg は app 別" surface difference between facet's panel
+/// and perch's pill (atelier Q6: the dark pill stays a divergence; the
+/// concrete black `background` auto-derives `backgroundMode == .fixed`).
+/// `muted` is a placeholder — perch never reads it.
 public let perchSystemSpec = ThemeSpec(
-    bg: HexColor(perchSystemPillBgHex),
-    text: HexColor(0xFFFFFF),
-    dim: HexColor(0xFFFFFF),
-    accent: HexColor(systemAccentSentinel),
+    background: HexColor(perchSystemPillBgHex),
+    foreground: HexColor(0xFFFFFF),
+    muted: HexColor(0xFFFFFF),
+    primary: HexColor(systemPrimarySentinel),
     font: .system,
     error: HexColor(defaultErrorHex),
-    bgAlpha: perchPillAlpha("system"))
+    backgroundAlpha: 0.30)   // dark pill → the historical default frost
 
 /// Resolve a canonical theme name into the `ThemeSpec` perch renders:
-/// sill's authoritative palette for everything except the two
-/// app-specific overlays — translucency (`bgAlpha`) and the themed miss
-/// color (`error`). `system` returns perch's own dark-pill spec. The
-/// name is assumed already canonical (validated + `random`-resolved at
-/// config parse via `perchCanonicalThemeName`); an unknown name falls
-/// through to sill's `paletteFor`, which clamps to `terminal`.
+/// sill's authoritative palette plus perch's one app-specific overlay,
+/// the frosted-pill translucency (`backgroundAlpha`). `system` returns
+/// perch's own dark-pill spec. The name is assumed already canonical
+/// (validated + `random`-resolved at config parse via
+/// `perchCanonicalThemeName`); an unknown name falls through to sill's
+/// `paletteFor`, which clamps to `terminal`.
 public func perchThemeSpec(_ name: String) -> ThemeSpec {
     let n = name.lowercased()
     if n == "system" { return perchSystemSpec }
-    var spec = paletteFor(n)              // sill canonical bg/accent/text/font
-    spec.bgAlpha = perchPillAlpha(n)      // perch translucency overlay
-    if let miss = perchMissOverride(n) {  // perch themed miss-flash overlay
-        spec.error = HexColor(miss)
-    }
+    var spec = paletteFor(n)                    // sill canonical palette
+    spec.backgroundAlpha = perchPillAlpha(for: spec)  // perch frost overlay
     return spec
 }
 

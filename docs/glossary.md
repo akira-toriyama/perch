@@ -186,14 +186,14 @@ UI フィードバック。
 - **Don't call it:** error flash, red flash, エラーフラッシュ
 
 ### theme palette
-[[pill]] の bg / accent / text + フォント種別を表現するパレット。静的カタログは
-共有ライブラリ **sill** の `ThemeSpec` (`canonicalThemeNames` — terminal /
-nord / … + クロスアプリの chomp / rainbow) を、perch 側で 2 つの app 固有
-オーバーレイ (pill 半透明 = `perchPillAlpha` / テーマ別 miss flash 色 =
-`perchMissOverride`) を上乗せして解決 (`perchThemeSpec`)。`system` は perch
-独自の dark-pill spec。ユーザー定義 (`[overlay.themes.<name>]` — 詳細は
-[[custom palette]]) は full `ThemeSpec`。facet とカタログを完全共有
-(accent / text / font 一致)。
+[[pill]] の background / primary / foreground + フォント種別を表現するパレット。
+静的カタログは共有ライブラリ **sill** の `ThemeSpec` (`canonicalThemeNames` —
+terminal / dracula / … + クロスアプリの chomp / rainbow) を、perch 側で 1 つの
+app 固有オーバーレイ (pill 半透明 = `perchPillAlpha` — sill の `isLight` から
+導出) を上乗せして解決 (`perchThemeSpec`)。miss flash 色は sill の `error`
+ロールをそのまま使用。`system` は perch 独自の dark-pill spec。ユーザー定義
+(`[overlay.themes.<name>]` — 詳細は [[custom palette]]) は full `ThemeSpec`。
+facet とカタログを完全共有 (background / primary / foreground / font 一致)。
 - 場所: [`Sources/PerchCore/Theme.swift`](../Sources/PerchCore/Theme.swift)
   (bridge) / sill `Palette` module (カタログ)
 - 設定: `[overlay].theme`

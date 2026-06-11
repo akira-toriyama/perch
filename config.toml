@@ -60,52 +60,42 @@ prioritise-center = true
 # is SHARED with facet (the `sill` theming library) — the exact same
 # accent / text / font, so a theme name carried over from a facet
 # config paints identically. perch layers its own pill translucency
-# and themed miss-flash colors on top.
+# on top (light themes ride a higher opacity so the pale fill stays
+# legible under the frost).
 #
-# Dark, monospace (editor-style):
-#   "terminal"   — Tokyo-Night green accent on near-black.
-#   "nord"       — cool polar-night blue-grey; frost-cyan accent.
-#   "dracula"    — vivid dark; purple accent.
-#   "gruvbox"    — retro warm dark; orange accent.
-#   "catppuccin" — soft pastel dark (Mocha); mauve accent.
-#   "rosepine"   — muted aubergine; iris accent.
-#   "everforest" — soft forest dark; green accent.
-#   "solarized"  — classic teal-base dark; blue accent.
-#   "onedark"    — Atom One Dark; blue accent.
-#   "monokai"    — high-energy dark; lime accent.
-#   "hacker"     — black base, neon-green accent (green-on-black).
+# Favorites:
+#   "terminal"         — classic phosphor green on near-black (vivid
+#                        green accent, amber secondary), mono.
+#   "chomp"            — arcade Pac-Man: pellet-yellow on a black maze,
+#                        ghost-red miss-flash, neon-blue secondary.
+#   "rainbow"          — loud max-saturation pink accent on near-black,
+#                        rounded font. (The STATIC palette — perch
+#                        doesn't cycle the hue.)
 #
-# Neon (vivid electric on hue-tinted near-black):
-#   "neon"       — electric cyan on blue-black; magenta miss-flash.
-#   "cyber"      — aqua/teal on teal-black; hot-pink miss-flash.
-#   "vapor"      — synthwave pink on purple-black; gold miss-flash.
+# Reference (VS Code favorites):
+#   "cobalt2"          — deep cobalt-blue; bright-gold accent (Wes Bos).
+#   "shades-of-purple" — purple-indigo; golden-yellow accent.
+#   "tokyo-hack"       — midnight-indigo; red-orange chrome (Tokyo Night).
 #
-# Light (rounded / system font, dark text on light pill):
-#   "cute"       — soft pastel pink; rounded font.
-#   "kawaii"     — candy lavender; rounded font.
-#   "paper"      — clean daytime white; system font.
+# Popular dark, monospace:
+#   "github-dark"      — the most-installed theme; link-blue accent.
+#   "dracula"          — vivid dark; signature purple, pink secondary.
+#   "catppuccin-mocha" — soft pastel dark; mauve accent.
+#   "gruvbox"          — retro warm dark; orange accent.
 #
-# Monochrome:
-#   "mono-light" — stark black-on-white, mono font.
-#   "mono-dark"  — stark white-on-black / OLED, mono font.
-#   "monotone"   — soft graphite greyscale, system font.
-#
-# Cross-app playful (from the shared sill catalog):
-#   "rainbow"    — loud max-saturation pink accent on near-black,
-#                  rounded font. (The STATIC palette — perch doesn't
-#                  cycle the hue; the overlay is up for sub-seconds.)
-#   "chomp"      — arcade Pac-Man: pellet-yellow on a black maze,
-#                  ghost-red miss-flash, neon-blue secondary.
+# Light (dark text on a light pill):
+#   "github-light"     — clean daytime white; link-blue, system font.
+#   "catppuccin-latte" — warm-grey lavender light; purple accent.
 #
 # Adaptive:
-#   "system"     — NSColor.controlAccentColor + dark pill tint —
-#                  the historical perch default; follows the user's
-#                  macOS accent (text + pill stay the dark frosted
-#                  chip regardless of light/dark).
+#   "system"           — NSColor.controlAccentColor + dark pill tint —
+#                        the historical perch default; follows the
+#                        user's macOS accent (text + pill stay the dark
+#                        frosted chip regardless of light/dark).
 #
 # Special:
-#   "random"     — pick a random theme at each launch / `--reload`
-#                  (excludes "system").
+#   "random"           — pick a random theme at each launch / `--reload`
+#                        (excludes "system").
 #
 # Unknown names clamp to "system" silently. perch always uses the
 # STATIC palette for a theme — the animated border / hue-cycling that
@@ -114,8 +104,8 @@ prioritise-center = true
 theme = "system"
 
 # Accent override. Use to layer a personal highlight color on TOP
-# of `theme` — e.g. nord pill body + hot-pink typed-prefix:
-#   theme  = "nord"
+# of `theme` — e.g. dracula pill body + hot-pink typed-prefix:
+#   theme  = "dracula"
 #   accent = "#ff85b3"
 # "system" (the default) lets the theme's palette accent win.
 # A `#rrggbb` literal overrides it. Anything else falls back to
@@ -127,7 +117,7 @@ accent = "system"
 # section becomes a selectable theme — just set `theme = "<name>"`
 # above. Resolution order:
 #   1. Custom palette here (if `theme` matches a section name)
-#   2. Built-in catalog (terminal / nord / dracula / ...)
+#   2. Built-in catalog (terminal / dracula / github-dark / ...)
 #   3. System default
 #
 # Names that shadow built-ins are silently ignored (a warning lands
