@@ -143,17 +143,14 @@ match-effect = "none"            # Figma 内では派手な演出を抑制
 
 `[overlay].theme` で pill 背景 / アクセント / テキスト / フォントを一括指定。
 カタログは **facet と共有**（[`sill`](https://github.com/akira-toriyama/sill)
-テーマライブラリ）— accent / text / font が完全一致なので、facet の設定から
-持ち込んだテーマ名は同じ見た目で描画される。pill の半透明とテーマ別ミス色は
-perch 側で上乗せ:
+テーマライブラリ）— background / accent / text / font が完全一致なので、
+facet の設定から持ち込んだテーマ名は同じ見た目で描画される。pill の半透明は
+perch 側で上乗せ（light テーマは摺りガラスで淡色が飛ばないよう不透明度を上げる）:
 
-- **Dark / mono**: `terminal` / `nord` / `dracula` / `gruvbox` /
-  `catppuccin` / `rosepine` / `everforest` / `solarized` / `onedark` /
-  `monokai` / `hacker`
-- **Neon**: `neon` / `cyber` / `vapor`
-- **Light**: `cute` / `kawaii` / `paper`
-- **Monochrome**: `mono-light` / `mono-dark` / `monotone`
-- **Cross-app**: `rainbow`（静的な派手ピンク）/ `chomp`（アーケード Pac-Man）
+- **Favorites**: `terminal`（古典的な緑 on 黒）/ `chomp`（アーケード Pac-Man）/ `rainbow`（派手なフルスペクトル）
+- **Reference**: `cobalt2` / `shades-of-purple` / `tokyo-hack`
+- **Popular dark**: `github-dark` / `dracula` / `catppuccin-mocha` / `gruvbox`
+- **Light**: `github-light` / `catppuccin-latte`
 - **Adaptive**: `system`（既定 — macOS アクセント追従。pill 自体は常にダークの摺りガラスチップ）
 - **Special**: `random`（`--reload` ごとにランダム）
 
@@ -240,7 +237,7 @@ clamp 範囲が併記されている。
 | `--reload` | client | デーモンに設定再読み込みを通知 (`--theme=` セッション override もクリア) |
 | `--quit` | client | デーモンを終了 |
 | `--status` | client | 現在のホットキー / 最終アクティベーションを表示 |
-| `--theme=<name>` | client | テーマのライブ override (built-in 名 or `[overlay.themes.<name>]` カスタム名)。`--reload` か `--theme=` で解除されるまで全 activation に適用。即時反映には `--activate` と併用: `perch --theme=neon --activate` |
+| `--theme=<name>` | client | テーマのライブ override (built-in 名 or `[overlay.themes.<name>]` カスタム名)。`--reload` か `--theme=` で解除されるまで全 activation に適用。即時反映には `--activate` と併用: `perch --theme=dracula --activate` |
 | `--dump-ax` | standalone | 前面アプリの perch がラベリングする AX 要素を全 dump — バグレポート用 |
 | `--dump-ax-tree` | standalone | フォーカスウィンドウの生 AX tree (深さ優先、フィルタ前)。web/Electron で見えない領域の調査用 |
 | `--dump-regions` | standalone | `--dump-ax` と同じ形式で `--regional` のコンテナを dump |

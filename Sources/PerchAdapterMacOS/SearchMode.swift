@@ -508,18 +508,4 @@ private final class SearchCanvas: NSView {
         p.lineWidth = 1
         p.stroke()
     }
-
-    private static func accent(_ s: String) -> NSColor {
-        if s == "system" { return .controlAccentColor }
-        var t = s
-        if t.hasPrefix("#") { t.removeFirst() }
-        guard t.count == 6, let v = UInt32(t, radix: 16) else {
-            return .controlAccentColor
-        }
-        return NSColor(
-            srgbRed: CGFloat((v >> 16) & 0xFF) / 255,
-            green:    CGFloat((v >> 8) & 0xFF) / 255,
-            blue:     CGFloat(v & 0xFF) / 255,
-            alpha: 1)
-    }
 }

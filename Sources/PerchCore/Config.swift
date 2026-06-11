@@ -702,21 +702,23 @@ public struct PerchConfig: Sendable {
                 case "mono":    return .mono
                 case "rounded": return .rounded
                 case "system":  return .system
+                case "menu":    return .menu
                 default:        return .mono
                 }
             }()
             // Map perch's custom-palette keys onto a sill ThemeSpec:
-            // pill-bg → bg, miss → error, pill-bg-alpha → bgAlpha. perch
-            // doesn't read dim/accent2/divider/hover/sel for pills, so
-            // dim is a placeholder (= text) and the rest stay nil.
+            // pill-bg → background, miss → error, pill-bg-alpha →
+            // backgroundAlpha. perch doesn't read
+            // muted/secondary/border/hover/selection for pills, so muted
+            // is a placeholder (= foreground) and the rest stay nil.
             out[name] = ThemeSpec(
-                bg: HexColor(pillBg),
-                text: HexColor(text),
-                dim: HexColor(text),
-                accent: HexColor(accent),
+                background: HexColor(pillBg),
+                foreground: HexColor(text),
+                muted: HexColor(text),
+                primary: HexColor(accent),
                 font: font,
                 error: HexColor(miss),
-                bgAlpha: alpha)
+                backgroundAlpha: alpha)
         }
         return out
     }

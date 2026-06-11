@@ -140,16 +140,16 @@ match-effect = "none"            # silence flashy effects inside Figma
 
 `[overlay].theme` picks pill background, accent, text, and font family
 in one knob. The catalog is **shared with facet** (the [`sill`](https://github.com/akira-toriyama/sill)
-theming library) — identical accent / text / font, so a theme name
-carried over from a facet config paints the same. perch layers its own
-pill translucency and themed miss-flash colors on top.
+theming library) — identical background / accent / text / font, so a
+theme name carried over from a facet config paints the same. perch
+layers its own pill translucency on top (light themes ride a higher
+opacity so the pale fill stays legible under the frost).
 
-- **Dark / mono**: `terminal`, `nord`, `dracula`, `gruvbox`, `catppuccin`,
-  `rosepine`, `everforest`, `solarized`, `onedark`, `monokai`, `hacker`
-- **Neon**: `neon`, `cyber`, `vapor`
-- **Light**: `cute`, `kawaii`, `paper`
-- **Monochrome**: `mono-light`, `mono-dark`, `monotone`
-- **Cross-app**: `rainbow` (static loud-pink palette), `chomp` (arcade Pac-Man)
+- **Favorites**: `terminal` (classic green-on-black), `chomp` (arcade
+  Pac-Man), `rainbow` (loud full-spectrum)
+- **Reference**: `cobalt2`, `shades-of-purple`, `tokyo-hack`
+- **Popular dark**: `github-dark`, `dracula`, `catppuccin-mocha`, `gruvbox`
+- **Light**: `github-light`, `catppuccin-latte`
 - **Adaptive**: `system` (default — follows the macOS accent; the pill itself stays a dark frosted chip)
 - **Special**: `random` (picks a built-in per `--reload`)
 
@@ -236,7 +236,7 @@ Every knob has a heredoc explaining what it does + the clamp range.
 | `--reload` | client | tell running daemon to re-read config (clears any `--theme=` override) |
 | `--quit` | client | terminate running daemon |
 | `--status` | client | dump active hotkey + last activation |
-| `--theme=<name>` | client | live theme override (built-in or `[overlay.themes.<name>]` custom) — persists until `--reload` or `--theme=` clears it. Combine with `--activate` to apply immediately: `perch --theme=neon --activate` |
+| `--theme=<name>` | client | live theme override (built-in or `[overlay.themes.<name>]` custom) — persists until `--reload` or `--theme=` clears it. Combine with `--activate` to apply immediately: `perch --theme=dracula --activate` |
 | `--dump-ax` | standalone | print every AX element perch would label in the frontmost app — for bug reports |
 | `--dump-ax-tree` | standalone | print the raw AX tree of the focused window (depth-first, pre-filter) — for diagnosing web/Electron blind spots |
 | `--dump-regions` | standalone | same shape as `--dump-ax` but for `--regional` containers |

@@ -687,7 +687,7 @@ final class HintPainter: NSView {
     ///    (a full sill `ThemeSpec` parsed from config).
     /// 2. sill's canonical palette via `perchThemeSpec(name)` (sill
     ///    `paletteFor` + perch's translucency / themed-miss overlays).
-    /// 3. System sentinel (`spec.usesSystemAccent` → controlAccentColor).
+    /// 3. System sentinel (`spec.usesSystemPrimary` → controlAccentColor).
     static func resolvePalette(cfg: PerchConfig) -> ResolvedPalette {
         let spec: ThemeSpec
         if let custom = cfg.overlay.customThemeName,
@@ -696,15 +696,15 @@ final class HintPainter: NSView {
         } else {
             spec = perchThemeSpec(cfg.overlay.theme)
         }
-        // sill's `accent` sentinel (0) ⇒ OS control-accent (perch's
-        // `system` theme + any preset whose accent is pure black, e.g.
-        // mono-light — same collision sill itself accepts). Otherwise
-        // the spec's concrete hue.
-        let themeAccent: NSColor = spec.usesSystemAccent
+        // sill's `primary` sentinel (0) ⇒ OS control-accent (perch's
+        // `system` theme + any preset whose primary is pure black —
+        // same collision sill itself accepts). Otherwise the spec's
+        // concrete hue.
+        let themeAccent: NSColor = spec.usesSystemPrimary
             ? .controlAccentColor
-            : color(hex: spec.accent.rgb, alpha: 1)
+            : color(hex: spec.primary.rgb, alpha: 1)
         // `[overlay].accent` overrides the theme accent when set to a
-        // concrete hex (lets users mix a theme body — nord pill colors
+        // concrete hex (lets users mix a theme body — dracula pill colors
         // / rounded font — with a personal highlight). Layered AFTER
         // the sentinel resolution, perch-side: sill has no per-app
         // accent override.
@@ -715,14 +715,14 @@ final class HintPainter: NSView {
             accent = parseAccent(cfg.overlay.accent) ?? themeAccent
         }
         return ResolvedPalette(
-            // sill's `system` spec carries bg == nil (vibrancy panel);
-            // perch's pill needs a concrete dark fill — fall back to the
-            // historical black. Every other spec (built-in + custom) has
-            // a bg.
-            pillBgHex: spec.bg?.rgb ?? perchSystemPillBgHex,
-            pillBgAlpha: spec.bgAlpha.map { CGFloat($0) } ?? 0.30,
+            // sill's `system` spec carries background == nil (vibrancy
+            // panel); perch's pill needs a concrete dark fill — fall back
+            // to the historical black. Every other spec (built-in +
+            // custom) has a background.
+            pillBgHex: spec.background?.rgb ?? perchSystemPillBgHex,
+            pillBgAlpha: spec.backgroundAlpha.map { CGFloat($0) } ?? 0.30,
             accentColor: accent,
-            textColor: color(hex: spec.text.rgb, alpha: 1),
+            textColor: color(hex: spec.foreground.rgb, alpha: 1),
             missColor: color(hex: spec.error.rgb, alpha: 1),
             font: spec.font)
     }

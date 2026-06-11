@@ -311,7 +311,7 @@ frontmost app's focused window**. The seam is captured at
     `HintPainter.shapeFor(cfg:hint:rect:)`. `.underline`
     suppresses the body entirely.
   - **Palette**: `[overlay].theme` selects from the shared sill
-    catalog (`canonicalThemeNames` — terminal / nord / … + the
+    catalog (`canonicalThemeNames` — terminal / dracula / … + the
     cross-app `chomp` / `rainbow`) or a `[overlay.themes.<name>]`
     custom palette. The default `"system"` keeps
     `NSColor.controlAccentColor` + dark pill tint (historical look).
