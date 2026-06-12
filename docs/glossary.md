@@ -580,7 +580,7 @@ Chromium bundle と同じ扱いで通過。`/tmp/perch.log` の
 
 ### `PERCH_DEBUG`
 **verbose ログの唯一のトリガ**（環境変数）。`--debug` フラグは無い
-（facet / chord / wand / eventfx / glance 家系と統一）。`./run.sh`
+（facet / chord / wand / glance 家系と統一）。`./run.sh`
 （と `./run.sh --dev`）が立てる。
 - **Don't call it:** --debug, --verbose, ログモード
 
