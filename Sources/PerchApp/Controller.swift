@@ -192,9 +192,11 @@ final class Controller {
         if let name = perchCanonicalThemeName(override) {
             return config.withTheme(name, customName: nil)
         }
+        let hint = perchThemeNameSuggestion(override)
+            .map { " Did you mean \"\($0)\"?" } ?? ""
         Log.line("controller: --theme=\"\(override)\" — no matching "
                  + "built-in or [overlay.themes.\(override)] palette; "
-                 + "ignoring.")
+                 + "ignoring." + hint)
         return config
     }
 
