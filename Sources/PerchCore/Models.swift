@@ -139,7 +139,7 @@ public enum HintAction: String, Sendable, CaseIterable {
     case nestedGrid
 }
 
-/// Parsed `[hotkey].combo` value.
+/// Parsed `[hotkey].active` value.
 public struct HotkeyCombo: Sendable, Equatable {
     public let modifiers: Modifiers
     public let key: String          // canonical lowercase ("space", "j", "f1")
