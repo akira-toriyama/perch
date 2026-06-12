@@ -81,7 +81,7 @@ final class TOMLTests: XCTestCase {
     }
 
     /// Empty arrays are valid (used to "explicitly nothing" — e.g.
-    /// `exclude-apps = []`). Must decode to `[]`, not nil and not
+    /// `[exclude] apps = []`). Must decode to `[]`, not nil and not
     /// `[""]`.
     func testEmptyArrayDecodes() {
         let src = """

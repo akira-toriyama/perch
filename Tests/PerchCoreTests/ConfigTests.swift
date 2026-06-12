@@ -77,7 +77,9 @@ final class ConfigTests: XCTestCase {
         let src = """
         [behavior]
         roles = ["Button", "Link"]
-        exclude-apps = ["com.evil.app"]
+
+        [exclude]
+        apps = ["com.evil.app"]
         """
         let cfg = PerchConfig.parse(src)
         XCTAssertEqual(cfg.behavior.roles, ["Button", "Link"])
