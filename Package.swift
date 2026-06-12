@@ -42,14 +42,15 @@ let package = Package(
         // adapter resolves the spec to NSColors itself (perch keeps its own
         // `[overlay].accent` override + pill-surface treatment), so it does
         // NOT link PaletteKit. Pinned to a SemVer tag for release/CI
-        // reproducibility; `.upToNextMinor` keeps it on 0.5.x (the 12-theme
+        // reproducibility; `.upToNextMinor` keeps it on 0.6.x (the 12-theme
         // Tailwind catalog + canonical/suggest validation + WCAG
-        // bestForeground + EffectIntensity; line-pets are Effects-only so
-        // perch, a Palette-only consumer, doesn't link them). For local,
+        // bestForeground + EffectIntensity — adopted via a PerchCore
+        // typealias since 0.6.0; the pure LinePet vocabulary also moved
+        // into Palette in 0.6.0 but perch doesn't use it). For local,
         // atomic sill↔perch editing, temporarily swap this line for
         // `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.5.0")),
+                 .upToNextMinor(from: "0.6.0")),
     ],
     targets: [
         .target(

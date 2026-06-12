@@ -16,8 +16,10 @@
 //     `system` spec;
 //   * the pill geometry (`PillShape`) and the transient hint-overlay
 //     effects (`MatchEffect` / `UnmatchEffect` / `AppearEffect` /
-//     `BorderEffect` / `EffectIntensity`) and the modifier-badge style —
-//     none of which are shared theming atoms.
+//     `BorderEffect`) and the modifier-badge style — none of which are
+//     shared theming atoms. (`EffectIntensity` is sill's shared knob
+//     since 0.6.x adoption — typealiased below with a CGFloat `scale`
+//     shim.)
 //
 // Stays in Core (no AppKit / CoreGraphics colors): the parsed config
 // carries `ThemeSpec` + the enums across the seam; the Adapter
@@ -98,8 +100,15 @@ public func perchCanonicalThemeName(_ raw: String) -> String? {
         let pool = canonicalThemeNames.filter { $0 != "random" && $0 != "system" }
         return pool.randomElement() ?? "terminal"
     }
-    return canonicalThemeNames.contains(t) ? t : nil
+    // Membership + normalization delegate to sill's shared mechanism
+    // (`random` was intercepted above, so its passthrough is unreachable).
+    return canonical(t)
 }
+
+/// "Did you mean" hint for an unknown theme name — sill's `suggest(_:)`
+/// surfaced through PerchCore so PerchApp (which doesn't link Palette)
+/// can enrich its loud CLI reject. `nil` when nothing is close enough.
+public func perchThemeNameSuggestion(_ raw: String) -> String? { suggest(raw) }
 
 // MARK: - Modifier badge
 
@@ -337,27 +346,17 @@ public enum BorderEffect: String, Sendable, CaseIterable {
     }
 }
 
-/// Overall magnitude scaler for `match` / `unmatch` effects.
-/// Ports wand's `intensity` vocabulary verbatim. Multiplies the
-/// effect's spatial dimension (explode scale, shake amplitude) but
-/// not its duration — the latency budget is fixed.
-public enum EffectIntensity: String, Sendable, CaseIterable {
-    case subtle  // 0.6× — calm
-    case normal  // 1.0× — the calibrated baseline
-    case bold    // 1.6× — more attention-grabbing
-    case wild    // 2.5× — over-the-top
+/// Overall magnitude scaler for `match` / `unmatch` effects — sill
+/// Palette's shared knob (subtle 0.6× / normal 1.0× / bold 1.6× /
+/// wild 2.5×, identical `parse`). The typealias keeps every PerchCore
+/// signature compiling without an `import Palette` in each adapter
+/// file; the `scale` shim preserves perch's CGFloat spelling of sill's
+/// `multiplier` (Double). Multiplies the effect's spatial dimension
+/// (explode scale, shake amplitude) but not its duration — the latency
+/// budget is fixed.
+public typealias EffectIntensity = Palette.EffectIntensity
 
-    public var scale: CGFloat {
-        switch self {
-        case .subtle: return 0.6
-        case .normal: return 1.0
-        case .bold:   return 1.6
-        case .wild:   return 2.5
-        }
-    }
-
-    public static func parse(_ s: String) -> EffectIntensity? {
-        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
-        return EffectIntensity(rawValue: t)
-    }
+public extension EffectIntensity {
+    /// perch's CGFloat view of sill's `multiplier`.
+    var scale: CGFloat { CGFloat(multiplier) }
 }
