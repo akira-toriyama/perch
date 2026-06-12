@@ -100,9 +100,9 @@ show-modifier-badge = "off"      # off / glyph / action — show ⌃⌥⇧⌘ on
 # Animations — see "Effects" below for the kind vocabulary.
 [overlay.effect]
 appear         = "pop"           # entrance: none / pop / cascade / fade-in / drop-in / bloom / random
-match          = "none"          # on resolve (winning pill only)
-unmatch        = "none"          # on missed key (layered over red flash)
-narrow         = "none"          # on prefix-filtered pills (the ones leaving)
+match          = "off"           # on resolve (winning pill only)
+unmatch        = "off"           # on missed key (layered over red flash)
+narrow         = "off"          # on prefix-filtered pills (the ones leaving)
 intensity      = "normal"        # subtle / normal / bold / wild
 duration-scale = 1.0             # 0.1..5.0 — global tempo multiplier
 
@@ -111,20 +111,22 @@ duration-scale = 1.0             # 0.1..5.0 — global tempo multiplier
 effect        = "off"            # off / neon / cyber / vapor / kawaii / rainbow / random
 glow          = true             # NSShadow bloom
 width         = 1.5
-cycle-seconds = 3.0              # hue rotation period
+color-cycle-ms = 3000            # hue rotation period (integer ms)
 
 # Audio feedback. Each value: system-sound name ("Tink" / "Pop" / ...)
-# OR a file path ("~/foo.mp3" / "/path/click.wav"). Empty / "none" silences.
+# OR a file path ("~/foo.mp3" / "/path/click.wav"). Empty ("") silences.
 [overlay.sound]
 match    = ""                    # plays on resolve
 unmatch  = ""                    # plays on miss
 activate = ""                    # plays on hint mode entry
 volume   = 0.5                   # 0..1
 
+[exclude]
+apps = []                        # bundle-id globs perch ignores (family shape)
+
 [behavior]
 auto-click-on-unique = true      # fire as soon as one candidate remains
 roles = ["Button", "MenuItem", "Link", "Tab", ...]
-exclude-apps = []                # bundle IDs perch ignores
 
 # Per-app overrides — `roles`, `min-size`, `auto-click-on-unique`,
 # AND any of the effect kinds (`match-effect`, `appear-effect`,
@@ -133,7 +135,7 @@ exclude-apps = []                # bundle IDs perch ignores
 min-size = 20
 
 [behavior."com.figma.Desktop"]
-match-effect = "none"            # silence flashy effects inside Figma
+match-effect = "off"            # silence flashy effects inside Figma
 ```
 
 ### Themes
@@ -210,7 +212,7 @@ The snippet above covers the most-edited knobs. The full reference
 — including `[behavior].min-size`, `[behavior.web].roles` (web-context
 role override), `[search.synonyms]` (fuzzy-match expansion), `[grid]`
 density / depth / nest-min-size, `[chord]` leader + timeout, and
-`[overlay].show-shortcuts` — lives in [config.toml](config.toml).
+`[overlay].shortcut-badge` — lives in [config.toml](config.toml).
 Every knob has a heredoc explaining what it does + the clamp range.
 
 ## CLI
@@ -326,7 +328,7 @@ firing, Cmd+Shift-1 fires + re-enters menu mode for chaining.
 Each pill shows the AX-bound keyboard shortcut on the right
 (e.g. `1  File > Quit  ⌘Q`) when one exists — a Superkey-style
 learning loop: discover the native shortcut while picking the
-menu item with `1-9`. Set `[overlay].show-shortcuts = false`
+menu item with `1-9`. Set `[overlay].shortcut-badge = false`
 in `config.toml` to hide.
 
 ### Grid mode (AX-bypass)

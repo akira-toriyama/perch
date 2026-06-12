@@ -51,7 +51,7 @@ final class OverlayCanvas: NSView {
     /// Bundle id of the app the controller resolved as frontmost
     /// when hint mode entered. Used by `effectiveAppearEffect` /
     /// `effectiveMatchEffect` / ... lookups so a per-app override
-    /// (e.g. `[behavior."com.figma.Desktop"] match-effect = "none"`)
+    /// (e.g. `[behavior."com.figma.Desktop"] match-effect = "off"`)
     /// wins over the global default. nil for app-agnostic modes
     /// (grid / search) — lookups then return the global default.
     var activeBundleID: String?
@@ -180,7 +180,7 @@ final class OverlayCanvas: NSView {
         var eliminated: [(Hint, CGRect)] = []
         if !firstFrame,
            config.overlay.animEnabled,
-           effectiveNarrow() != .none {
+           effectiveNarrow() != .off {
             let newKeys = Set(hints.map { $0.keys })
             for old in pills where !newKeys.contains(old.hint.keys) {
                 eliminated.append((old.hint, old.rect))
@@ -190,7 +190,7 @@ final class OverlayCanvas: NSView {
         self.typed = typed
         self.state = .idle
         let kind = config.overlay.animEnabled
-            ? effectiveAppear().resolvingRandom() : .none
+            ? effectiveAppear().resolvingRandom() : .off
         pills = hints.enumerated().map { idx, h in
             // Cascade staggers entrance by pill index — 30ms per
             // pill is enough to read as "wave" without the last
@@ -207,7 +207,7 @@ final class OverlayCanvas: NSView {
                 matched: !typed.isEmpty && h.keys.hasPrefix(typed),
                 appearDelay: delay)
         }
-        if firstFrame, config.overlay.animEnabled, kind != .none {
+        if firstFrame, config.overlay.animEnabled, kind != .off {
             appearedAt = CACurrentMediaTime()
         }
         layoutPills()
@@ -259,7 +259,7 @@ final class OverlayCanvas: NSView {
     ) {
         let resolved = kind.resolvingRandom()
         switch resolved {
-        case .none, .random:
+        case .off, .random:
             DispatchQueue.main.asyncAfter(deadline: .now() + scaled(0.2)) {
                 MainActor.assumeIsolated { completion() }
             }
@@ -378,7 +378,7 @@ final class OverlayCanvas: NSView {
     ) {
         let resolved = kind.resolvingRandom()
         switch resolved {
-        case .none, .random:
+        case .off, .random:
             completion()
         case .fade:
             runMatchAnim(
@@ -767,7 +767,7 @@ final class OverlayCanvas: NSView {
     private func layoutPills() {
         // Compute per-pill appear state for this tick.
         let kind = config.overlay.animEnabled
-            ? effectiveAppear().resolvingRandom() : .none
+            ? effectiveAppear().resolvingRandom() : .off
         let now = CACurrentMediaTime()
         var anyInFlight = false
         for i in pills.indices {
@@ -830,7 +830,7 @@ final class OverlayCanvas: NSView {
         now: TimeInterval
     ) -> (scale: CGFloat, dx: CGFloat, dy: CGFloat,
           alpha: CGFloat, inFlight: Bool) {
-        guard let t0 = appearedAt, kind != .none else {
+        guard let t0 = appearedAt, kind != .off else {
             return (1, 0, 0, 1, false)
         }
         let perPillDuration: TimeInterval = 0.15 * config.effect.durationScale
@@ -847,7 +847,7 @@ final class OverlayCanvas: NSView {
         let i = config.effect.intensity.scale
         let done = local >= perPillDuration
         switch kind {
-        case .none, .random:
+        case .off, .random:
             return (1, 0, 0, 1, false)
         case .pop:
             // Historical scale-in 0.85 → 1.0.

@@ -108,7 +108,8 @@ theme = "system"
 #   theme  = "dracula"
 #   accent = "#ff85b3"
 # "system" (the default) lets the theme's palette accent win.
-# A `#rrggbb` literal overrides it. Anything else falls back to
+# Any sill colour token overrides it — named colours (red / cyan /
+# …), `#rgb`, `#rrggbb`, `#rrggbbaa`. Anything else falls back to
 # "system" silently (typo can't break the daemon).
 accent = "system"
 
@@ -154,7 +155,7 @@ pill-shape = "pill"
 # Hint pill font size (pt). Clamped 8..32. The font FAMILY is
 # picked by `theme` (mono / rounded / system); this knob only
 # controls the size.
-font-size = 14
+font-size = 15
 
 # Frosted-glass background under each pill (NSVisualEffectView,
 # .hudWindow material). Turn off for a flat dark fill if your Mac
@@ -172,7 +173,7 @@ anim-enabled = true
 # the native shortcut while still picking the menu item with 1-9.
 # Set to false if menu titles already include their own shortcut
 # hint, or for screenshot / demo work where the annotation clutters.
-show-shortcuts = true
+shortcut-badge = true
 
 # Hold-to-peek key — while held during hint mode, the overlay
 # temporarily hides so you can see the UI underneath. Release to
@@ -200,7 +201,7 @@ show-modifier-badge = "off"
 # ---- Overlay effects ---------------------------------------------
 # Animations layered on top of the hint flow. Mirrors wand's
 # `[gesture.effect]` vocabulary, scoped to perch's single-pill
-# resolve target. Both directions default to "none" so the snappy
+# resolve target. Both directions default to "off" so the snappy
 # bare-resolve UX is preserved.
 #
 # Requires `[overlay].anim-enabled = true` (the global motion
@@ -216,14 +217,14 @@ show-modifier-badge = "off"
 # Exit-side kinds (`fade` / `explode` / `drop` / etc.) silently
 # fall back to `"pop"` here — `appear` does not accept them.
 #
-#   "none"      — pills paint at full size, no delay.
+#   "off"       — pills paint at full size, no delay.
 #   "pop"       — historical 150ms scale-in (default).
 #   "cascade"   — pills appear one after another (30ms × index)
 #                 with a bloom + alpha chain. Reads as a wave.
 #   "fade-in"   — alpha 0 → 1, no scale.
 #   "drop-in"   — pills fall from 40pt above into their slot.
 #   "bloom"     — 0.4 → 1.0 scale + alpha (explode in reverse).
-#   "random"    — pick a non-none non-random kind each activation.
+#   "random"    — pick a non-off non-random kind each activation.
 appear = "pop"
 
 # What happens to the WINNING pill at hint-resolve time. AXPress
@@ -234,7 +235,7 @@ appear = "pop"
 #
 # Vocabulary mirrors wand's `[gesture.effect] match` verbatim:
 #
-#   "none"        — pill vanishes instantly (default — no latency).
+#   "off"         — pill vanishes instantly (default — no latency).
 #   "fade"        — fades to transparent over 120ms.
 #   "explode"     — scales 1.0 → ~1.4 and fades over 140ms.
 #   "drop"        — translates downward off-screen while fading.
@@ -246,10 +247,10 @@ appear = "pop"
 #                   center (most attention-grabbing — natural for
 #                   the moment a click actually fires).
 #   "confetti"    — particles rain past the pill with gravity.
-#   "random"      — pick a random non-none kind each resolve.
+#   "random"      — pick a random non-off kind each resolve.
 #
-# Unknown kinds clamp to "none" silently.
-match = "none"
+# Unknown kinds clamp to "off" silently.
+match = "off"
 
 # What happens on a missed keypress (a typed key that no label
 # starts with, or a non-letter key). The existing 200ms RED FLASH
@@ -270,14 +271,14 @@ match = "none"
 #   - `fireworks` / `confetti` emit from EVERY visible pill (vs
 #     the winning-only emission on `match`) so the miss feedback
 #     fills the screen.
-#   - `random` excludes `none` so a miss always shows motion.
+#   - `random` excludes `off` so a miss always shows motion.
 #
-# Unknown kinds clamp to "none" silently.
-unmatch = "none"
+# Unknown kinds clamp to "off" silently.
+unmatch = "off"
 
 # What happens to pills that get FILTERED OUT mid-typing — e.g.
 # the user types `a` while `aa, ab, ac, xx` are on screen, so `xx`
-# disappears because its label doesn't start with `a`. Off (`"none"`,
+# disappears because its label doesn't start with `a`. Off (`"off"`,
 # the default) is instant removal — the historical perch behavior.
 # Set to any `match` kind to give each disappearing pill a visual
 # exit at its original position.
@@ -292,7 +293,7 @@ unmatch = "none"
 #
 # Tip: pair `narrow = "drop"` with `match = "explode"` so the
 # typing rhythm reads as "candidates drop out / picked one bursts".
-narrow = "none"
+narrow = "off"
 
 # Overall magnitude scaler for ALL three directions — multiplies the
 # spatial dimension (explode peak scale, shake amplitude, slide
@@ -352,11 +353,12 @@ glow = true
 # pairs cleanly with the pill 10pt corner radius.
 width = 1.5
 
-# Hue rotation period in seconds — the border's hue rotates
-# around the color wheel over this many seconds, returning to its
-# base color every cycle. Set to 0 to lock the color (rainbow
-# then collapses to a static white border). Clamped 0..120.
-cycle-seconds = 3.0
+# Hue rotation period in integer milliseconds (the family
+# spelling) — the border's hue rotates around the color wheel over
+# this period, returning to its base color every cycle. Set to 0
+# to lock the color (rainbow then collapses to a static white
+# border). Clamped 0..120000.
+color-cycle-ms = 3000
 
 
 # ---- Overlay sound -----------------------------------------------
@@ -375,7 +377,8 @@ cycle-seconds = 3.0
 #       match = "~/Library/Sounds/click.mp3"
 #       match = "/Users/me/sounds/typewriter.wav"
 #
-#   - "none" / "off" / empty — silenced for that direction.
+#   - empty ("") — silenced for that direction (the family sentinel
+#     for path/name string keys).
 #
 # Path interpretation wins over system-name when both could match
 # (so `~/Pop.mp3` beats the system `Pop`). Unresolved specs log
@@ -383,16 +386,16 @@ cycle-seconds = 3.0
 [overlay.sound]
 
 # Plays on hint resolve (any modifier).
-match = "none"
+match = ""
 
 # Plays on a missed keypress (non-matching letter or non-letter
 # key). Layered with the existing 200ms red flash + unmatch motion.
-unmatch = "none"
+unmatch = ""
 
 # Plays when hint mode activates (hotkey fires, AX walk completes,
 # panel paints). Helpful as an "ah, perch heard me" cue when
 # Reduce Motion is on and the visual entrance is muted.
-activate = "none"
+activate = ""
 
 # Master volume for all sounds, 0.0..1.0. Default 0.5 keeps system
 # sounds at half their natural volume.
@@ -400,6 +403,13 @@ volume = 0.5
 
 
 # ---- Behaviour ---------------------------------------------------
+[exclude]
+# Bundle IDs perch never activates over — array of globs (`*` / `?`),
+# the family-shared shape (same grammar as wand / halo [exclude].apps).
+# Useful for things that handle their own keyboard nav.
+apps = []
+
+
 [behavior]
 # When ONE candidate remains after partial input, auto-click without
 # waiting for the user to finish typing. Saves a keystroke on the
@@ -423,9 +433,6 @@ roles = [
     "SearchField",
 ]
 
-# Bundle IDs to ignore (perch won't activate over these apps).
-# Useful for things that handle their own keyboard nav.
-exclude-apps = []
 
 # Skip AX elements whose frame is smaller than this on either axis
 # (points). Default 6 — historical floor that drops 1×1 hidden
@@ -487,10 +494,10 @@ min-size = 6
 # min-size = 12                     # Xcode toolbar density
 #
 # [behavior."com.figma.Desktop"]
-# match-effect   = "none"            # Silence flashy match-effect inside
-# appear-effect  = "none"            #   Figma so the canvas stays calm
-# unmatch-effect = "none"            #   even with a wild global config
-# narrow-effect  = "none"
+# match-effect   = "off"             # Silence flashy match-effect inside
+# appear-effect  = "off"             #   Figma so the canvas stays calm
+# unmatch-effect = "off"             #   even with a wild global config
+# narrow-effect  = "off"
 
 
 # ---- Chord-suffix action mode ------------------------------------

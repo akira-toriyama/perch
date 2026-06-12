@@ -91,7 +91,7 @@ final class HintPainter: NSView {
 
     /// Normalised hue rotation for the border effect (0..1). The
     /// OverlayCanvas cycle driver updates this each tick when
-    /// `[overlay.border].cycle-seconds > 0`. 0 = base hue; 0.5 =
+    /// `[overlay.border].color-cycle-ms > 0`. 0 = base hue; 0.5 =
     /// 180° around the wheel; 1 ≡ 0.
     private var borderHueOffset: CGFloat = 0
 
@@ -174,7 +174,7 @@ final class HintPainter: NSView {
 
     /// Set the border hue offset for the neon-border effect.
     /// Driver in OverlayCanvas updates this each tick while
-    /// `[overlay.border].cycle-seconds > 0`.
+    /// `[overlay.border].color-cycle-ms > 0`.
     func setBorderHueOffset(_ offset: CGFloat) {
         borderHueOffset = offset
         needsDisplay = true
@@ -744,12 +744,11 @@ final class HintPainter: NSView {
     /// "system" — return nil so the theme accent wins.
     private static func parseAccent(_ s: String) -> NSColor? {
         if s == "system" { return nil }
-        var t = s
-        if t.hasPrefix("#") { t.removeFirst() }
-        guard t.count == 6, let v = UInt32(t, radix: 16) else {
-            return nil
-        }
-        return color(hex: v, alpha: 1)
+        // sill's shared colour grammar (named / #rgb / #rrggbb /
+        // #rrggbbaa), materialized through the same sRGB helper the
+        // rest of the painter uses.
+        guard let hex = parseColorToken(s) else { return nil }
+        return color(hex: hex.rgb, alpha: CGFloat(hex.alpha))
     }
 
     /// Map sill's `FontKind` → an AppKit font instance. Mono uses

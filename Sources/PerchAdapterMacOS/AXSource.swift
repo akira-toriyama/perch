@@ -461,7 +461,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     ///     uses, stored in `liveById` so dispatch resolves it back to
     ///     the live `AXUIElement`.
     ///
-    /// Apps the user has blocklisted via `[behavior].exclude-apps`
+    /// Apps the user has blocklisted via `[exclude].apps`
     /// are skipped — the same opt-out covers hint mode + window
     /// switcher with no extra knobs.
     public func enumerateWindows() -> [UIElement] {

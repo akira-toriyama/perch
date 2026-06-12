@@ -177,7 +177,7 @@ public enum PillShape: String, Sendable, CaseIterable {
 /// of that window.
 public enum MatchEffect: String, Sendable, CaseIterable {
     /// Default — pill vanishes the instant the hint resolves.
-    case none
+    case off
     /// Pill fades to alpha 0 over 120ms.
     case fade
     /// Pill scales 1.0 → ~1.4 and fades simultaneously over 140ms.
@@ -209,12 +209,12 @@ public enum MatchEffect: String, Sendable, CaseIterable {
         return MatchEffect(rawValue: t)
     }
 
-    /// Resolve `.random` to a concrete kind. Excludes `.none` (so
+    /// Resolve `.random` to a concrete kind. Excludes `.off` (so
     /// random never collapses to no animation) and `.random` itself.
     /// Other cases pass through unchanged.
     public func resolvingRandom() -> MatchEffect {
         guard self == .random else { return self }
-        let pool = MatchEffect.allCases.filter { $0 != .random && $0 != .none }
+        let pool = MatchEffect.allCases.filter { $0 != .random && $0 != .off }
         return pool.randomElement() ?? .fade
     }
 }
@@ -225,7 +225,7 @@ public enum MatchEffect: String, Sendable, CaseIterable {
 /// motion on top so the user FEELS the miss (motion is faster to
 /// process than color).
 public enum UnmatchEffect: String, Sendable, CaseIterable {
-    case none
+    case off
     /// Pills shake horizontally ±4pt over 200ms (3 oscillations).
     case shake
     /// Pills fade out during the 200ms window.
@@ -255,7 +255,7 @@ public enum UnmatchEffect: String, Sendable, CaseIterable {
 
     public func resolvingRandom() -> UnmatchEffect {
         guard self == .random else { return self }
-        let pool = UnmatchEffect.allCases.filter { $0 != .random && $0 != .none }
+        let pool = UnmatchEffect.allCases.filter { $0 != .random && $0 != .off }
         return pool.randomElement() ?? .shake
     }
 }
@@ -272,7 +272,7 @@ public enum UnmatchEffect: String, Sendable, CaseIterable {
 /// `duration + perPillDelay * pillCount`.
 public enum AppearEffect: String, Sendable, CaseIterable {
     /// No appear animation — pills paint at full size, no delay.
-    case none
+    case off
     /// 150ms scale-in 0.85 → 1.0 ease-out cubic — the historical
     /// perch default. Stays as the new default because it's the
     /// subtle option that doesn't shock the user on every activate.
@@ -297,7 +297,7 @@ public enum AppearEffect: String, Sendable, CaseIterable {
     public func resolvingRandom() -> AppearEffect {
         guard self == .random else { return self }
         let pool = AppearEffect.allCases.filter {
-            $0 != .random && $0 != .none
+            $0 != .random && $0 != .off
         }
         return pool.randomElement() ?? .pop
     }

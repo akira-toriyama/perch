@@ -19,7 +19,7 @@ import PerchCore
 public final class SoundPlayer {
 
     /// Pre-loaded sounds keyed by direction. nil means the user
-    /// disabled that direction (`"none"` / empty) OR the spec
+    /// disabled that direction (empty `""`) OR the spec
     /// failed to resolve — the play methods are safe to call in
     /// either case (no-op).
     private var match: NSSound?
@@ -62,12 +62,11 @@ public final class SoundPlayer {
     /// the path interpretation first (tilde-expanded) so a file at
     /// `~/Pop.mp3` wins over a same-named system sound. Falls back
     /// to `NSSound(named:)` for vanilla `"Tink"` / `"Pop"` etc.
-    /// Empty / `"none"` / `"off"` returns nil silently.
+    /// Empty (`""`) returns nil silently — the family sentinel for
+    /// "inherit / disabled" on path/name string keys.
     private static func load(_ spec: String, role: String) -> NSSound? {
         let s = spec.trimmingCharacters(in: .whitespaces)
         if s.isEmpty { return nil }
-        let lower = s.lowercased()
-        if lower == "none" || lower == "off" { return nil }
 
         // File path interpretation. Tilde-expand and check FS.
         let expanded = (s as NSString).expandingTildeInPath

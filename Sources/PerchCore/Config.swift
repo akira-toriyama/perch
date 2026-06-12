@@ -202,7 +202,7 @@ public struct BorderConfig: Sendable {
 
 /// `[overlay.sound]` — audio feedback. `match` / `unmatch` /
 /// `activate` accept either a macOS system-sound name OR a file
-/// path (tilde-expanded). Empty / `"none"` silences.
+/// path (tilde-expanded). Empty (`""`) silences.
 public struct SoundConfig: Sendable {
     public let match: String
     public let unmatch: String
@@ -275,7 +275,7 @@ public struct BehaviorConfig: Sendable {
 }
 
 /// Effect-channel resolvers — per-app `[behavior."<bundle>"]` keys
-/// (e.g. `match-effect = "none"`) win over the global
+/// (e.g. `match-effect = "off"`) win over the global
 /// `[overlay.effect]` defaults. Stored on `BehaviorConfig` so the
 /// adapter only carries one config snapshot.
 extension BehaviorConfig {
@@ -504,8 +504,8 @@ public struct PerchConfig: Sendable {
             showShortcuts: true, peekKey: "space",
             modifierBadge: .off),
         effect: EffectConfig(
-            appear: .pop, match: .none, unmatch: .none,
-            narrow: .none, intensity: .normal, durationScale: 1.0),
+            appear: .pop, match: .off, unmatch: .off,
+            narrow: .off, intensity: .normal, durationScale: 1.0),
         border: BorderConfig(
             effect: .off, glow: true, width: 1.5, cycleSeconds: 3.0),
         sound: SoundConfig(
@@ -610,7 +610,7 @@ public struct PerchConfig: Sendable {
         } ?? 15
         let blur = doc["overlay"]?["blur-enabled"]?.asBool ?? true
         let anim = doc["overlay"]?["anim-enabled"]?.asBool ?? true
-        let showShortcuts = doc["overlay"]?["show-shortcuts"]?.asBool ?? true
+        let showShortcuts = doc["overlay"]?["shortcut-badge"]?.asBool ?? true
         let peekKey = (doc["overlay"]?["peek-key"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             ?? "space"
@@ -723,17 +723,14 @@ public struct PerchConfig: Sendable {
         return out
     }
 
-    /// `"#rrggbb"` → `0xRRGGBB`. Trims + lowercases + validates 6
-    /// hex digits. Returns nil on malformed input so the caller can
-    /// fall back to a default.
+    /// Colour token → `0xRRGGBB` via sill's shared grammar
+    /// (`parseColorToken`): named colours, `#rgb`, `#rrggbb`,
+    /// `#rrggbbaa` (alpha ignored here — pill translucency is its own
+    /// knob). Returns nil on malformed input so the caller can fall
+    /// back to a default.
     private static func parseHexValue(_ s: String?) -> UInt32? {
-        guard var t = s?.trimmingCharacters(in: .whitespaces)
-            .lowercased() else { return nil }
-        if t.hasPrefix("#") { t.removeFirst() }
-        guard t.count == 6,
-              t.allSatisfy({ "0123456789abcdef".contains($0) })
-        else { return nil }
-        return UInt32(t, radix: 16)
+        guard let s else { return nil }
+        return parseColorToken(s)?.rgb
     }
 
     private static func parseEffect(_ doc: TOML.Document) -> EffectConfig {
@@ -741,11 +738,11 @@ public struct PerchConfig: Sendable {
         let appear = (eff?["appear"]?.asString)
             .flatMap(AppearEffect.parse)?.resolvingRandom() ?? .pop
         let match = (eff?["match"]?.asString)
-            .flatMap(MatchEffect.parse) ?? .none
+            .flatMap(MatchEffect.parse) ?? .off
         let unmatch = (eff?["unmatch"]?.asString)
-            .flatMap(UnmatchEffect.parse) ?? .none
+            .flatMap(UnmatchEffect.parse) ?? .off
         let narrow = (eff?["narrow"]?.asString)
-            .flatMap(MatchEffect.parse) ?? .none
+            .flatMap(MatchEffect.parse) ?? .off
         // Particle kinds in the narrow context fall through to .fade
         // at runtime (`GhostDriver.spawn`) — warn the user once at
         // parse-time so they know the dispatch differs from what
@@ -780,9 +777,11 @@ public struct PerchConfig: Sendable {
             return raw >= 0.5 && raw <= 30 ? raw : 1.5
         }()
         let cycle: Double = {
-            guard let raw = b?["cycle-seconds"]?.asDouble
+            guard let raw = b?["color-cycle-ms"]?.asDouble
             else { return 3.0 }
-            return raw >= 0 && raw <= 120 ? raw : 3.0
+            // ms in config (family spelling), seconds internally.
+            // 0 keeps the hue lock; 120000 ms = the old 120 s cap.
+            return raw >= 0 && raw <= 120_000 ? raw / 1000 : 3.0
         }()
         return BorderConfig(
             effect: effect, glow: glow, width: width,
@@ -807,7 +806,7 @@ public struct PerchConfig: Sendable {
         let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
             .map { $0.filter { !$0.isEmpty } } ?? defaultRoles
-        let excludes = doc["behavior"]?["exclude-apps"]?.asStringArray ?? []
+        let excludes = doc["exclude"]?["apps"]?.asStringArray ?? []
         let minSize = (doc["behavior"]?["min-size"]?.asDouble).map {
             max(0, $0)
         } ?? 6
@@ -948,9 +947,9 @@ public struct PerchConfig: Sendable {
     private static func sanitiseAccent(_ s: String) -> String? {
         let t = s.trimmingCharacters(in: .whitespaces).lowercased()
         if t == "system" || t == "accent" { return "system" }
-        guard t.hasPrefix("#"), t.count == 7,
-              t.dropFirst().allSatisfy({ "0123456789abcdef".contains($0) })
-        else { return nil }
-        return t
+        // sill's shared colour grammar: named colours, #rgb, #rrggbb,
+        // #rrggbbaa. Stored as the normalized token; the adapter
+        // re-parses with the same grammar.
+        return parseColorToken(t) != nil ? t : nil
     }
 }
