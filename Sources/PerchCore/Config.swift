@@ -17,6 +17,18 @@
 import CoreGraphics
 import Foundation
 import Palette
+import Toml
+
+/// A flat TOML document: literal section-header → key → value. perch
+/// reads its config through sill's `Toml.parseFlat`, whose
+/// `Document.tables` has exactly this shape — lenient (a typo drops one
+/// line, not the daemon) and keyed by the verbatim header text so
+/// `[behavior."<bundle>"]` and `[overlay.themes.<name>]` stay literal.
+/// The four hand-rolled family parsers folded into sill's `Toml` module
+/// in atelier Phase 1.6; this alias keeps the section-parser signatures
+/// readable. Values are read via `Toml.Value`'s accessors (`asString`,
+/// `asDouble`, `asStringArray`, …).
+private typealias TOMLDoc = [String: [String: Toml.Value]]
 
 // MARK: - Sub-structs
 
@@ -536,7 +548,11 @@ public struct PerchConfig: Sendable {
     /// Parse a config source string. Public so tests can drive the
     /// clamping rules directly without touching disk.
     public static func parse(_ source: String) -> PerchConfig {
-        let doc = TOML.parse(source)
+        // sill's flat skin — keyed by literal header text, lenient.
+        // perch's old single-line-only parser dropped the multi-line
+        // `[behavior].roles` array (silently falling back to
+        // `defaultRoles`); `Toml.parseFlat` accumulates it correctly.
+        let doc = Toml.parseFlat(source).tables
 
         return PerchConfig(
             hotkey: parseHotkey(doc),
@@ -554,7 +570,7 @@ public struct PerchConfig: Sendable {
 
     // MARK: - Section parsers
 
-    private static func parseHotkey(_ doc: TOML.Document) -> HotkeyConfig {
+    private static func parseHotkey(_ doc: TOMLDoc) -> HotkeyConfig {
         let hk = doc["hotkey"]?["active"]?.asString
             .flatMap(HotkeyCombo.parse) ?? defaultHotkey
         let cancel = (doc["hotkey"]?["cancel"]?.asString)
@@ -564,7 +580,7 @@ public struct PerchConfig: Sendable {
         return HotkeyConfig(active: hk, cancel: cancel)
     }
 
-    private static func parseLabels(_ doc: TOML.Document) -> LabelsConfig {
+    private static func parseLabels(_ doc: TOMLDoc) -> LabelsConfig {
         let alphabet = (doc["labels"]?["alphabet"]?.asString)
             .flatMap { sanitiseAlphabet($0) } ?? defaultAlphabet
         let priority = doc["labels"]?["prioritise-center"]?.asBool ?? true
@@ -572,7 +588,7 @@ public struct PerchConfig: Sendable {
             alphabet: alphabet, prioritiseCenter: priority)
     }
 
-    private static func parseOverlay(_ doc: TOML.Document) -> OverlayConfig {
+    private static func parseOverlay(_ doc: TOMLDoc) -> OverlayConfig {
         let accent = (doc["overlay"]?["accent"]?.asString)
             .flatMap(sanitiseAccent) ?? "system"
 
@@ -648,7 +664,7 @@ public struct PerchConfig: Sendable {
     /// back to system defaults per typo-tolerance — a typo never
     /// kills the palette.
     private static func parseCustomPalettes(
-        _ doc: TOML.Document
+        _ doc: TOMLDoc
     ) -> [String: ThemeSpec] {
         var out: [String: ThemeSpec] = [:]
         // Plural `themes` (not `theme`) because `[overlay].theme` is
@@ -733,7 +749,7 @@ public struct PerchConfig: Sendable {
         return parseColorToken(s)?.rgb
     }
 
-    private static func parseEffect(_ doc: TOML.Document) -> EffectConfig {
+    private static func parseEffect(_ doc: TOMLDoc) -> EffectConfig {
         let eff = doc["overlay.effect"]
         let appear = (eff?["appear"]?.asString)
             .flatMap(AppearEffect.parse)?.resolvingRandom() ?? .pop
@@ -767,7 +783,7 @@ public struct PerchConfig: Sendable {
             durationScale: durScale)
     }
 
-    private static func parseBorder(_ doc: TOML.Document) -> BorderConfig {
+    private static func parseBorder(_ doc: TOMLDoc) -> BorderConfig {
         let b = doc["overlay.border"]
         let effect = (b?["effect"]?.asString)
             .flatMap(BorderEffect.parse)?.resolvingRandom() ?? .off
@@ -788,7 +804,7 @@ public struct PerchConfig: Sendable {
             cycleSeconds: cycle)
     }
 
-    private static func parseSound(_ doc: TOML.Document) -> SoundConfig {
+    private static func parseSound(_ doc: TOMLDoc) -> SoundConfig {
         let s = doc["overlay.sound"]
         let match = s?["match"]?.asString ?? ""
         let unmatch = s?["unmatch"]?.asString ?? ""
@@ -802,7 +818,7 @@ public struct PerchConfig: Sendable {
             volume: volume)
     }
 
-    private static func parseBehavior(_ doc: TOML.Document) -> BehaviorConfig {
+    private static func parseBehavior(_ doc: TOMLDoc) -> BehaviorConfig {
         let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
             .map { $0.filter { !$0.isEmpty } } ?? defaultRoles
@@ -850,7 +866,7 @@ public struct PerchConfig: Sendable {
             minSize: minSize, perApp: perApp)
     }
 
-    private static func parseRegional(_ doc: TOML.Document) -> RegionalConfig {
+    private static func parseRegional(_ doc: TOMLDoc) -> RegionalConfig {
         let w = (doc["regional"]?["min-width"]?.asDouble)
             .map { max(0, $0) } ?? 200
         let h = (doc["regional"]?["min-height"]?.asDouble)
@@ -858,7 +874,7 @@ public struct PerchConfig: Sendable {
         return RegionalConfig(minWidth: w, minHeight: h)
     }
 
-    private static func parseGrid(_ doc: TOML.Document) -> GridConfig {
+    private static func parseGrid(_ doc: TOMLDoc) -> GridConfig {
         let cols: Int = {
             guard let raw = doc["grid"]?["cols"]?.asInt else { return 12 }
             return raw >= 2 && raw <= 32 ? raw : 12
@@ -893,7 +909,7 @@ public struct PerchConfig: Sendable {
             maxDepth: maxDepth)
     }
 
-    private static func parseChord(_ doc: TOML.Document) -> ChordConfig {
+    private static func parseChord(_ doc: TOMLDoc) -> ChordConfig {
         let leader: String = {
             guard let raw = doc["chord"]?["leader"]?.asString else {
                 return ""
@@ -908,7 +924,7 @@ public struct PerchConfig: Sendable {
         return ChordConfig(leader: leader, timeoutMs: timeoutMs)
     }
 
-    private static func parseSearch(_ doc: TOML.Document) -> SearchConfig {
+    private static func parseSearch(_ doc: TOMLDoc) -> SearchConfig {
         var synonyms: [String: [String]] = [:]
         if let section = doc["search.synonyms"] {
             for (rawKey, value) in section {

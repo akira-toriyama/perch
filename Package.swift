@@ -36,26 +36,31 @@ let package = Package(
     ],
     dependencies: [
         // Shared theming foundation (plan atelier). perch is the
-        // "pure twin": PerchCore consumes only the AppKit-free `Palette`
-        // module (ThemeSpec / paletteFor / FontKind / canonicalThemeNames),
-        // proving the pure layer is reusable outside facet's View. The
-        // adapter resolves the spec to NSColors itself (perch keeps its own
-        // `[overlay].accent` override + pill-surface treatment), so it does
-        // NOT link PaletteKit. Pinned to a SemVer tag for release/CI
-        // reproducibility; `.upToNextMinor` keeps it on 0.6.x (the 12-theme
-        // Tailwind catalog + canonical/suggest validation + WCAG
-        // bestForeground + EffectIntensity — adopted via a PerchCore
-        // typealias since 0.6.0; the pure LinePet vocabulary also moved
-        // into Palette in 0.6.0 but perch doesn't use it). For local,
-        // atomic sill↔perch editing, temporarily swap this line for
-        // `.package(path: "../sill")`.
+        // "pure twin": PerchCore consumes the AppKit-free `Palette`
+        // module (ThemeSpec / paletteFor / FontKind / canonicalThemeNames)
+        // and, since 0.7.0, the `Toml` module — the family's ONE
+        // hand-rolled TOML subset parser (perch's in-tree TOML.swift
+        // folded into sill in atelier Phase 1.6). PerchCore reads config
+        // via `Toml.parseFlat` (the flat, lenient skin); the multi-line
+        // `[behavior].roles` array that the old single-line parser
+        // silently skipped now parses correctly. The adapter resolves the
+        // spec to NSColors itself (perch keeps its own `[overlay].accent`
+        // override + pill-surface treatment), so it does NOT link
+        // PaletteKit. Pinned to a SemVer tag for release/CI
+        // reproducibility; `.upToNextMinor` keeps it on 0.7.x (floor
+        // 0.7.1 = the escape-aware comment/quote fix the parser swap
+        // surfaced). For local, atomic sill↔perch editing, temporarily
+        // swap this line for `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.6.0")),
+                 .upToNextMinor(from: "0.7.1")),
     ],
     targets: [
         .target(
             name: "PerchCore",
-            dependencies: [.product(name: "Palette", package: "sill")]),
+            dependencies: [
+                .product(name: "Palette", package: "sill"),
+                .product(name: "Toml", package: "sill"),
+            ]),
         .target(
             name: "PerchAdapterMacOS",
             dependencies: [
