@@ -547,6 +547,17 @@ public struct PerchConfig: Sendable {
 
     /// Parse a config source string. Public so tests can drive the
     /// clamping rules directly without touching disk.
+    ///
+    /// The UNIFORM scalar sections (`[labels]`/`[overlay]` scalars/
+    /// `[overlay.effect]`/`[overlay.border]`/`[overlay.sound]`/`[exclude]`/
+    /// `[regional]`/`[grid]` + the scalar `[hotkey]`/`[chord]` keys) are
+    /// driven by the SINGLE declarative `configSpec` (which ALSO emits the
+    /// JSON Schema — see `PerchConfig+Spec.swift`), decoded into a mutable
+    /// `Staged` seeded with the built-in defaults. The NON-uniform bits stay
+    /// bespoke below (custom palettes, per-app/bundle-id overrides, the theme
+    /// custom-palette interplay, the deprecation log, synonyms, and the
+    /// grammar-parsed `hotkey.active` / `labels.alphabet` / `chord.leader`).
+    /// The spec drives both decode and schema, so the two can never drift.
     public static func parse(_ source: String) -> PerchConfig {
         // sill's flat skin — keyed by literal header text, lenient.
         // perch's old single-line-only parser dropped the multi-line
@@ -554,44 +565,63 @@ public struct PerchConfig: Sendable {
         // `defaultRoles`); `Toml.parseFlat` accumulates it correctly.
         let doc = Toml.parseFlat(source).tables
 
+        // Drive the uniform scalar sections off the one declarative spec.
+        var s = Staged()
+        configSpec.decode(doc, into: &s)
+
         return PerchConfig(
-            hotkey: parseHotkey(doc),
-            labels: parseLabels(doc),
-            overlay: parseOverlay(doc),
-            effect: parseEffect(doc),
-            border: parseBorder(doc),
-            sound: parseSound(doc),
-            behavior: parseBehavior(doc),
-            regional: parseRegional(doc),
-            grid: parseGrid(doc),
-            chord: parseChord(doc),
+            hotkey: assembleHotkey(doc, s),
+            labels: assembleLabels(doc, s),
+            overlay: assembleOverlay(doc, s),
+            effect: assembleEffect(s),
+            border: BorderConfig(
+                effect: s.borderEffect, glow: s.borderGlow,
+                width: s.borderWidth, cycleSeconds: s.borderCycleSeconds),
+            sound: SoundConfig(
+                match: s.soundMatch, unmatch: s.soundUnmatch,
+                activate: s.soundActivate, volume: s.volume),
+            behavior: assembleBehavior(doc, s),
+            regional: RegionalConfig(
+                minWidth: s.regMinWidth, minHeight: s.regMinHeight),
+            grid: GridConfig(
+                cols: s.gridCols, rows: s.gridRows,
+                recursiveCols: s.recursiveCols, recursiveRows: s.recursiveRows,
+                nestMinSize: s.nestMinSize, maxDepth: s.maxDepth),
+            chord: assembleChord(doc, s),
             search: parseSearch(doc))
     }
 
-    // MARK: - Section parsers
+    // MARK: - Section assembly (spec-driven `Staged` + bespoke fields)
 
-    private static func parseHotkey(_ doc: TOMLDoc) -> HotkeyConfig {
+    /// `[hotkey]` — `cancel` came from the spec; `active` is bespoke
+    /// (HotkeyCombo modifier+key grammar — not a uniform scalar).
+    private static func assembleHotkey(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> HotkeyConfig {
         let hk = doc["hotkey"]?["active"]?.asString
             .flatMap(HotkeyCombo.parse) ?? defaultHotkey
-        let cancel = (doc["hotkey"]?["cancel"]?.asString)
-            .flatMap { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-            .flatMap { $0.isEmpty ? nil : $0 }
-            ?? defaultCancelKey
-        return HotkeyConfig(active: hk, cancel: cancel)
+        return HotkeyConfig(active: hk, cancel: s.cancel)
     }
 
-    private static func parseLabels(_ doc: TOMLDoc) -> LabelsConfig {
+    /// `[labels]` — `prioritise-center` came from the spec; `alphabet`
+    /// is bespoke (`sanitiseAlphabet` de-dup/clean, not a plain scalar).
+    private static func assembleLabels(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> LabelsConfig {
         let alphabet = (doc["labels"]?["alphabet"]?.asString)
             .flatMap { sanitiseAlphabet($0) } ?? defaultAlphabet
-        let priority = doc["labels"]?["prioritise-center"]?.asBool ?? true
         return LabelsConfig(
-            alphabet: alphabet, prioritiseCenter: priority)
+            alphabet: alphabet, prioritiseCenter: s.prioritiseCenter)
     }
 
-    private static func parseOverlay(_ doc: TOMLDoc) -> OverlayConfig {
-        let accent = (doc["overlay"]?["accent"]?.asString)
-            .flatMap(sanitiseAccent) ?? "system"
-
+    /// `[overlay]` — `accent`/`pill-shape`/`font-size`/`blur`/`anim`/
+    /// `shortcut-badge`/`peek-key` came from the spec; `theme` (custom-
+    /// palette interplay + `random`), `show-modifier-badge` (bool back-
+    /// compat + deprecation log), and the `[overlay.themes.<name>]`
+    /// custom palettes are bespoke.
+    private static func assembleOverlay(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> OverlayConfig {
         // [overlay.themes.<name>] user-defined palettes — same flat-
         // key shape as [behavior."<bundle>"]. Each section is a
         // (pill-bg, accent, text, miss, pill-bg-alpha, font) tuple
@@ -619,17 +649,6 @@ public struct PerchConfig: Sendable {
             customThemeName = nil
             theme = perchCanonicalThemeName(rawTheme) ?? "system"
         }
-        let shape = (doc["overlay"]?["pill-shape"]?.asString)
-            .flatMap(PillShape.parse) ?? .pill
-        let size = (doc["overlay"]?["font-size"]?.asDouble).map {
-            min(max($0, 8), 32)
-        } ?? 15
-        let blur = doc["overlay"]?["blur-enabled"]?.asBool ?? true
-        let anim = doc["overlay"]?["anim-enabled"]?.asBool ?? true
-        let showShortcuts = doc["overlay"]?["shortcut-badge"]?.asBool ?? true
-        let peekKey = (doc["overlay"]?["peek-key"]?.asString)
-            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-            ?? "space"
         // show-modifier-badge is a string enum: "off" / "glyph" /
         // "action". The PR #92 transitional bool support ("true" →
         // .glyph) is gone — config edited after PR #96 must use the
@@ -638,8 +657,8 @@ public struct PerchConfig: Sendable {
         // who carry over old bool literals, but a raw TOML bool
         // (no quotes) now silently lands on .off + a warning.
         let badge: ModifierBadgeStyle
-        if let s = doc["overlay"]?["show-modifier-badge"]?.asString {
-            badge = ModifierBadgeStyle.parse(s) ?? .off
+        if let str = doc["overlay"]?["show-modifier-badge"]?.asString {
+            badge = ModifierBadgeStyle.parse(str) ?? .off
         } else if doc["overlay"]?["show-modifier-badge"]?.asBool != nil {
             Log.line("config: show-modifier-badge — bare bool no longer "
                      + "supported; use \"off\" / \"glyph\" / \"action\". "
@@ -649,12 +668,102 @@ public struct PerchConfig: Sendable {
             badge = .off
         }
         return OverlayConfig(
-            theme: theme, accent: accent, pillShape: shape,
-            fontSize: size, blurEnabled: blur, animEnabled: anim,
-            showShortcuts: showShortcuts, peekKey: peekKey,
+            theme: theme, accent: s.accent, pillShape: s.pillShape,
+            fontSize: s.fontSize, blurEnabled: s.blurEnabled,
+            animEnabled: s.animEnabled,
+            showShortcuts: s.showShortcuts, peekKey: s.peekKey,
             modifierBadge: badge,
             customPalettes: customPalettes,
             customThemeName: customThemeName)
+    }
+
+    /// `[overlay.effect]` — every field came from the spec. The only
+    /// non-decode bit is the parse-time warning when `narrow` is a
+    /// particle kind (it downgrades to `.fade` at runtime); re-derived
+    /// here from the resolved value so the user still sees it.
+    private static func assembleEffect(_ s: Staged) -> EffectConfig {
+        // Particle kinds in the narrow context fall through to .fade
+        // at runtime (`GhostDriver.spawn`) — warn the user once at
+        // parse-time so they know the dispatch differs from what
+        // they wrote, instead of debugging a missing burst later.
+        if s.narrow == .fireworks || s.narrow == .confetti {
+            Log.line("config: [overlay.effect].narrow = "
+                     + "\"\(s.narrow.rawValue)\" downgrades to "
+                     + "\"fade\" at runtime — per-pill particle "
+                     + "bursts on a dense hint set would emit "
+                     + "hundreds of simultaneous particles.")
+        }
+        return EffectConfig(
+            appear: s.appear, match: s.match, unmatch: s.unmatch,
+            narrow: s.narrow, intensity: s.intensity,
+            durationScale: s.durationScale)
+    }
+
+    /// `[behavior]` — `auto-click-on-unique`/`min-size` came from the
+    /// spec, and `excludeApps` from the spec's `[exclude].apps`. The
+    /// `roles` / web-`roles` arrays (empty-entry filtering + the
+    /// web→global fallback) and the per-bundle-id `[behavior."<id>"]`
+    /// overrides are bespoke.
+    private static func assembleBehavior(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> BehaviorConfig {
+        let roles = (doc["behavior"]?["roles"]?.asStringArray)
+            .map { $0.filter { !$0.isEmpty } } ?? defaultRoles
+        let webRoles = (doc["behavior.web"]?["roles"]?.asStringArray)
+            .map { $0.filter { !$0.isEmpty } } ?? roles
+
+        // Per-app overrides — `[behavior."<bundle-id>"]` sections.
+        // Same flat-key shape as `[behavior.web]`.
+        var perApp: [String: BehaviorOverrides] = [:]
+        for (raw, section) in doc {
+            guard raw.hasPrefix("behavior.\""),
+                  raw.hasSuffix("\""),
+                  raw.count > "behavior.\"\"".count
+            else { continue }
+            let bid = String(raw.dropFirst("behavior.\"".count).dropLast())
+            guard !bid.isEmpty else { continue }
+            let r = section["roles"]?.asStringArray
+                .map { $0.filter { !$0.isEmpty } }
+            let m = section["min-size"]?.asDouble.map { max(0, $0) }
+            let a = section["auto-click-on-unique"]?.asBool
+            let appear = section["appear-effect"]?.asString
+                .flatMap(AppearEffect.parse)
+            let match = section["match-effect"]?.asString
+                .flatMap(MatchEffect.parse)
+            let unmatch = section["unmatch-effect"]?.asString
+                .flatMap(UnmatchEffect.parse)
+            let narrow = section["narrow-effect"]?.asString
+                .flatMap(MatchEffect.parse)
+            if r == nil, m == nil, a == nil,
+               appear == nil, match == nil,
+               unmatch == nil, narrow == nil { continue }
+            perApp[bid] = BehaviorOverrides(
+                roles: r, minSize: m, autoClickOnUnique: a,
+                appearEffect: appear, matchEffect: match,
+                unmatchEffect: unmatch, narrowEffect: narrow)
+        }
+
+        return BehaviorConfig(
+            autoClickOnUnique: s.autoClickOnUnique, roles: roles,
+            webRoles: webRoles, excludeApps: s.excludeApps,
+            minSize: s.minSize, perApp: perApp)
+    }
+
+    /// `[chord]` — `timeout-ms` came from the spec; `leader` is bespoke
+    /// (first-char-only after trim+lowercase, not a plain scalar).
+    private static func assembleChord(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> ChordConfig {
+        let leader: String = {
+            guard let raw = doc["chord"]?["leader"]?.asString else {
+                return ""
+            }
+            let trimmed = raw
+                .trimmingCharacters(in: .whitespaces)
+                .lowercased()
+            return String(trimmed.prefix(1))
+        }()
+        return ChordConfig(leader: leader, timeoutMs: s.timeoutMs)
     }
 
     /// Walk every `[overlay.themes.<name>]` section and assemble a
@@ -749,181 +858,6 @@ public struct PerchConfig: Sendable {
         return parseColorToken(s)?.rgb
     }
 
-    private static func parseEffect(_ doc: TOMLDoc) -> EffectConfig {
-        let eff = doc["overlay.effect"]
-        let appear = (eff?["appear"]?.asString)
-            .flatMap(AppearEffect.parse)?.resolvingRandom() ?? .pop
-        let match = (eff?["match"]?.asString)
-            .flatMap(MatchEffect.parse) ?? .off
-        let unmatch = (eff?["unmatch"]?.asString)
-            .flatMap(UnmatchEffect.parse) ?? .off
-        let narrow = (eff?["narrow"]?.asString)
-            .flatMap(MatchEffect.parse) ?? .off
-        // Particle kinds in the narrow context fall through to .fade
-        // at runtime (`GhostDriver.spawn`) — warn the user once at
-        // parse-time so they know the dispatch differs from what
-        // they wrote, instead of debugging a missing burst later.
-        if narrow == .fireworks || narrow == .confetti {
-            Log.line("config: [overlay.effect].narrow = "
-                     + "\"\(narrow.rawValue)\" downgrades to "
-                     + "\"fade\" at runtime — per-pill particle "
-                     + "bursts on a dense hint set would emit "
-                     + "hundreds of simultaneous particles.")
-        }
-        let intensity = (eff?["intensity"]?.asString)
-            .flatMap(EffectIntensity.parse) ?? .normal
-        let durScale: Double = {
-            guard let raw = eff?["duration-scale"]?.asDouble
-            else { return 1.0 }
-            return raw >= 0.1 && raw <= 5.0 ? raw : 1.0
-        }()
-        return EffectConfig(
-            appear: appear, match: match, unmatch: unmatch,
-            narrow: narrow, intensity: intensity,
-            durationScale: durScale)
-    }
-
-    private static func parseBorder(_ doc: TOMLDoc) -> BorderConfig {
-        let b = doc["overlay.border"]
-        let effect = (b?["effect"]?.asString)
-            .flatMap(BorderEffect.parse)?.resolvingRandom() ?? .off
-        let glow = b?["glow"]?.asBool ?? true
-        let width: Double = {
-            guard let raw = b?["width"]?.asDouble else { return 1.5 }
-            return raw >= 0.5 && raw <= 30 ? raw : 1.5
-        }()
-        let cycle: Double = {
-            guard let raw = b?["color-cycle-ms"]?.asDouble
-            else { return 3.0 }
-            // ms in config (family spelling), seconds internally.
-            // 0 keeps the hue lock; 120000 ms = the old 120 s cap.
-            return raw >= 0 && raw <= 120_000 ? raw / 1000 : 3.0
-        }()
-        return BorderConfig(
-            effect: effect, glow: glow, width: width,
-            cycleSeconds: cycle)
-    }
-
-    private static func parseSound(_ doc: TOMLDoc) -> SoundConfig {
-        let s = doc["overlay.sound"]
-        let match = s?["match"]?.asString ?? ""
-        let unmatch = s?["unmatch"]?.asString ?? ""
-        let activate = s?["activate"]?.asString ?? ""
-        let volume: Double = {
-            guard let raw = s?["volume"]?.asDouble else { return 0.5 }
-            return max(0, min(1, raw))
-        }()
-        return SoundConfig(
-            match: match, unmatch: unmatch, activate: activate,
-            volume: volume)
-    }
-
-    private static func parseBehavior(_ doc: TOMLDoc) -> BehaviorConfig {
-        let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
-        let roles = (doc["behavior"]?["roles"]?.asStringArray)
-            .map { $0.filter { !$0.isEmpty } } ?? defaultRoles
-        let excludes = doc["exclude"]?["apps"]?.asStringArray ?? []
-        let minSize = (doc["behavior"]?["min-size"]?.asDouble).map {
-            max(0, $0)
-        } ?? 6
-        let webRoles = (doc["behavior.web"]?["roles"]?.asStringArray)
-            .map { $0.filter { !$0.isEmpty } } ?? roles
-
-        // Per-app overrides — `[behavior."<bundle-id>"]` sections.
-        // Same flat-key shape as `[behavior.web]`.
-        var perApp: [String: BehaviorOverrides] = [:]
-        for (raw, section) in doc {
-            guard raw.hasPrefix("behavior.\""),
-                  raw.hasSuffix("\""),
-                  raw.count > "behavior.\"\"".count
-            else { continue }
-            let bid = String(raw.dropFirst("behavior.\"".count).dropLast())
-            guard !bid.isEmpty else { continue }
-            let r = section["roles"]?.asStringArray
-                .map { $0.filter { !$0.isEmpty } }
-            let m = section["min-size"]?.asDouble.map { max(0, $0) }
-            let a = section["auto-click-on-unique"]?.asBool
-            let appear = section["appear-effect"]?.asString
-                .flatMap(AppearEffect.parse)
-            let match = section["match-effect"]?.asString
-                .flatMap(MatchEffect.parse)
-            let unmatch = section["unmatch-effect"]?.asString
-                .flatMap(UnmatchEffect.parse)
-            let narrow = section["narrow-effect"]?.asString
-                .flatMap(MatchEffect.parse)
-            if r == nil, m == nil, a == nil,
-               appear == nil, match == nil,
-               unmatch == nil, narrow == nil { continue }
-            perApp[bid] = BehaviorOverrides(
-                roles: r, minSize: m, autoClickOnUnique: a,
-                appearEffect: appear, matchEffect: match,
-                unmatchEffect: unmatch, narrowEffect: narrow)
-        }
-
-        return BehaviorConfig(
-            autoClickOnUnique: autoClick, roles: roles,
-            webRoles: webRoles, excludeApps: excludes,
-            minSize: minSize, perApp: perApp)
-    }
-
-    private static func parseRegional(_ doc: TOMLDoc) -> RegionalConfig {
-        let w = (doc["regional"]?["min-width"]?.asDouble)
-            .map { max(0, $0) } ?? 200
-        let h = (doc["regional"]?["min-height"]?.asDouble)
-            .map { max(0, $0) } ?? 100
-        return RegionalConfig(minWidth: w, minHeight: h)
-    }
-
-    private static func parseGrid(_ doc: TOMLDoc) -> GridConfig {
-        let cols: Int = {
-            guard let raw = doc["grid"]?["cols"]?.asInt else { return 12 }
-            return raw >= 2 && raw <= 32 ? raw : 12
-        }()
-        let rows: Int = {
-            guard let raw = doc["grid"]?["rows"]?.asInt else { return 8 }
-            return raw >= 2 && raw <= 32 ? raw : 8
-        }()
-        let rCols: Int = {
-            guard let raw = doc["grid"]?["recursive-cols"]?.asInt
-            else { return 3 }
-            return raw >= 2 && raw <= 32 ? raw : 3
-        }()
-        let rRows: Int = {
-            guard let raw = doc["grid"]?["recursive-rows"]?.asInt
-            else { return 3 }
-            return raw >= 2 && raw <= 32 ? raw : 3
-        }()
-        let maxDepth: Int = {
-            guard let raw = doc["grid"]?["max-depth"]?.asInt
-            else { return 3 }
-            return raw >= 1 && raw <= 10 ? raw : 3
-        }()
-        let nestMin: Double = {
-            guard let raw = doc["grid"]?["nest-min-size"]?.asDouble
-            else { return 100 }
-            return raw >= 1 && raw <= 1000 ? raw : 100
-        }()
-        return GridConfig(
-            cols: cols, rows: rows, recursiveCols: rCols,
-            recursiveRows: rRows, nestMinSize: nestMin,
-            maxDepth: maxDepth)
-    }
-
-    private static func parseChord(_ doc: TOMLDoc) -> ChordConfig {
-        let leader: String = {
-            guard let raw = doc["chord"]?["leader"]?.asString else {
-                return ""
-            }
-            let trimmed = raw
-                .trimmingCharacters(in: .whitespaces)
-                .lowercased()
-            return String(trimmed.prefix(1))
-        }()
-        let timeoutMs = (doc["chord"]?["timeout-ms"]?.asDouble)
-            .map { max(0, min($0, 5000)) } ?? 600
-        return ChordConfig(leader: leader, timeoutMs: timeoutMs)
-    }
-
     private static func parseSearch(_ doc: TOMLDoc) -> SearchConfig {
         var synonyms: [String: [String]] = [:]
         if let section = doc["search.synonyms"] {
@@ -941,31 +875,7 @@ public struct PerchConfig: Sendable {
         return SearchConfig(synonyms: synonyms)
     }
 
-    // MARK: - Sanitisers
-
-    /// Drop duplicates and non-typeable characters, lowercase the
-    /// result. Empty after sanitising → fall back to the default
-    /// alphabet (returns `nil` so the call site can apply the
-    /// default).
-    private static func sanitiseAlphabet(_ s: String) -> String? {
-        var seen = Set<Character>()
-        var out = ""
-        for ch in s.lowercased() {
-            guard ch.isLetter, !seen.contains(ch) else { continue }
-            seen.insert(ch)
-            out.append(ch)
-        }
-        return out.isEmpty ? nil : out
-    }
-
-    /// Accept "system" or a `#rrggbb` literal. Returns canonical
-    /// lowercase, or `nil` on malformed input so the caller can clamp.
-    private static func sanitiseAccent(_ s: String) -> String? {
-        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
-        if t == "system" || t == "accent" { return "system" }
-        // sill's shared colour grammar: named colours, #rgb, #rrggbb,
-        // #rrggbbaa. Stored as the normalized token; the adapter
-        // re-parses with the same grammar.
-        return parseColorToken(t) != nil ? t : nil
-    }
+    // Note: `sanitiseAlphabet` / `sanitiseAccent` now live in
+    // `PerchConfig+Spec.swift` (non-private static) so BOTH the spec's
+    // `apply` closures and this file's bespoke assembly share one copy.
 }

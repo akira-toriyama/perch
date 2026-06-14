@@ -1,4 +1,13 @@
+#:schema ./config.schema.json
 # perch — keyboard-driven UI navigator for macOS.
+#
+# The `#:schema` line above gives editors (taplo / Even Better TOML)
+# key + value completion and inline validation. perch writes this
+# schema next to your config on launch, and it's generated from
+# perch's own config parser (`perch --emit-schema`) — so it always
+# matches the binary. Out-of-range / unknown values are clamped to
+# safe defaults at runtime regardless; the schema just surfaces the
+# mistake in your editor before you save.
 #
 # This file is the SOURCE OF TRUTH for what perch does. The app
 # never writes to it and never auto-generates an example — what

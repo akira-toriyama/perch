@@ -37,22 +37,25 @@ let package = Package(
     dependencies: [
         // Shared theming foundation (plan atelier). perch is the
         // "pure twin": PerchCore consumes the AppKit-free `Palette`
-        // module (ThemeSpec / paletteFor / FontKind / canonicalThemeNames)
-        // and, since 0.7.0, the `Toml` module — the family's ONE
-        // hand-rolled TOML subset parser (perch's in-tree TOML.swift
-        // folded into sill in atelier Phase 1.6). PerchCore reads config
-        // via `Toml.parseFlat` (the flat, lenient skin); the multi-line
+        // module (ThemeSpec / paletteFor / FontKind / canonicalThemeNames),
+        // the `Toml` module — the family's ONE hand-rolled TOML subset
+        // parser (perch's in-tree TOML.swift folded into sill in atelier
+        // Phase 1.6) — and, since 0.9.0, the `ConfigSchema` module: one
+        // declarative `Spec` drives BOTH the config.toml decode and the
+        // JSON Schema emitted for taplo completion (`perch --emit-schema`),
+        // so the two never drift. PerchCore reads config via
+        // `Toml.parseFlat` (the flat, lenient skin); the multi-line
         // `[behavior].roles` array that the old single-line parser
         // silently skipped now parses correctly. The adapter resolves the
         // spec to NSColors itself (perch keeps its own `[overlay].accent`
         // override + pill-surface treatment), so it does NOT link
         // PaletteKit. Pinned to a SemVer tag for release/CI
-        // reproducibility; `.upToNextMinor` keeps it on 0.7.x (floor
-        // 0.7.1 = the escape-aware comment/quote fix the parser swap
-        // surfaced). For local, atomic sill↔perch editing, temporarily
-        // swap this line for `.package(path: "../sill")`.
+        // reproducibility; `.upToNextMinor` keeps it on a single pre-1.0
+        // minor (a pre-1.0 minor can break, so don't auto-jump). Floor
+        // 0.9.0 = the `ConfigSchema` module. For local, atomic sill↔perch
+        // editing, temporarily swap this line for `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.7.1")),
+                 .upToNextMinor(from: "0.9.1")),
     ],
     targets: [
         .target(
@@ -60,6 +63,10 @@ let package = Package(
             dependencies: [
                 .product(name: "Palette", package: "sill"),
                 .product(name: "Toml", package: "sill"),
+                // ConfigSchema: one declarative `Spec` drives BOTH the
+                // config.toml decode and the JSON Schema emitted for taplo
+                // completion (`perch --emit-schema`) — so the two never drift.
+                .product(name: "ConfigSchema", package: "sill"),
             ]),
         .target(
             name: "PerchAdapterMacOS",
