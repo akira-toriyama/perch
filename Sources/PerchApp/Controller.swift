@@ -1,6 +1,6 @@
 // Orchestrator. Owns the hotkey monitor, AX source, overlay, and
 // the live config snapshot. The hotkey trampoline (Carbon callback,
-// also `perch --activate` over DNC) lands on `activate()`, which
+// also `perch overlay --activate` over DNC) lands on `activate()`, which
 // runs the full flow:
 //   1. source.enumerate()         AX walk in the adapter
 //   2. Labeler.assign → hints     pure logic in Core
@@ -83,15 +83,15 @@ final class Controller {
 
     /// File-system watcher on `~/.config/perch/config.toml`. Fires
     /// `reload(cause: "fs")` on save so users don't need to invoke
-    /// `perch --reload` after every edit. Created in `start()` so
+    /// `perch daemon --reload` after every edit. Created in `start()` so
     /// the callback can capture `self` after stored-property init
     /// completes (same lifecycle as `hotkey`).
     private var configWatcher: ConfigWatcher?
 
-    /// `perch --theme=<name>` session override. When non-nil,
+    /// `perch overlay --theme <name>` session override. When non-nil,
     /// `effectiveConfig()` swaps in this theme (built-in or custom
-    /// palette name) — applied to all activations until `--reload`
-    /// or `--theme=` (empty) clears it. Cleared on reload so the
+    /// palette name) — applied to all activations until `daemon --reload`
+    /// or `overlay --theme ''` (empty) clears it. Cleared on reload so the
     /// user's expectation of "reload = clean slate" holds.
     private var themeOverride: String?
 
@@ -115,10 +115,10 @@ final class Controller {
         installControlObserver()
         installAppActivationObserver()
         // Hot-reload: watch the user's config file so saves take
-        // effect without a `perch --reload` IPC round-trip. The
+        // effect without a `perch daemon --reload` IPC round-trip. The
         // watcher is a no-op when the file doesn't exist (the
         // built-in defaults are already loaded; user can `perch
-        // --reload` after creating it).
+        // daemon --reload` after creating it).
         let watcher = ConfigWatcher { [weak self] in
             Task { @MainActor [weak self] in
                 self?.reload(cause: "fs")
@@ -142,7 +142,7 @@ final class Controller {
         let new = PerchConfig.load()
         let hotkeyChanged = new.hotkey.active != config.hotkey.active
         config = new
-        // Reload = clean slate. A live `--theme=` override doesn't
+        // Reload = clean slate. A live `overlay --theme` override doesn't
         // survive a config reload — matches the "reload resets state"
         // user expectation, and prevents the surprising scenario of
         // editing `theme = "hacker"` in the file and not seeing
@@ -546,7 +546,7 @@ final class Controller {
         if let g = grid { g.stop(); grid = nil }
         if let n = nudge { n.stop(); nudge = nil }
         if let d = drag { d.stop(); drag = nil }
-        // Toggle: a second hotkey press (or `--activate`) while
+        // Toggle: a second hotkey press (or `overlay --activate`) while
         // hint mode is up cancels and returns.
         if activeMode == .hint {
             overlay.hide()

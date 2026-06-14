@@ -140,7 +140,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// allow-list doesn't apply.
     ///
     /// Session-lifetime; cleared on daemon restart. Exposed read-only
-    /// to `Controller.writeStatus(...)` so `perch --status` can
+    /// to `Controller.writeStatus(...)` so `perch daemon --show` can
     /// surface the list for triage.
     private var discoveredWebBundles: Set<String> = []
 
@@ -177,7 +177,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     /// Read-only snapshot of WKWebView-bearing bundles discovered
     /// during this daemon's lifetime (issue #38). Used by
-    /// `Controller.writeStatus(...)` so `perch --status` can surface
+    /// `Controller.writeStatus(...)` so `perch daemon --show` can surface
     /// the list as a triage aid ("which non-Chromium apps does perch
     /// know to wake?"). Sorted for stable output.
     public var discoveredWebBearingBundles: [String] {
@@ -186,7 +186,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
     /// Reverse the renderer wake-up on every pid we've flipped
     /// `AXEnhancedUserInterface = true` on during the daemon's
-    /// lifetime. Called at clean shutdown (`perch --quit`) so we
+    /// lifetime. Called at clean shutdown (`perch daemon --quit`) so we
     /// don't leak Chromium / Electron AX bookkeeping state past
     /// perch's process boundary.
     ///
@@ -209,8 +209,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         enhancedPids.removeAll()
         prewarmedPids.removeAll()
         // Discovery set is in-memory only — clearing here keeps the
-        // `--status` line honest (no stale "discovered" entries
-        // after a `--quit` would never re-walk them).
+        // `daemon --show` line honest (no stale "discovered" entries
+        // after a `daemon --quit` would never re-walk them).
         discoveredWebBundles.removeAll()
         guard !pids.isEmpty else { return }
         for pid in pids {
@@ -455,7 +455,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     ///     appended for minimised windows so the user can see at a
     ///     glance which picks won't already be on-screen.
     ///   - `frame`: `.zero` — windows ship to a vertical-list
-    ///     render (same render path as `--menu`), not a pill pinned
+    ///     render (same render path as `overlay --menu`), not a pill pinned
     ///     to a frame.
     ///   - `id`: the same `"<pid>:<seq>"` shape every other enumerator
     ///     uses, stored in `liveById` so dispatch resolves it back to
@@ -524,7 +524,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     ///     the fuzzy match — "thinking" finds 🤔, "good" finds
     ///     👍, etc.
     ///   - `frame`: `.zero` — emoji ship to the vertical-list
-    ///     render (same path as `--menu` and `--windows`); no
+    ///     render (same path as `overlay --menu` and `overlay --windows`); no
     ///     on-screen frame to pin a pill to.
     ///   - `id`: `"emoji:<glyph>"` — the glyph encoded directly
     ///     so dispatch can decode without a side-table lookup.
@@ -583,7 +583,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// **Latency**: `.fast` recognition level ranges 100-400ms
     /// on Apple Silicon for a typical 4K screen. That's slow vs
     /// the AX walk (<30ms) but acceptable for the fallback use
-    /// case the user invoked explicitly via `--vision`.
+    /// case the user invoked explicitly via `overlay --vision`.
     public func enumerateVision() -> [UIElement] {
         liveById.removeAll(keepingCapacity: true)
         customLabelById.removeAll(keepingCapacity: true)
@@ -979,8 +979,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// modifier-held click.
     ///
     /// **Crosses the AX-bypass carve-out** (cursor visibly jumps
-    /// to the element). Same rationale as `--grid` / `--drag` /
-    /// `--nudge`: when AX-press can't deliver the semantic, mouse
+    /// to the element). Same rationale as `overlay --grid` / `overlay --drag` /
+    /// `overlay --nudge`: when AX-press can't deliver the semantic, mouse
     /// synth is the only option.
     private func dispatchSynthClick(
         _ elt: AXUIElement, flags: CGEventFlags,
@@ -1255,7 +1255,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return synthClick(at: point, button: .right,
                               flags: [], id: id, tag: "vision-right")
         case .focus:
-            // "warp only" — useful before --drag picks up.
+            // "warp only" — useful before overlay --drag picks up.
             _ = CGWarpMouseCursorPosition(point)
             Log.line("dispatch: vision warp-only @ "
                      + "(\(Int(point.x)),\(Int(point.y))) → id=\(id)")

@@ -8,7 +8,7 @@ import XCTest
 /// `PerchConfig.configSpec`, so this guards the committed copy against a
 /// stale regeneration.
 ///
-/// Regenerate with: `perch --emit-schema > config.schema.json`.
+/// Regenerate with: `perch config --emit-schema > config.schema.json`.
 final class ConfigSchemaDriftTests: XCTestCase {
 
     func testCommittedSchemaMatchesSpec() throws {
@@ -23,6 +23,6 @@ final class ConfigSchemaDriftTests: XCTestCase {
         XCTAssertEqual(
             committed, PerchConfig.jsonSchema,
             "config.schema.json is stale — run "
-                + "`perch --emit-schema > config.schema.json` and commit.")
+                + "`perch config --emit-schema > config.schema.json` and commit.")
     }
 }

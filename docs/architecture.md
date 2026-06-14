@@ -19,7 +19,8 @@ or by a fixture (`SyntheticUIElementSource` in
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  PerchApp      @main, CLI argv, Controller wiring,      │
-│                IPC observer for --reload / --quit       │  app
+│                IPC observer for daemon --reload /        │
+│                daemon --quit                             │  app
 └──────────────────────┬──────────────────────────────────┘
                        │
               ┌────────┴────────┐
@@ -73,7 +74,7 @@ app startup.
 ## The activation flow
 
 ```
-hotkey shift+space  (or `perch --activate` over DNC)
+hotkey shift+space  (or `perch overlay --activate` over DNC)
   │
   ▼
 Controller.activate()
@@ -211,23 +212,33 @@ reports.
 
 ## CLI surface
 
-`Main.swift` is the single source of truth (the recognition loop +
-the `--theme=<name>` special-case prefix); the full README CLI
-table is authoritative for end-user copy. The architectural cut:
+`Main.swift` is the single source of truth (the recognition loop);
+argv tokenizing is now delegated to the shared sill `CLIKit`
+tokenizer, while perch keeps its own verb vocabulary. The full
+README CLI table is authoritative for end-user copy. The CLI is a
+yabai-style domain-verb grammar (`perch <domain> --<verb>
+[VALUE]`); each domain takes exactly one verb. The architectural
+cut:
 
-| Mode | Flags |
+| Mode | Domain · verb |
 |---|---|
-| server | *(no flag)* — run the daemon (hotkey loop) |
-| standalone | `--validate` (exit 0/2) · `--doctor` (exit 0/1) · `--help` |
-| standalone diagnostics | `--dump-ax` · `--dump-ax-tree` (raw, pre-filter) · `--dump-regions` (regional-mode candidates) |
-| client (mode entry) | `--activate` · `--scroll` · `--search` · `--regional` · `--menu` · `--windows` · `--emoji` · `--grid` · `--rgrid` · `--nudge` · `--drag` · `--vision` |
-| client (control) | `--cancel` · `--reload` · `--quit` · `--status` · `--theme=<name>` |
+| server | *(no domain)* — run the daemon (hotkey loop) |
+| standalone | `config --validate` (exit 0/2) · `config --doctor` (exit 0/1) · `--help` |
+| standalone diagnostics | `ax --dump` · `ax --tree` (raw, pre-filter) · `ax --regions` (regional-mode candidates) |
+| client (mode entry) | `overlay --activate` · `overlay --scroll` · `overlay --search` · `overlay --regional` · `overlay --menu` · `overlay --windows` · `overlay --emoji` · `overlay --grid` · `overlay --rgrid` · `overlay --nudge` · `overlay --drag` · `overlay --vision` |
+| client (control) | `overlay --cancel` · `daemon --reload` · `daemon --quit` · `daemon --show` · `overlay --theme <name>` |
 
-`--theme=<name>` is the lone `=value` flag — every other client
-command is bare. Main.swift's recognition loop branches on the
-`themePrefix` explicitly so the bare-name unknown-flag check
-doesn't trip on `--theme=neon`. Unknown flags exit 2 (Rule of
-Repair: loud + immediate failure, never silent fallback).
+`overlay --theme` takes a space-separated value (`overlay --theme
+neon`); passing an empty string (`overlay --theme ''`) clears the
+override, and a bare `--theme` with no value is an error. Values
+are never `--theme=<name>`. Combining verbs within a domain (e.g.
+`daemon --reload --quit`) or using a flag outside its domain exits
+2 — no silent fallback; an unknown flag prints a "did you mean
+…?" hint. Exit codes: 0 ok / 1 diagnostic check failed
+(`config --doctor`, `ax --*` with no AX grant) / 2 usage · bad
+flag · invalid config (loud stderr) / 3 daemon precondition
+(Rule of Repair: loud + immediate failure, never silent
+fallback).
 
 Verbose logging is not a flag: set the `PERCH_DEBUG` env var
 (e.g. `PERCH_DEBUG=1 perch`) to mirror logs to stderr and enable
@@ -248,9 +259,9 @@ rgrid / nudge / drag / vision — Controller tears down whichever
 is active before starting a new one so the single session-level
 KeyTap installs cleanly.
 
-`--status` is one-way the other direction: DNC can't reply, so
+`daemon --show` is one-way the other direction: DNC can't reply, so
 the daemon maintains a small status file at `/tmp/perch.status`
-that `--status` reads.
+that `daemon --show` reads.
 
 ## Keyboard input — the second seam
 
@@ -324,7 +335,7 @@ canonical PR(s) on the GitHub project board (`perch roadmap`).
   ceiling once it crosses into an `AXWebArea`; the Controller
   pre-warms renderer-AX on Chromium app activation (#28) so the
   first hotkey after focus-change sees the populated page tree
-  rather than just the browser chrome; `--dump-ax-tree` exposes
+  rather than just the browser chrome; `ax --tree` exposes
   the raw tree for diagnosing what AX actually reports for a
   given web shell. #38 generalises the bundle-id allow-list with
   *observation-based discovery*: when the walker encounters an
@@ -333,7 +344,7 @@ canonical PR(s) on the GitHub project board (`perch roadmap`).
   WKWebView marketing panes), the bundle is promoted in-memory
   for the rest of the daemon lifetime so subsequent activations
   get the wake / prewarm path too.
-- **M3** — regional hints (#34) — `perch --regional` enters a
+- **M3** — regional hints (#34) — `perch overlay --regional` enters a
   hint-mode variant whose `UIElementSource.enumerateRegions()`
   walks the AX tree with `regionalRoles` (Group / Article /
   Section / SplitGroup / ScrollArea / Outline / Image), a
@@ -342,7 +353,7 @@ canonical PR(s) on the GitHub project board (`perch roadmap`).
   action-mode modifiers apply (Cmd → copyTitle is the headline
   use). `AXUIElementSource` shares the AX walk between hint and
   regional via a `WalkPolicy` struct.
-- **M3+** — menu-bar search (#52) — `perch --menu` reuses
+- **M3+** — menu-bar search (#52) — `perch overlay --menu` reuses
   `SearchMode` against `UIElementSource.enumerateMenu()`, which
   walks `kAXMenuBarAttribute` recursively and emits each
   pressable menu item with its full `"File > Save As…"` path as
@@ -350,16 +361,16 @@ canonical PR(s) on the GitHub project board (`perch roadmap`).
   items have no on-screen frame until opened — the `.zero` frame
   rules out pill-over-element placement). The `SearchRenderMode`
   enum gates between pills and list at draw time. Companion
-  ports: `--windows` (#54, cross-app window switcher), `--emoji`
-  (#55, curated emoji picker), `--search` fuzzy + synonyms (#53),
-  scroll mode count-prefix + half/full-page bindings (#56), chord
-  suffix actions (#57), AX shortcut annotation on `--menu` pills
-  (#58).
-- **M4** — explicit AX-bypass dispatch family. `--grid` (#66,
+  ports: `overlay --windows` (#54, cross-app window switcher),
+  `overlay --emoji` (#55, curated emoji picker), `overlay --search`
+  fuzzy + synonyms (#53), scroll mode count-prefix + half/full-page
+  bindings (#56), chord suffix actions (#57), AX shortcut annotation
+  on `overlay --menu` pills (#58).
+- **M4** — explicit AX-bypass dispatch family. `overlay --grid` (#66,
   M4-α) divides the screen into a labelled `cols × rows` grid;
-  `--rgrid` (#67, M4-β) drills recursively up to `max-depth`
-  levels per pick; `--nudge` (#68, M4-γ) is the arrow-key cursor
-  walker for last-mile precision; `--drag` (#69, M4-δ) does
+  `overlay --rgrid` (#67, M4-β) drills recursively up to `max-depth`
+  levels per pick; `overlay --nudge` (#68, M4-γ) is the arrow-key cursor
+  walker for last-mile precision; `overlay --drag` (#69, M4-δ) does
   keyboard-driven mouseDown / move / mouseUp. The chord suffix
   family gained modifier-held synthetic clicks (`,m` / `,h` —
   #70, M4-ε), sticky modifiers (#71, M4-ζ), and multi-click
@@ -367,7 +378,7 @@ canonical PR(s) on the GitHub project board (`perch roadmap`).
   mouse events — the cursor visibly jumps; that's the carve-out
   for reaching AX-invisible UI (Figma canvas, Photoshop, web
   `<canvas>`).
-- **M5** — Vision-OCR hint mode (#73): `--vision` runs Apple
+- **M5** — Vision-OCR hint mode (#73): `overlay --vision` runs Apple
   Vision's `VNRecognizeTextRequest` on the main display capture
   and emits one `UIElement` per recognised string. Click is
   synthetic `CGEvent` at the centroid (no AX target). Requires
@@ -382,7 +393,7 @@ canonical PR(s) on the GitHub project board (`perch roadmap`).
   channels (appear / match
   / unmatch / narrow); neon border; sound; modifier badge
   (off / glyph / action); hot-reload of `~/.config/perch/config.toml`;
-  hold-to-peek; per-app effect overrides; `--theme=<name>` CLI
+  hold-to-peek; per-app effect overrides; `overlay --theme <name>` CLI
   session override; `PerchConfig` sub-struct refactor (PR #89).
 
 ## References

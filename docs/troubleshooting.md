@@ -4,7 +4,7 @@ Catalogue of bug signatures we've actually hit + the fix. If you're
 seeing one of these, you're probably one PR / config change away
 from green.
 
-## `perch --quit` succeeds but a daemon is still running
+## `perch daemon --quit` succeeds but a daemon is still running
 
 There's probably a **second daemon left over from an earlier
 debug session**. `./stop.sh` greps for both `Contents/MacOS/perch`
@@ -32,7 +32,7 @@ the diagnostic order:
    didn't, the user might be on a setup where the menu bar is
    auto-hidden or the Dock is set to "always show on" some
    unusual edge.
-3. **Run `perch --dump-ax`.** If it lists elements whose frames
+3. **Run `perch ax --dump`.** If it lists elements whose frames
    are clearly outside the focused window, the AX tree itself
    is reporting bogus positions (Electron with stale layout
    cache, fullscreen apps with embedded sub-windows). For
@@ -70,7 +70,7 @@ if you see it during normal use, the OS is in a transient state.
 
 What it says — `CGEvent.tapCreate` returned nil. Two causes:
 
-1. **Accessibility not granted to this binary.** `perch --doctor`
+1. **Accessibility not granted to this binary.** `perch config --doctor`
    should already show `✗ Accessibility: NOT granted`. Grant in
    System Settings → Privacy & Security → Accessibility. If
    you're running `.build/debug/perch` directly, the grant is
@@ -93,13 +93,13 @@ once" report has the cause.
 
 ## The hotkey doesn't fire at all
 
-Run `perch --doctor` first.
+Run `perch config --doctor` first.
 
 - `✗ Accessibility` → grant it.
 - `✓ Daemon: running` AND no `controller: --activate received`
   in the log when you press the hotkey → another app is binding
   the same combo. Rebind via `[hotkey].active` to something else
-  (`ctrl+alt+space`, `cmd+f1`) and run `perch --reload`.
+  (`ctrl+alt+space`, `cmd+f1`) and run `perch daemon --reload`.
 - `✗ Daemon: not running` → `./run.sh` (dev loop) or
   `open Perch.app` (brew install) to launch.
 
@@ -126,5 +126,5 @@ Web-shell apps (Cursor, VSCode, Slack) sometimes have their AX
 tree paused (when the WebContents is suspended, e.g. background
 tab). Bring the window forward, give it focus, type one
 character into it (anything to wake the AX subsystem), then try
-shift+space again. If the count is still 0, run `perch --dump-ax`
+shift+space again. If the count is still 0, run `perch ax --dump`
 to confirm whether the issue is enumeration-side or label-side.

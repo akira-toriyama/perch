@@ -17,12 +17,12 @@
 #
 # Always kills any currently-running perch first (via ./stop.sh) so
 # the new bundle takes over cleanly. Quit later: ./stop.sh or
-# `perch --quit`.
+# `perch daemon --quit`.
 #
 # After building, links a `perch` CLI onto PATH (via install-cli.sh)
 # pointing at the bundle just built, so client commands
-# (`perch --activate`, `perch --theme=…`, …) work right away — no
-# separate install step.
+# (`perch overlay --activate`, `perch overlay --theme …`, …) work right
+# away — no separate install step.
 #
 # PERCH_DEBUG=1 is set on the launched app so /tmp/perch.log stays
 # verbose during the dev loop. A normal / brew launch sets nothing

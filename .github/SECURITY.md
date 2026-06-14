@@ -16,7 +16,7 @@ labels) or synthesise UI presses against arbitrary apps.
 
 Include:
 
-- the version you're running (`perch --doctor` prints it)
+- the version you're running (`perch config --doctor` prints it)
 - a minimal reproduction (config snippet + the app perch was
   pointed at, or a step-by-step description)
 - the impact you observed and any mitigations you've considered

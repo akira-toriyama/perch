@@ -4,7 +4,7 @@
 # The `#:schema` line above gives editors (taplo / Even Better TOML)
 # key + value completion and inline validation. perch writes this
 # schema next to your config on launch, and it's generated from
-# perch's own config parser (`perch --emit-schema`) — so it always
+# perch's own config parser (`perch config --emit-schema`) — so it always
 # matches the binary. Out-of-range / unknown values are clamped to
 # safe defaults at runtime regardless; the schema just surfaces the
 # mistake in your editor before you save.
@@ -17,7 +17,7 @@
 #   curl --create-dirs -o ~/.config/perch/config.toml \
 #     https://raw.githubusercontent.com/akira-toriyama/perch/main/config.toml
 #
-# Reload after edits: perch --reload  (or just save — perch watches
+# Reload after edits: perch daemon --reload  (or just save — perch watches
 # the file for changes when running as a daemon).
 
 # ---- Activation ---------------------------------------------------
@@ -30,8 +30,8 @@
 # under your thumb.
 #
 # You can also activate from the CLI without the hotkey:
-#   perch --activate    request the running daemon to show hints
-#   perch --cancel      dismiss hints if any are showing
+#   perch overlay --activate    request the running daemon to show hints
+#   perch overlay --cancel      dismiss hints if any are showing
 # Bind these from Karabiner / skhd / Raycast if you prefer a different
 # trigger or want multiple triggers.
 active = "shift+space"
@@ -103,7 +103,7 @@ prioritise-center = true
 #                        frosted chip regardless of light/dark).
 #
 # Special:
-#   "random"           — pick a random theme at each launch / `--reload`
+#   "random"           — pick a random theme at each launch / `daemon --reload`
 #                        (excludes "system").
 #
 # Unknown names clamp to "system" silently. perch always uses the
@@ -177,7 +177,7 @@ blur-enabled = true
 # you find effects distracting.
 anim-enabled = true
 
-# Show the AX-bound keyboard shortcut (⌘Q, ⇧⌘N, …) on `--menu`
+# Show the AX-bound keyboard shortcut (⌘Q, ⇧⌘N, …) on `overlay --menu`
 # pills as a right-aligned, dimmer annotation. Lets you discover
 # the native shortcut while still picking the menu item with 1-9.
 # Set to false if menu titles already include their own shortcut
@@ -188,8 +188,8 @@ shortcut-badge = true
 # temporarily hides so you can see the UI underneath. Release to
 # restore the pills. Single key, no modifiers (e.g. "space", "tab").
 # Empty disables the feature; unknown names silently disable per
-# typo-tolerance. Only applies to hint mode (`--activate` /
-# `--regional`); search / menu / grid modes are unaffected.
+# typo-tolerance. Only applies to hint mode (`overlay --activate` /
+# `overlay --regional`); search / menu / grid modes are unaffected.
 peek-key = "space"
 
 # Modifier-key badge — when a modifier is held during hint mode,
@@ -534,7 +534,7 @@ min-size = 6
 
 
 # ---- Search-mode synonyms ----------------------------------------
-# `perch --search` / `perch --menu` rank labels with a fuzzy
+# `perch overlay --search` / `perch overlay --menu` rank labels with a fuzzy
 # subsequence matcher (so `Cls` finds "Close Tab", `prfs` finds
 # "Preferences…"). Synonym groups extend that with intent matching:
 # typing any form in a group surfaces labels that contain ANY other
@@ -549,7 +549,7 @@ min-size = 6
 
 
 # ---- Coordinate grid (M4-α, issue #66) --------------------------
-# `perch --grid` overlays a labeled grid across the screen union
+# `perch overlay --grid` overlays a labeled grid across the screen union
 # and warps the cursor + clicks via synthetic CGEvent when the user
 # types a label. The AX-bypass fallback for Figma canvas /
 # Photoshop / web <canvas> / custom-drawn UIs where hint mode is
@@ -563,9 +563,9 @@ min-size = 6
 cols = 12
 rows = 8
 
-# Recursive grid (`perch --rgrid`, M4-β) drills into the picked
+# Recursive grid (`perch overlay --rgrid`, M4-β) drills into the picked
 # cell up to `max-depth` levels before clicking. 1 collapses to
-# regular `--grid` (click on first label).
+# regular `overlay --grid` (click on first label).
 #
 # With the default 3×3 `recursive-cols/rows`:
 #   depth 3 → 27 cells per axis (~80px terminal on 4K)
@@ -576,8 +576,8 @@ rows = 8
 # exceeds the alphabet length AND is sub-pixel on any display.
 max-depth = 3
 
-# Density used by `--rgrid` at EVERY drill level. Distinct from
-# `cols`/`rows` (which are the single-pass `--grid` density)
+# Density used by `overlay --rgrid` at EVERY drill level. Distinct from
+# `cols`/`rows` (which are the single-pass `overlay --grid` density)
 # because the recursive case wants FEWER cells per step so each
 # pick is a single-letter label (no 2-letter `aa`/`ab` chains).
 # Default 3×3 → at depth 3 you address 27 effective spots with
@@ -596,7 +596,7 @@ nest-min-size = 100
 
 
 # ---- Regional hint mode ------------------------------------------
-# Entered via `perch --regional`. Labels large containers (article
+# Entered via `perch overlay --regional`. Labels large containers (article
 # body, sidebar pane, embedded image, scroll area, outline view)
 # instead of every clickable leaf — for "select / copy / focus on
 # broader strokes" tasks. See README.md / docs/glossary.md.

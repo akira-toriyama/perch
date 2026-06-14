@@ -1,7 +1,26 @@
-// Entry point. Three modes chosen by CLI flag: server (no flag —
-// install hotkey, wait), client (`--reload` / `--quit` — post DNC
-// to the running server), standalone (`--validate` / `--doctor` /
-// `--help`).
+// Entry point. yabai-style `perch <domain> --<verb> [VALUE]` CLI
+// (atelier Phase 3 M3). Bare `perch` is server mode (install hotkey,
+// wait); every other invocation peels a domain noun and dispatches a
+// verb:
+//
+//   overlay  --activate / --scroll / --search / --regional / --menu /
+//            --windows / --emoji / --grid / --rgrid / --nudge / --drag /
+//            --vision / --cancel  (mode entry, post DNC to the daemon)
+//            --theme <name>       (live theme override modifier)
+//   daemon   --reload / --show (was --status) / --quit  (post DNC)
+//   config   --validate / --doctor / --emit-schema      (standalone)
+//   ax       --dump (was --dump-ax) / --tree (was --dump-ax-tree) /
+//            --regions (was --dump-regions)              (standalone)
+//
+// argv tokenizing is delegated to the family's shared pure `CLIKit`
+// tokenizer (sill): it consumes values by app-declared arity, so the
+// `--verb=value` form is gone and `--theme ''` (empty-clear) / a
+// `-`-leading theme name are taken verbatim instead of mistaken for
+// flags. perch keeps its OWN verb vocabulary + reject-before-act
+// ordering (parse runs before any DNC post); CLIKit only tokenizes.
+// The DNC wire commands (grid / search / theme:<name> / reload / quit /
+// …) are unchanged, so the new CLI talks to an old daemon and vice
+// versa — only the argv surface moved.
 //
 // `@main enum PerchApp` — NOT top-level `main.swift`. The enum form
 // lets a future XCTest `@testable import PerchApp` work without
@@ -10,6 +29,7 @@
 
 import AppKit
 import Foundation
+import CLIKit
 import PerchCore
 import PerchAdapterMacOS
 
@@ -21,108 +41,96 @@ enum PerchApp {
         perch — keyboard-driven UI navigator for macOS.
 
         USAGE
-          perch                       run as agent (waits for hotkey)
-          perch [COMMAND]             one-shot client command
+          perch                              run as agent (waits for hotkey)
+          perch <domain> --<verb> [VALUE]   one-shot control command
 
         SERVER MODE
-          perch                       run as agent
-                                      (set PERCH_DEBUG=1 in the
-                                      environment for a verbose log to
-                                      stderr + /tmp/perch.log)
+          perch                             run as agent
+                                              (set PERCH_DEBUG=1 in the
+                                              environment for a verbose log to
+                                              stderr + /tmp/perch.log)
 
-        CLIENT COMMANDS — need a running daemon (exit 3 if none)
-          perch --activate            show hint overlay now (alt. to hotkey)
-          perch --scroll              enter scroll mode (j/k/d/u/gg/G, esc)
-          perch --search              enter search mode (type, then 1-9 to pick)
-          perch --regional            enter regional mode — label large
-                                      containers (article / pane / image)
-                                      instead of every clickable leaf
-          perch --menu                enter menu-search mode — fuzzy search
-                                      the frontmost app's whole menu bar
-                                      (deep / hidden commands incl.); pick
-                                      with 1-9 like --search
-          perch --windows             enter cross-app window switcher —
-                                      fuzzy search every window across
-                                      every running app; pick with 1-9
-                                      (raises the window AND activates
-                                      its owning app)
-          perch --emoji               enter emoji picker — fuzzy search
-                                      a curated table by name (thinking
-                                      → 🤔); pick with 1-9 to type the
-                                      glyph at the caret (Unicode
-                                      injection, no pasteboard write)
-          perch --grid                enter coordinate grid — divide
-                                      the screen union into labeled
-                                      cells; type label to warp cursor
-                                      + left-click (Shift → right-click,
-                                      Cmd → warp only). Use when hint
-                                      mode can't see the target (canvas,
-                                      Photoshop, custom UI).
-          perch --rgrid               enter recursive grid — each label
-                                      pick subdivides the chosen cell
-                                      up to [grid].max-depth levels
-                                      (default 3). Space / Enter at any
-                                      level clicks the current cell
-                                      center; Backspace pops one level.
-                                      Pixel-precision drill-down.
-          perch --nudge               enter arrow-nudge cursor — arrows
-                                      move cursor by 1px (bare), 10px
-                                      (Shift), 100px (Alt), screen-edge
-                                      (Cmd). Space/Enter clicks + exits.
-                                      Last-mile precision after --grid.
-          perch --drag                enter keyboard drag — nudge to A,
-                                      `d` to grab (mouseDown), nudge to
-                                      B, `d` again to release (mouseUp).
-                                      Esc is a safety release. For UI
-                                      drag-and-drop (resize, reorder).
-          perch --vision              enter Vision-OCR hint mode —
-                                      Apple Vision text recognition on
-                                      the main display, each visible
-                                      word becomes a hint. Requires
-                                      Screen Recording grant. Use when
-                                      grid is too coarse (Figma layer
-                                      panel, web canvas text, etc.).
-          perch --cancel              dismiss the overlay if showing
-          perch --reload              re-read ~/.config/perch/config.toml
-          perch --status              print active hotkey, alphabet, last event
-          perch --quit                terminate the running daemon
+        overlay — hint / mode entry (need a running daemon; exit 3 if none)
+          overlay --activate          show hint overlay now (alt. to hotkey)
+          overlay --scroll            enter scroll mode (j/k/d/u/gg/G, esc)
+          overlay --search            enter search mode (type, then 1-9 to pick)
+          overlay --regional          regional mode — label large containers
+                                        (article / pane / image) instead of
+                                        every clickable leaf
+          overlay --menu              menu-search mode — fuzzy search the
+                                        frontmost app's whole menu bar (deep /
+                                        hidden commands incl.); pick with 1-9
+          overlay --windows           cross-app window switcher — fuzzy search
+                                        every window across every running app;
+                                        pick with 1-9 (raises + activates)
+          overlay --emoji             emoji picker — fuzzy search a curated
+                                        table by name (thinking → 🤔); 1-9 types
+                                        the glyph at the caret (no pasteboard)
+          overlay --grid              coordinate grid — divide the screen union
+                                        into labeled cells; type label to warp
+                                        cursor + left-click (Shift → right-click,
+                                        Cmd → warp only). For canvas / custom UI
+                                        hint mode can't see.
+          overlay --rgrid             recursive grid — each label pick subdivides
+                                        the chosen cell up to [grid].max-depth
+                                        levels (default 3). Space / Enter clicks
+                                        the current cell center; Backspace pops.
+          overlay --nudge             arrow-nudge cursor — arrows move 1px (bare),
+                                        10px (Shift), 100px (Alt), screen-edge
+                                        (Cmd). Space/Enter clicks + exits.
+          overlay --drag              keyboard drag — nudge to A, `d` to grab
+                                        (mouseDown), nudge to B, `d` to release.
+                                        Esc is a safety release.
+          overlay --vision            Vision-OCR hint mode — Apple Vision text
+                                        recognition on the main display, each
+                                        visible word becomes a hint. Requires
+                                        Screen Recording grant.
+          overlay --cancel            dismiss the overlay if showing
+          overlay --theme <name>      live theme override (applies to all
+                                        activations until `daemon --reload` or
+                                        `overlay --theme ''` clears it). Any
+                                        built-in (terminal / dracula /
+                                        catppuccin-mocha / ... / system / random)
+                                        or an [overlay.themes.<name>] custom.
+                                        Compose with a mode verb to apply
+                                        immediately:
+                                            perch overlay --activate --theme dracula
 
-        SESSION OVERRIDE
-          perch --theme=<name>        live theme override (applies to all
-                                      activations until --reload or
-                                      --theme= clears it). Accepts any
-                                      built-in name (terminal / nord /
-                                      dracula / ... / system / random) or
-                                      a [overlay.themes.<name>] custom.
-                                      Combine with --activate to apply
-                                      immediately:
-                                          perch --theme=neon --activate
+        daemon — lifecycle (need a running daemon; exit 3 if none)
+          daemon --reload             re-read ~/.config/perch/config.toml
+          daemon --show               print active hotkey, alphabet, last event
+          daemon --quit               terminate the running daemon
 
-        STANDALONE COMMANDS — no daemon required
-          perch --validate            parse config.toml; exit 0 if valid
-          perch --doctor              health check: Accessibility, config,
-                                      daemon, hotkey, screens, log file
-          perch --dump-ax             dump AX elements perch would label
-                                      in the current frontmost app
-                                      (one line per element; useful for
-                                      "why isn't this element labelled?"
-                                      triage)
-          perch --dump-ax-tree        dump the raw AX tree (depth-first,
-                                      pre-filter) of the frontmost app's
-                                      focused window — useful when an
-                                      element doesn't even reach the
-                                      filter chain (web view content
-                                      hidden by lazy AX backends, etc.)
-          perch --dump-regions        same shape as --dump-ax but lists
-                                      what `perch --regional` would label
-                                      (large containers; useful to tune
-                                      `[regional].min-width / min-height`)
-          perch --help                this help
+        config — settings (no daemon required)
+          config --validate           parse config.toml; exit 0 if valid
+          config --doctor             health check: Accessibility, config,
+                                        daemon, hotkey, screens, log file
+          config --emit-schema        print the config.toml JSON Schema
+                                        (Draft-07) to stdout. Generated from
+                                        perch's own parser, so it always matches
+                                        the binary. Regenerate with:
+                                          perch config --emit-schema > config.schema.json
+
+        ax — accessibility diagnostics (no daemon required)
+          ax --dump                   dump AX elements perch would label in the
+                                        current frontmost app (one line each;
+                                        "why isn't this element labelled?" triage)
+          ax --tree                   dump the raw AX tree (depth-first,
+                                        pre-filter) of the frontmost app's
+                                        focused window — for when an element
+                                        doesn't even reach the filter chain
+                                        (web view content hidden by lazy AX, etc.)
+          ax --regions                same shape as `ax --dump` but lists what
+                                        `perch overlay --regional` would label
+                                        (tune `[regional].min-width / min-height`)
+
+          perch --help, -h            this help
 
         EXIT CODES
           0   success
-          2   bad flag / invalid config
-          3   precondition mismatch: client cmd with no daemon
+          1   diagnostic check failed (config --doctor, ax --* with no AX grant)
+          2   usage / bad flag / invalid config (loud on stderr)
+          3   daemon precondition: a daemon / overlay command with no daemon running
 
         CONFIG
           ~/.config/perch/config.toml is the single source of truth.
@@ -138,106 +146,191 @@ enum PerchApp {
     static func main() {
         let argv = Array(CommandLine.arguments.dropFirst())
 
-        if argv.contains("--help") { printHelp() }
-
-        // `--emit-schema` is a one-shot: print the `config.toml` JSON
-        // Schema (Draft-07) to stdout and exit. Generated from the same
-        // declarative `configSpec` that decodes the config, so the two
-        // can't drift. The repo regenerates the committed schema with
-        // `perch --emit-schema > config.schema.json`. Handled before the
-        // unknown-flag check so it never needs to join `recognised`.
-        if argv.contains("--emit-schema") {
-            print(PerchConfig.jsonSchema, terminator: "")
-            exit(0)
-        }
+        // Debug logging is triggered by the PERCH_DEBUG env var (set by
+        // run.sh on the dev bundle), NOT a CLI flag — run.sh and a
+        // brew / raw launch start the same artifact, so the signal is
+        // injected at launch time. A normal launch sets nothing and
+        // stays quiet.
         if ProcessInfo.processInfo.environment["PERCH_DEBUG"] != nil {
             debugMode = true
         }
 
-        // Two-pass: reject ANY unknown flag *before* dispatching a
-        // recognised one, so `perch --reload --typo` fails loudly on
-        // --typo instead of silently acting on --reload and never
-        // looking at the rest (no silent fallback — facet/stroke
-        // Rule of Repair discipline).
-        let recognised: Set<String> = [
-            "--help", "--validate", "--doctor",
-            "--dump-ax", "--dump-ax-tree", "--dump-regions",
-            "--activate", "--cancel", "--scroll", "--search",
-            "--regional", "--menu", "--windows", "--emoji",
-            "--grid", "--rgrid", "--nudge", "--drag", "--vision",
-            "--reload", "--quit", "--status",
-        ]
-        // `--theme=<name>` is the one `=value` arg in the CLI;
-        // recognise it separately so the bare-name unknown-flag
-        // check doesn't reject it. Empty name (`--theme=`) clears
-        // the override and falls back to the config's theme.
-        var themeOverride: String?
-        let themePrefix = "--theme="
-        for a in argv where !recognised.contains(a) {
-            if a.hasPrefix(themePrefix) {
-                themeOverride = String(a.dropFirst(themePrefix.count))
-                continue
+        // Bare `perch` = server mode (the LSUIElement launch path). Every
+        // other invocation is a yabai-style `perch <domain> --<verb>`
+        // control command. The domain noun is peeled here; CLIKit then
+        // tokenizes the rest against that domain's verb-arity spec.
+        guard let domain = argv.first else { runServer() }
+        switch domain {
+        case "--help", "-h": printHelp()
+        case "overlay": dispatchOverlay(Array(argv.dropFirst()))
+        case "daemon":  dispatchDaemon(Array(argv.dropFirst()))
+        case "config":  dispatchConfig(Array(argv.dropFirst()))
+        case "ax":      dispatchAX(Array(argv.dropFirst()))
+        default:
+            // A `-`-leading first token is almost always an old flat
+            // flag (`perch --grid`) — point at the new home loudly
+            // instead of a bare "unknown command".
+            if domain.hasPrefix("-") {
+                CLIKit.die("perch", "flags now live under a domain — e.g. "
+                    + "`perch overlay --activate`, `perch daemon --reload`, "
+                    + "`perch config --validate`, `perch ax --dump`. "
+                    + "Got '\(domain)'. See `perch --help`.")
             }
-            let msg = "perch: unknown flag \"\(a)\" — see "
-                + "`perch --help`\n"
-            FileHandle.standardError.write(Data(msg.utf8))
-            exit(2)
+            CLIKit.die("perch", "unknown command '\(domain)'. Domains: "
+                + "overlay daemon config ax (or bare `perch` for server). "
+                + "See `perch --help`.")
+        }
+    }
+
+    // MARK: domain dispatch (CLIKit tokenizes; perch keeps verb policy — D4)
+
+    /// Parse `argv` against `spec`, mapping any usage error to a loud
+    /// exit 2. (CLIKit's tokenizer is pure; perch owns the exit, and
+    /// — because parse runs before any DNC post — keeps perch's
+    /// reject-before-act ordering: a typo never half-fires a command.)
+    private static func parseOrDie(_ argv: [String], _ spec: CLIKit.Spec) -> CLIKit.Invocation {
+        do { return try CLIKit.parse(argv, spec: spec) }
+        catch let e as CLIKit.ParseError { CLIKit.die("perch", e.usageMessage) }
+        catch { CLIKit.die("perch", "\(error)") }
+    }
+
+    /// Exactly one of `verbs` must be present. CLIKit already rejected
+    /// unknown flags; this is perch's mutual-exclusion policy (a domain
+    /// has one action; modifiers attach to it).
+    private static func requireOneVerb(_ inv: CLIKit.Invocation, among verbs: [String],
+                                       domain: String) -> String {
+        let present = inv.names.filter { verbs.contains($0) }
+        if present.count == 1 { return present[0] }
+        if present.isEmpty {
+            CLIKit.die("perch", "`perch \(domain)` needs a verb: "
+                + verbs.joined(separator: " ") + ". See `perch --help`.")
+        }
+        CLIKit.die("perch", "`perch \(domain)`: incompatible verbs "
+            + present.joined(separator: " ") + " — pick one. See `perch --help`.")
+    }
+
+    /// `overlay` — the 13 mode-entry verbs (each posts a bare-noun wire
+    /// command the daemon's control observer already understands) plus
+    /// the `--theme <name>` modifier. `--theme` is `.value` arity:
+    /// `--theme dracula` sets the override, `--theme ''` clears it (posted
+    /// as the bare `theme:` the daemon maps to "clear"), bare `--theme`
+    /// with no value is a loud missingValue. It composes with a mode
+    /// verb — `overlay --activate --theme dracula` re-themes THEN shows, so
+    /// the new theme applies immediately — and is also valid standalone.
+    private static func dispatchOverlay(_ argv: [String]) -> Never {
+        // verb → DNC wire command (the daemon-side names are frozen so
+        // the new CLI talks to an old daemon and vice versa).
+        let modeWire: [String: String] = [
+            "--activate": "activate", "--cancel": "cancel",
+            "--scroll": "scroll", "--search": "search",
+            "--regional": "regional", "--menu": "menu",
+            "--windows": "windows", "--emoji": "emoji",
+            "--grid": "grid", "--rgrid": "rgrid",
+            "--nudge": "nudge", "--drag": "drag", "--vision": "vision",
+        ]
+        var arity: [String: CLIKit.Arity] = ["--theme": .value]
+        for k in modeWire.keys { arity[k] = .flag }
+        let inv = parseOrDie(argv, CLIKit.Spec(arity: arity))
+
+        // `--theme` is non-nil iff present (CLIKit guarantees its value
+        // by arity, incl. the empty string for the clear case).
+        let themeName = inv.value("--theme")
+        let modes = inv.names.filter { modeWire[$0] != nil }
+        if modes.count > 1 {
+            CLIKit.die("perch", "`perch overlay`: incompatible verbs "
+                + modes.joined(separator: " ") + " — pick one. See `perch --help`.")
+        }
+        if modes.isEmpty && themeName == nil {
+            CLIKit.die("perch", "`perch overlay` needs a verb: "
+                + modeWire.keys.sorted().joined(separator: " ")
+                + " (or `--theme <name>`). See `perch --help`.")
         }
 
-        // Standalone modes — no running daemon required.
-        if argv.contains("--doctor") { runDoctor() }
-        if argv.contains("--dump-ax-tree") { runDumpAXTree() }
-        if argv.contains("--dump-regions") { runDumpRegions() }
-        if argv.contains("--dump-ax") { runDumpAX() }
-        if argv.contains("--validate") {
-            let cfg = PerchConfig.load()
-            // Per-app override count is the at-a-glance signal that
-            // `[behavior."<bundle>"]` sections parsed — issue #37's
-            // acceptance criterion. Empty for the common case so we
-            // don't noise up the line; surfaces only when configured.
-            let perApp = cfg.behavior.perApp.isEmpty
-                ? ""
-                : ", \(cfg.behavior.perApp.count) per-app override(s)"
-            let synonyms = cfg.search.synonyms.isEmpty
-                ? ""
-                : ", \(cfg.search.synonyms.count) synonym group(s)"
-            FileHandle.standardError.write(Data((
-                "perch: loaded hotkey=\(human(cfg.hotkey.active)), "
-                + "alphabet=\"\(cfg.labels.alphabet)\", "
-                + "\(cfg.behavior.roles.count) role(s)\(perApp)\(synonyms)\n"
-            ).utf8))
+        // Both posts target the same daemon — check liveness once, then
+        // post the theme override (if any) before the mode verb so the
+        // mode renders with the override already applied.
+        requireDaemon()
+        if let name = themeName { post("theme:\(name)") }
+        if let verb = modes.first { post(modeWire[verb]!) }
+        exit(0)
+    }
+
+    /// `daemon` — lifecycle verbs posted to the running daemon over DNC.
+    /// `--show` is the old `--status` read口 (greppable status file).
+    private static func dispatchDaemon(_ argv: [String]) -> Never {
+        let spec = CLIKit.Spec(arity: [
+            "--reload": .flag, "--show": .flag, "--quit": .flag,
+        ])
+        let inv = parseOrDie(argv, spec)
+        switch requireOneVerb(inv, among: ["--reload", "--show", "--quit"],
+                              domain: "daemon") {
+        case "--reload": runClient(cmd: "reload")
+        case "--show":   runStatus()
+        case "--quit":   runClient(cmd: "quit")
+        default: preconditionFailure("unreachable: requireOneVerb returned an unlisted verb")
+        }
+    }
+
+    /// `config` — standalone settings verbs (no daemon required).
+    private static func dispatchConfig(_ argv: [String]) -> Never {
+        let spec = CLIKit.Spec(arity: [
+            "--validate": .flag, "--doctor": .flag, "--emit-schema": .flag,
+        ])
+        let inv = parseOrDie(argv, spec)
+        switch requireOneVerb(inv, among: ["--validate", "--doctor", "--emit-schema"],
+                              domain: "config") {
+        case "--validate": runValidate()
+        case "--doctor":   runDoctor()
+        case "--emit-schema":
+            // Generated from the same declarative `configSpec` that
+            // decodes the config, so editor schema and parser can't drift.
+            print(PerchConfig.jsonSchema, terminator: "")
             exit(0)
+        default: preconditionFailure("unreachable: requireOneVerb returned an unlisted verb")
         }
+    }
 
-        // Client commands — require a running daemon.
-        //
-        // Theme override is its own dispatch path because the
-        // payload (theme name) doesn't fit the bare-verb shape of
-        // the other commands. Posted as "theme:<name>" so the
-        // daemon's existing string-prefix handler can pull the
-        // name back out. Empty name clears the override.
-        if let name = themeOverride {
-            runClient(cmd: "theme:\(name)")
+    /// `ax` — standalone accessibility-tree diagnostics (no daemon).
+    /// Verbs renamed from the old `--dump-ax` / `--dump-ax-tree` /
+    /// `--dump-regions`; the greppable OUTPUT format is unchanged.
+    @MainActor
+    private static func dispatchAX(_ argv: [String]) -> Never {
+        let spec = CLIKit.Spec(arity: [
+            "--dump": .flag, "--tree": .flag, "--regions": .flag,
+        ])
+        let inv = parseOrDie(argv, spec)
+        switch requireOneVerb(inv, among: ["--dump", "--tree", "--regions"],
+                              domain: "ax") {
+        case "--dump":    runDumpAX()
+        case "--tree":    runDumpAXTree()
+        case "--regions": runDumpRegions()
+        default: preconditionFailure("unreachable: requireOneVerb returned an unlisted verb")
         }
-        if argv.contains("--status")   { runStatus() }
-        if argv.contains("--activate") { runClient(cmd: "activate") }
-        if argv.contains("--scroll")   { runClient(cmd: "scroll") }
-        if argv.contains("--search")   { runClient(cmd: "search") }
-        if argv.contains("--regional") { runClient(cmd: "regional") }
-        if argv.contains("--menu")     { runClient(cmd: "menu") }
-        if argv.contains("--windows")  { runClient(cmd: "windows") }
-        if argv.contains("--emoji")    { runClient(cmd: "emoji") }
-        if argv.contains("--grid")     { runClient(cmd: "grid") }
-        if argv.contains("--rgrid")    { runClient(cmd: "rgrid") }
-        if argv.contains("--nudge")    { runClient(cmd: "nudge") }
-        if argv.contains("--drag")     { runClient(cmd: "drag") }
-        if argv.contains("--vision")   { runClient(cmd: "vision") }
-        if argv.contains("--cancel")   { runClient(cmd: "cancel") }
-        if argv.contains("--reload")   { runClient(cmd: "reload") }
-        if argv.contains("--quit")     { runClient(cmd: "quit") }
+    }
 
-        // ----- Server mode -----
-        runServer()
+    /// `config --validate` — parse config.toml and print a one-line
+    /// summary to stderr. `load()` is lenient (missing file → defaults,
+    /// malformed values → clamped best-effort), so this is a "parsed
+    /// summary" report that always exits 0; it never returns the exit 2
+    /// the help advertises for genuinely unparseable usage.
+    private static func runValidate() -> Never {
+        let cfg = PerchConfig.load()
+        // Per-app override count is the at-a-glance signal that
+        // `[behavior."<bundle>"]` sections parsed — issue #37's
+        // acceptance criterion. Empty for the common case so we
+        // don't noise up the line; surfaces only when configured.
+        let perApp = cfg.behavior.perApp.isEmpty
+            ? ""
+            : ", \(cfg.behavior.perApp.count) per-app override(s)"
+        let synonyms = cfg.search.synonyms.isEmpty
+            ? ""
+            : ", \(cfg.search.synonyms.count) synonym group(s)"
+        FileHandle.standardError.write(Data((
+            "perch: loaded hotkey=\(human(cfg.hotkey.active)), "
+            + "alphabet=\"\(cfg.labels.alphabet)\", "
+            + "\(cfg.behavior.roles.count) role(s)\(perApp)\(synonyms)\n"
+        ).utf8))
+        exit(0)
     }
 
     @MainActor
@@ -266,7 +359,7 @@ enum PerchApp {
     /// Health report: Accessibility, config, daemon, screen layout,
     /// log file. Exit 0 if everything's green, 1 if any check
     /// fails. Every line is also useful information for a bug
-    /// report; copying the entire `perch --doctor` output is the
+    /// report; copying the entire `perch config --doctor` output is the
     /// single most useful attachment for triage.
     private static func runDoctor() -> Never {
         func line(_ ok: Bool, _ label: String, _ detail: String) -> String {
@@ -363,7 +456,7 @@ enum PerchApp {
     /// standalone path doesn't need the daemon running.
     ///
     /// Useful when answering "why isn't <button X> being labeled?"
-    /// — if `--dump-ax` shows the element, the bug is in label
+    /// — if `ax --dump` shows the element, the bug is in label
     /// assignment / overlay rendering; if it doesn't, the bug is
     /// in the AX walk / filter chain (then re-run with `PERCH_DEBUG=1`
     /// for per-stage drop reasons).
@@ -372,8 +465,8 @@ enum PerchApp {
         runDump(label: "dump-ax") { $0.enumerate() }
     }
 
-    /// Mirror of `--dump-ax` for regional hint mode (#34). Prints
-    /// every container `perch --regional` WOULD label in the
+    /// Mirror of `ax --dump` for regional hint mode (#34). Prints
+    /// every container `perch overlay --regional` WOULD label in the
     /// current frontmost app. Useful for triaging the
     /// "is my `[regional].min-width` floor right for this app?"
     /// question without entering the actual overlay.
@@ -382,7 +475,7 @@ enum PerchApp {
         runDump(label: "dump-regions") { $0.enumerateRegions() }
     }
 
-    /// Shared body of `--dump-ax` / `--dump-regions`. `enumerator`
+    /// Shared body of `ax --dump` / `ax --regions`. `enumerator`
     /// picks which `UIElementSource` method to call; the rest of
     /// the formatting is identical so the two outputs stay grep-able
     /// in the same way.
@@ -436,7 +529,7 @@ enum PerchApp {
 
     /// Dump the raw AX tree of the frontmost app's focused window
     /// (pre-filter — no role allow-list, no press-support check, no
-    /// window-bounds clamp). Sibling of `--dump-ax` for the case
+    /// window-bounds clamp). Sibling of `ax --dump` for the case
     /// where the element doesn't even reach the filter chain (most
     /// often: a web view whose AX content the backend hasn't
     /// awakened, or a node living below the native walker's depth
@@ -465,12 +558,12 @@ enum PerchApp {
         mutating func write(_ s: String) { print(s, terminator: "") }
     }
 
-    /// Print the running daemon's status from the status file it
-    /// maintains. Exit 3 if no daemon is running.
+    /// `perch daemon --show` — print the running daemon's status from the
+    /// status file it maintains. Exit 3 if no daemon is running.
     private static func runStatus() -> Never {
         guard isServerRunning() else {
             FileHandle.standardError.write(Data((
-                "perch: --status needs a running daemon. Start one "
+                "perch: `daemon --show` needs a running daemon. Start one "
                 + "with `perch` first.\n"
             ).utf8))
             exit(3)
@@ -483,10 +576,10 @@ enum PerchApp {
         exit(0)
     }
 
-    /// Post `cmd` to the running daemon via DistributedNotificationCenter,
-    /// then exit. Refuses (exit 3) if no daemon is running so the
-    /// user doesn't get a silent no-op.
-    private static func runClient(cmd: String) -> Never {
+    /// Refuse (exit 3) if no daemon is running, so a client command
+    /// doesn't become a silent no-op. Shared by the single-shot
+    /// `runClient` and `overlay`'s two-post path (theme + mode).
+    private static func requireDaemon() {
         guard isServerRunning() else {
             FileHandle.standardError.write(Data((
                 "perch: no daemon running — start it with "
@@ -494,12 +587,25 @@ enum PerchApp {
             ).utf8))
             exit(3)
         }
+    }
+
+    /// Post one control command to the running daemon over
+    /// DistributedNotificationCenter. Does NOT exit (the caller decides
+    /// when to exit, since `overlay` may post two: theme then mode).
+    private static func post(_ cmd: String) {
         DistributedNotificationCenter.default().postNotificationName(
             .init(controlNotificationName),
             object: cmd,
             userInfo: nil,
             deliverImmediately: true
         )
+    }
+
+    /// Post a single `cmd` to the running daemon, then exit. Refuses
+    /// (exit 3) if no daemon is running.
+    private static func runClient(cmd: String) -> Never {
+        requireDaemon()
+        post(cmd)
         exit(0)
     }
 

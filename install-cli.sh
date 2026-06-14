@@ -1,12 +1,13 @@
 #!/bin/zsh
 # Put a `perch` command on your PATH. perch then acts as a thin
-# client for the running daemon: `perch --activate` / `--scroll` /
-# `--search` / `--menu` / `--windows` / `--emoji` / `--regional` /
-# `--grid` / `--rgrid` / `--nudge` / `--drag` / `--vision` /
-# `--cancel` / `--reload` / `--quit` / `--status` post a
-# distributed notification (or read /tmp/perch.status) and exit.
-# Standalone subcommands (`--validate` / `--doctor` / `--dump-ax*`)
-# work too — they don't need a running daemon.
+# client for the running daemon: `perch overlay --activate` / --scroll /
+# --search / --menu / --windows / --emoji / --regional / --grid /
+# --rgrid / --nudge / --drag / --vision / --cancel and
+# `perch daemon --reload` / --quit / --show post a distributed
+# notification (or read /tmp/perch.status) and exit.
+# Standalone subcommands (`perch config --validate` / --doctor and
+# `perch ax --dump` / --tree / --regions) work too — they don't need a
+# running daemon.
 #
 # Launch the daemon via run.sh or `open Perch.app`.
 #
@@ -83,8 +84,8 @@ case ":$PATH:" in
   *) echo "note: add $DIR to PATH (e.g. in ~/.zshrc)";;
 esac
 echo "usage:"
-echo "  perch --validate / --doctor / --status     diagnostics"
-echo "  perch --activate / --cancel                hint mode (client)"
-echo "  perch --scroll / --search / --menu / --windows / --emoji"
-echo "  perch --regional / --grid / --rgrid / --nudge / --drag / --vision"
-echo "  perch --reload / --quit"
+echo "  perch config --validate / --doctor              diagnostics"
+echo "  perch daemon --show / --reload / --quit         daemon lifecycle"
+echo "  perch overlay --activate / --cancel             hint mode (client)"
+echo "  perch overlay --scroll / --search / --menu / --windows / --emoji"
+echo "  perch overlay --regional / --grid / --rgrid / --nudge / --drag / --vision"

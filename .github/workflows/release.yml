@@ -3,8 +3,8 @@ name: Release
 # Thin caller of the shared rolling-DRAFT release (atelier Track 3).
 # The version-compute + dry-run + draft-management logic lives once in
 # akira-toriyama/.github; this file supplies only perch's name + install
-# prose + the post-build --validate smoke. See that reusable's header
-# for the model. Config: cliff.toml.
+# prose + the post-build `config --validate` smoke. See that reusable's
+# header for the model. Config: cliff.toml.
 on:
   push:
     branches: [main]
@@ -27,7 +27,10 @@ jobs:
     uses: akira-toriyama/.github/.github/workflows/release.yml@main
     with:
       app: Perch
-      smoke: true
+      # yabai-style CLI (atelier Phase 3 M3): the post-build smoke is
+      # `config --validate` (validate moved under the `config` domain).
+      # `smoke-cmd` takes precedence over the legacy boolean `smoke`.
+      smoke-cmd: "config --validate"
       dry-run: ${{ github.event.inputs.dry_run == 'true' }}
       install-notes: |
         ## Install
@@ -53,5 +56,6 @@ jobs:
         Privacy & Security → Accessibility). Start the daemon with
         `perch` (or `PERCH_DEBUG=1 perch` to mirror logs to stderr). See
         [README](https://github.com/akira-toriyama/perch#readme)
-        for the config schema and the `--reload` / `--quit` /
-        `--status` flags.
+        for the config schema and the yabai-style CLI
+        (`perch daemon --reload` / `daemon --show` / `daemon --quit`,
+        `perch overlay --activate`, …).

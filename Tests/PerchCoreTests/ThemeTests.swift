@@ -54,7 +54,7 @@ final class ThemeTests: XCTestCase {
     }
 
     func testPhaseVCatalogAcceptsAllTwelveColorThemes() {
-        // The blessed 12 color themes + system are all valid --theme= values.
+        // The blessed 12 color themes + system are all valid overlay --theme values.
         for name in ["terminal", "chomp", "rainbow", "cobalt2",
                      "shades-of-purple", "tokyo-hack", "github-dark",
                      "dracula", "catppuccin-mocha", "gruvbox",
@@ -165,7 +165,7 @@ final class ThemeTests: XCTestCase {
 
     func testConfigThemeTypoClampsToSystemSilently() {
         // Config-file typo clamps to system per the TOML
-        // clamp-don't-reject rule (the loud path is the --theme= CLI).
+        // clamp-don't-reject rule (the loud path is the overlay --theme CLI).
         // A now-cut name (`nord`) is just a typo to the Phase V catalog.
         XCTAssertEqual(
             PerchConfig.parse("[overlay]\ntheme = \"frob\"").overlay.theme,

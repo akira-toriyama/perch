@@ -8,10 +8,10 @@ diagnostic commands below.
 ## The five-second triage
 
 ```sh
-perch --doctor           # accessibility, screens, frontmost, log file
-perch --dump-ax          # exactly what perch would label right now
-perch --dump-ax-tree     # the raw AX tree (pre-filter) of the focused window
-perch --dump-regions     # what `perch --regional` would label (issue #34)
+perch config --doctor    # accessibility, screens, frontmost, log file
+perch ax --dump          # exactly what perch would label right now
+perch ax --tree          # the raw AX tree (pre-filter) of the focused window
+perch ax --regions       # what `perch overlay --regional` would label (issue #34)
 tail -F /tmp/perch.log   # live event stream
 ```
 
@@ -20,7 +20,7 @@ the cause is visible without launching anything else.
 
 ## Standalone diagnostic commands
 
-### `perch --doctor`
+### `perch config --doctor`
 
 Health report covering the things that most commonly go wrong.
 Every line is bug-report-grade information:
@@ -43,7 +43,7 @@ perch doctor
 
 Exit 0 if every ✓ is green; exit 1 if any ✗.
 
-### `perch --dump-ax`
+### `perch ax --dump`
 
 Walks the frontmost app's AX tree through perch's full filter
 chain and prints each surviving element on one line:
@@ -66,11 +66,11 @@ the filter chain. Re-run perch with `PERCH_DEBUG=1` and watch
 `/tmp/perch.log` for the per-stage drop reasons (`ax: de-dup M → N`,
 the `bounds … → filter=(…)` rect, etc.). When the missing element
 sits inside a web view (Chrome / Electron / a WKWebView host), the
-next command is the one to reach for — `--dump-ax` only shows
+next command is the one to reach for — `ax --dump` only shows
 nodes that made it through the role + press-support filters, and
 a web area might not be exposing any clickable leaves at all yet.
 
-### `perch --dump-ax-tree`
+### `perch ax --tree`
 
 Walks the focused window's **raw** AX tree depth-first and prints
 one line per node — pre-filter, regardless of role or press
@@ -102,16 +102,16 @@ renderer accessibility is lazy — first activation of an AX client
 on a page can take a beat to populate; for Electron apps the
 content area may have to be focused at least once. The fix isn't
 in perch's walker. **If the element IS in the raw tree but doesn't
-appear in `--dump-ax`:** the filter chain dropped it — usually the
+appear in `ax --dump`:** the filter chain dropped it — usually the
 role allow-list (the node's role isn't in `[behavior].roles`) or
 press support (the node didn't advertise `kAXPressAction`).
 
-### `perch --dump-regions`
+### `perch ax --regions`
 
-Sibling of `--dump-ax` for regional hint mode (issue #34). Lists
-every large container `perch --regional` would label, with the
+Sibling of `ax --dump` for regional hint mode (issue #34). Lists
+every large container `perch overlay --regional` would label, with the
 current `[regional].min-width` / `min-height` floor applied. Same
-output shape as `--dump-ax`:
+output shape as `ax --dump`:
 
 ```
 perch dump-regions → com.apple.News (pid 1234)
@@ -126,7 +126,7 @@ Use it to tune the regional floor for a specific app: if Books
 labels nothing, lower the floor; if a GitHub timeline labels every
 post, raise it.
 
-### `perch --validate`
+### `perch config --validate`
 
 Pure parse check of `~/.config/perch/config.toml`. Exit 0 if it
 parses (every clamp / fallback is a "success" — the policy is
@@ -134,7 +134,7 @@ parses (every clamp / fallback is a "success" — the policy is
 the parser actually rejects. Useful in `pre-commit` hooks if you
 edit the config in version control.
 
-### `perch --status`
+### `perch daemon --show`
 
 Reads `/tmp/perch.status` (the file the daemon writes on every
 hotkey / activation / reload). Exit 3 if no daemon is running.

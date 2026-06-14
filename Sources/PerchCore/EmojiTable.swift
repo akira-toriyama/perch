@@ -1,4 +1,4 @@
-// Curated emoji name table for `--emoji` (issue #55).
+// Curated emoji name table for `overlay --emoji` (issue #55).
 //
 // Each entry is `(glyph, keywords)` where `keywords` is a single
 // space-joined string of search terms — CLDR short name first,

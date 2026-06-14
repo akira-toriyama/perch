@@ -96,14 +96,14 @@
       "properties" : {
         "cols" : {
           "default" : 12,
-          "description" : "Single-pass --grid columns. Clamped 2..32.",
+          "description" : "Single-pass overlay --grid columns. Clamped 2..32.",
           "maximum" : 32,
           "minimum" : 2,
           "type" : "integer"
         },
         "max-depth" : {
           "default" : 3,
-          "description" : "Max recursive --rgrid drill depth. Clamped 1..10.",
+          "description" : "Max recursive overlay --rgrid drill depth. Clamped 1..10.",
           "maximum" : 10,
           "minimum" : 1,
           "type" : "integer"
@@ -117,21 +117,21 @@
         },
         "recursive-cols" : {
           "default" : 3,
-          "description" : "--rgrid columns per drill level. Clamped 2..32.",
+          "description" : "overlay --rgrid columns per drill level. Clamped 2..32.",
           "maximum" : 32,
           "minimum" : 2,
           "type" : "integer"
         },
         "recursive-rows" : {
           "default" : 3,
-          "description" : "--rgrid rows per drill level. Clamped 2..32.",
+          "description" : "overlay --rgrid rows per drill level. Clamped 2..32.",
           "maximum" : 32,
           "minimum" : 2,
           "type" : "integer"
         },
         "rows" : {
           "default" : 8,
-          "description" : "Single-pass --grid rows. Clamped 2..32.",
+          "description" : "Single-pass overlay --grid rows. Clamped 2..32.",
           "maximum" : 32,
           "minimum" : 2,
           "type" : "integer"
@@ -351,7 +351,7 @@
         },
         "shortcut-badge" : {
           "default" : true,
-          "description" : "Show AX-bound keyboard-shortcut annotations on --menu pills.",
+          "description" : "Show AX-bound keyboard-shortcut annotations on overlay --menu pills.",
           "type" : "boolean"
         },
         "show-modifier-badge" : {
@@ -434,7 +434,7 @@
       "properties" : {
         "synonyms" : {
           "additionalProperties" : true,
-          "description" : "`[search.synonyms]` fuzzy-match expansion table for --search / --menu / --windows / --emoji. Each key maps to a string array of synonyms (bidirectional; the key itself and empties are dropped).",
+          "description" : "`[search.synonyms]` fuzzy-match expansion table for overlay --search / overlay --menu / overlay --windows / overlay --emoji. Each key maps to a string array of synonyms (bidirectional; the key itself and empties are dropped).",
           "type" : "object"
         }
       },

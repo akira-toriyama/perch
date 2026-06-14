@@ -93,7 +93,7 @@ public struct OverlayConfig: Sendable {
     /// driver collapses to its instant baseline.
     public let animEnabled: Bool
 
-    /// Show AX-bound keyboard shortcut annotations on `--menu` pills.
+    /// Show AX-bound keyboard shortcut annotations on `overlay --menu` pills.
     public let showShortcuts: Bool
 
     /// User-defined palettes from `[overlay.themes.<name>]` sections,
@@ -339,7 +339,7 @@ public struct RegionalConfig: Sendable {
 public struct GridConfig: Sendable {
     public let cols: Int
     public let rows: Int
-    /// `--rgrid` cells per axis at each drill level. Smaller than
+    /// `overlay --rgrid` cells per axis at each drill level. Smaller than
     /// `cols`/`rows` so the recursive case picks with single-letter
     /// labels per level.
     public let recursiveCols: Int
@@ -461,7 +461,7 @@ public struct PerchConfig: Sendable {
 
     /// Return a copy of this config with `overlay.theme` (and
     /// optionally `overlay.customThemeName`) replaced. Used by the
-    /// `--theme=<name>` session override so the Controller doesn't
+    /// `overlay --theme <name>` session override so the Controller doesn't
     /// have to hand-construct a full PerchConfig with one field
     /// changed. Every other field carries over unchanged.
     public func withTheme(
@@ -632,7 +632,7 @@ public struct PerchConfig: Sendable {
         // palettes, then sill's canonical name set. `random` resolves
         // to a concrete name HERE (session-stable); an unknown name
         // clamps silently to "system" per the TOML clamp-don't-reject
-        // rule (the loud-rejection path is the `--theme=` CLI override
+        // rule (the loud-rejection path is the `overlay --theme` CLI override
         // in Controller).
         let rawTheme = (doc["overlay"]?["theme"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }

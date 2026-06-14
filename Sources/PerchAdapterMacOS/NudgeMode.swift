@@ -1,6 +1,6 @@
 // Arrow-nudge cursor mode (issue #68 / M4-γ). The last-mile
-// pixel adjustment that complements `--grid` / `--rgrid`: after
-// the grid lands the cursor close, `--nudge` walks it the rest
+// pixel adjustment that complements `overlay --grid` / `overlay --rgrid`: after
+// the grid lands the cursor close, `overlay --nudge` walks it the rest
 // of the way with arrow keys + step-size modifiers.
 //
 // No overlay panel — the cursor is the visual feedback. Just a
@@ -29,7 +29,7 @@
 // Dispatch is `CGWarpMouseCursorPosition` for the move plus a
 // `mouseMoved` `CGEvent` so apps under the cursor see the hover
 // (tooltips, button highlight). Cursor jump is visible and
-// intentional — same "AX-bypass carve-out" as `--grid`.
+// intentional — same "AX-bypass carve-out" as `overlay --grid`.
 
 import AppKit
 import CoreGraphics
