@@ -139,6 +139,17 @@ enum PerchApp {
         let argv = Array(CommandLine.arguments.dropFirst())
 
         if argv.contains("--help") { printHelp() }
+
+        // `--emit-schema` is a one-shot: print the `config.toml` JSON
+        // Schema (Draft-07) to stdout and exit. Generated from the same
+        // declarative `configSpec` that decodes the config, so the two
+        // can't drift. The repo regenerates the committed schema with
+        // `perch --emit-schema > config.schema.json`. Handled before the
+        // unknown-flag check so it never needs to join `recognised`.
+        if argv.contains("--emit-schema") {
+            print(PerchConfig.jsonSchema, terminator: "")
+            exit(0)
+        }
         if ProcessInfo.processInfo.environment["PERCH_DEBUG"] != nil {
             debugMode = true
         }
@@ -231,6 +242,13 @@ enum PerchApp {
 
     @MainActor
     private static func runServer() -> Never {
+        // Refresh the taplo schema sidecar next to the user config so
+        // editor completion/validation just works (idempotent; writes
+        // only on change, and the ConfigWatcher tracks config.toml — not
+        // this sibling — so the write can't trigger a hot-reload).
+        // Best-effort: a failure is non-fatal, so it never blocks start.
+        PerchConfig.installSchema()
+
         let cfg = PerchConfig.load()
 
         let app = NSApplication.shared
