@@ -42,7 +42,7 @@ let package = Package(
         // parser (perch's in-tree TOML.swift folded into sill in atelier
         // Phase 1.6) — and, since 0.9.0, the `ConfigSchema` module: one
         // declarative `Spec` drives BOTH the config.toml decode and the
-        // JSON Schema emitted for taplo completion (`perch --emit-schema`),
+        // JSON Schema emitted for taplo completion (`perch config --emit-schema`),
         // so the two never drift. PerchCore reads config via
         // `Toml.parseFlat` (the flat, lenient skin); the multi-line
         // `[behavior].roles` array that the old single-line parser
@@ -52,10 +52,16 @@ let package = Package(
         // PaletteKit. Pinned to a SemVer tag for release/CI
         // reproducibility; `.upToNextMinor` keeps it on a single pre-1.0
         // minor (a pre-1.0 minor can break, so don't auto-jump). Floor
-        // 0.9.0 = the `ConfigSchema` module. For local, atomic sill↔perch
-        // editing, temporarily swap this line for `.package(path: "../sill")`.
+        // 0.10.0 = the `CLIKit` module — the family's shared pure argv
+        // tokenizer (atelier Phase 3 M3). PerchApp consumes it so the
+        // yabai-style `perch <domain> --<verb> VALUE` grammar gets
+        // arity-driven value consumption (negative coords, `--theme ''`
+        // empty-clear, loud unknown-flag exit 2) for free, replacing
+        // perch's old flat `argv.contains` parser. For local, atomic
+        // sill↔perch editing, temporarily swap this line for
+        // `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.9.1")),
+                 .upToNextMinor(from: "0.10.0")),
     ],
     targets: [
         .target(
@@ -65,7 +71,7 @@ let package = Package(
                 .product(name: "Toml", package: "sill"),
                 // ConfigSchema: one declarative `Spec` drives BOTH the
                 // config.toml decode and the JSON Schema emitted for taplo
-                // completion (`perch --emit-schema`) — so the two never drift.
+                // completion (`perch config --emit-schema`) — so the two never drift.
                 .product(name: "ConfigSchema", package: "sill"),
             ]),
         .target(
@@ -80,6 +86,14 @@ let package = Package(
             dependencies: [
                 "PerchCore",
                 "PerchAdapterMacOS",
+                // CLIKit: the family's shared pure argv tokenizer (atelier
+                // Phase 3). Drives the yabai-style `perch <domain> --<verb>
+                // VALUE` grammar — arity-driven value consumption (so
+                // `--theme ''` clears the override and a `-`-leading theme
+                // name isn't mistaken for a flag) + loud unknown-flag exit 2.
+                // perch keeps its OWN verb vocabulary + dispatch policy
+                // (reject-before-act ordering); CLIKit only tokenizes.
+                .product(name: "CLIKit", package: "sill"),
             ]),
         .testTarget(
             name: "PerchCoreTests",

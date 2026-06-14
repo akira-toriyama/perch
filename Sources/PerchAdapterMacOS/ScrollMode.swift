@@ -1,4 +1,4 @@
-// Keyboard-driven scrolling. Once entered (via `perch --scroll`),
+// Keyboard-driven scrolling. Once entered (via `perch overlay --scroll`),
 // perch installs a KeyTap that intercepts a small set of vim-style
 // keys and synthesises the corresponding `CGEvent` scroll-wheel
 // events against the frontmost window — same way every browser

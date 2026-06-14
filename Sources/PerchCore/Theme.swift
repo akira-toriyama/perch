@@ -86,7 +86,7 @@ public func perchThemeSpec(_ name: String) -> ThemeSpec {
     return spec
 }
 
-/// Validate a raw `[overlay].theme` / `--theme=` value against sill's
+/// Validate a raw `[overlay].theme` / `overlay --theme ''` value against sill's
 /// `canonicalThemeNames`, returning the canonical name or `nil` for an
 /// unknown name so the caller can clamp to `system` + log (perch's
 /// loud-typo-rejection discipline — sill's `paletteFor` is silent and

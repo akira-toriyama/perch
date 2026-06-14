@@ -35,7 +35,7 @@ macOS 13+, three-layer hexagonal split.
 swift build                  # compile (CommandLineTools works)
 swift test                   # tests — needs Xcode (XCTest); fails on CLT
 .build/debug/perch --help    # smoke test
-.build/debug/perch --validate
+.build/debug/perch config --validate
 ./run.sh                     # debug → Perch-dev.app + log tail (dev loop)
 ./run.sh --release           # release → Perch.app (pre-publish verify)
 ./install-cli.sh             # symlink `perch` onto $PATH
@@ -123,7 +123,8 @@ frontmost app's focused window**. The seam is captured at
   search, menu, windows). AX press is less disruptive (no focus
   change, no cursor jump) and matches the way native UI tests
   drive controls. **Mouse synthesis carve-out:** the M4 series
-  (`--grid` / `--rgrid` / `--nudge` / `--drag` and the
+  (`overlay --grid` / `overlay --rgrid` / `overlay --nudge` /
+  `overlay --drag` and the
   modifier-held click variant) is the explicit AX-bypass — those
   modes have no AX target by definition, so `CGEvent` mouse
   events are the ONLY dispatch path. The cursor WILL visibly
@@ -148,7 +149,7 @@ frontmost app's focused window**. The seam is captured at
   stroke / facet: the file is the only thing the user has to
   look at to know what perch will do.
 - **`[hotkey].active` is the key name**, not `combo`. It mirrors
-  the CLI surface (`perch --activate`) — same verb on both sides
+  the CLI surface (`perch overlay --activate`) — same verb on both sides
   of the seam. Don't rename it back; existing user configs that
   carry the old `combo` key will silently fall back to the
   default hotkey (the typo-tolerance policy below).
@@ -157,7 +158,7 @@ frontmost app's focused window**. The seam is captured at
   `config-default-behavior` pattern.
 - **All TOML keys clamp out-of-range / unknown values to defaults**
   rather than rejecting. A typo can never break hint mode — the
-  key with the typo silently uses the default. `perch --validate`
+  key with the typo silently uses the default. `perch config --validate`
   is the explicit verification path.
 - **Prefer fully-nested TOML when adding new knobs** — every key
   should live under a `[section]` header. A top-level scalar mixed
@@ -210,9 +211,9 @@ frontmost app's focused window**. The seam is captured at
   `DispatchSourceFileSystemObject` in
   [`Sources/PerchApp/ConfigWatcher.swift`](Sources/PerchApp/ConfigWatcher.swift)
   (PR #86). Edits to the file fire `Controller.reload(cause: "fs")`
-  with a 150ms debounce + atomic-rename re-open. `perch --reload`
+  with a 150ms debounce + atomic-rename re-open. `perch daemon --reload`
   IPC still works as the explicit path. Don't bypass the watcher
-  for "convenience" — `--reload` is the manual override.
+  for "convenience" — `daemon --reload` is the manual override.
 
 ### TOML parser
 
@@ -362,12 +363,13 @@ frontmost app's focused window**. The seam is captured at
   macOS system-sound names OR `~/foo.mp3` paths (tilde-expanded
   + AVFoundation-decoded — mp3 / m4a / wav / aiff). Empty /
   `"none"` silences.
-- **Theme override (CLI session)** (PR #96): `perch --theme=<name>`
+- **Theme override (CLI session)** (PR #96): `perch overlay --theme NAME`
   posts a `theme:<name>` IPC; Controller stores
   `themeOverride: String?` and rebuilds the effective config via
   `PerchConfig.withTheme(_:customName:)` on every push to source
-  / overlay / sound. Cleared on `--reload` or empty `--theme=`.
-  The one `=value` arg in the CLI surface.
+  / overlay / sound. Cleared on `daemon --reload` or empty
+  `overlay --theme ''`. The one value-taking verb in the CLI
+  surface (space-separated, never `--theme=NAME`).
 - **Keyboard capture uses a `KeyTap` (CGEventTap)**, not
   `NSEvent.addLocalMonitorForEvents`. The first attempt at this
   module used the local monitor + a transient
@@ -403,7 +405,7 @@ frontmost app's focused window**. The seam is captured at
   after firing so the user can chain actions (open 5 PRs in a
   row, close 8 notifications, …) without re-pressing the
   hotkey between each. Search mode follows the same mapping —
-  Cmd+Shift in `--search` picks the match AND re-enters search
+  Cmd+Shift in `overlay --search` picks the match AND re-enters search
   mode with an empty query for the next round.
   `actionFor(flags:)` in
   [Sources/PerchAdapterMacOS/OverlayWindow.swift](Sources/PerchAdapterMacOS/OverlayWindow.swift)
@@ -423,8 +425,9 @@ frontmost app's focused window**. The seam is captured at
   **Default is leader empty → chord mode OFF** so the
   bare-resolve UX stays snappy — opting in is a config-only
   step. The chord state machine lives **only in OverlayWindow
-  (hint mode)**; search-mode variants (`--search` / `--menu` /
-  `--windows` / `--emoji`) keep the modifier-only mapping.
+  (hint mode)**; search-mode variants (`overlay --search` /
+  `overlay --menu` / `overlay --windows` / `overlay --emoji`) keep
+  the modifier-only mapping.
   Don't grow chord into those without a real demand — their
   digit-pick UX (`1-9`) already covers the multi-action pivot
   case.
@@ -487,7 +490,7 @@ frontmost app's focused window**. The seam is captured at
   `ax: WebArea in non-listed bundle <bid> → promoted` once
   per bundle; the live list is also rewritten into
   `/tmp/perch.status` (`discovered-web-bundles:` line) so
-  `perch --status` can show what perch has learned. **Safe to
+  `perch daemon --show` can show what perch has learned. **Safe to
   extend the Enhanced wake gate this way** — observation-based,
   so Office (no WebArea) never lands there.
 - **Manual and Enhanced wake have independent per-pid latches**
@@ -542,7 +545,7 @@ frontmost app's focused window**. The seam is captured at
   feeds the result through the existing label / overlay /
   dispatch pipeline. Action-mode modifiers apply unchanged —
   Cmd → copyTitle is the headline use case ("copy this article
-  title to clipboard"). Entry is CLI-only via `perch --regional`;
+  title to clipboard"). Entry is CLI-only via `perch overlay --regional`;
   there's no Carbon hotkey for it (users wire Karabiner / skhd
   / Raycast). **The shared `runHintFlow` is the right seam for
   any future "different enumerator, same pipeline" mode** —
@@ -553,7 +556,7 @@ frontmost app's focused window**. The seam is captured at
   `SearchRenderMode` (`.verticalList` instead of pills over
   frames, because menu items have no on-screen frame until
   opened). `Controller.startSearchSession(…)` is the shared
-  seam between `--search` and `--menu`; future search-flavour
+  seam between `overlay --search` and `overlay --menu`; future search-flavour
   modes (window switcher, emoji picker) should slot in there
   rather than forking SearchMode. Menu items dispatch via the
   same `AXUIElementPerformAction(kAXPressAction)` as everything
@@ -593,7 +596,7 @@ frontmost app's focused window**. The seam is captured at
   **Screen Recording TCC grant** is required. `CGDisplayCreateImage`
   returns nil without it; we log + return empty so the overlay
   dismisses silently rather than crashing. Latency is 100-400ms
-  per invocation — acceptable for the deliberate `--vision`
+  per invocation — acceptable for the deliberate `overlay --vision`
   fallback, not the default path. **Don't try to integrate
   vision results with the hint walker** — different latency
   profile, different dispatch path, mixing them confuses the
@@ -610,14 +613,14 @@ frontmost app's focused window**. The seam is captured at
   cell. The cursor WILL visibly jump; that's the accepted
   trade-off (see "Mouse synthesis carve-out" above). Action
   mapping: bare → left click, Shift → right, Cmd → warp only
-  (for the `--drag` workflow), Cmd+Shift → left click + re-enter
+  (for the `overlay --drag` workflow), Cmd+Shift → left click + re-enter
   for chained operations. **Don't promote grid cells to
   AX-anchored UIElements** — the whole point is that no AX
   layer exists; the synthetic id is a marker, not a side-table
   key.
-- **`--grid` vs `--rgrid` density** (PR #87 / #88): `--grid`
+- **`overlay --grid` vs `overlay --rgrid` density** (PR #87 / #88): `overlay --grid`
   (single-pass) uses `[grid].cols × [grid].rows` (default 12×8);
-  `--rgrid` (recursive) uses `[grid].recursive-cols × .recursive-rows`
+  `overlay --rgrid` (recursive) uses `[grid].recursive-cols × .recursive-rows`
   (default **3×3**) **at every drill level**. Smaller per-step
   density keeps each pick a single-letter label. `[grid].max-depth`
   clamps to **1..10** (raised from 5 in PR #88 so 3×3 has
@@ -627,7 +630,7 @@ frontmost app's focused window**. The seam is captured at
   visual surface (theme / shape / effects / border / sound /
   modifier-badge) hint mode has.
 - **Hold-to-peek in grid** (PR #87): `[overlay].peek-key`
-  (default `"space"`) also works in `--grid` / `--rgrid`.
+  (default `"space"`) also works in `overlay --grid` / `overlay --rgrid`.
   Space's old "click center at current depth" role moved to
   `Return` / `KeypadEnter` exclusively so peek doesn't shadow
   the terminal-click shortcut.
@@ -695,26 +698,26 @@ The five-second triage:
    that's the actual everyday call site. `./run.sh --no-tail`
    skips the tail; `./run.sh --release` builds the production
    bundle for pre-publish verification.
-2. **`perch --doctor`** — macOS / accessibility / config /
+2. **`perch config --doctor`** — macOS / accessibility / config /
    daemon / screens / frontmost / log file. Every line is
    bug-report-grade information; copying the whole output is
    the single most useful triage attachment.
-3. **`perch --dump-ax`** — print every AX element perch would
+3. **`perch ax --dump`** — print every AX element perch would
    label in the current frontmost app. If the missing element
    is in the dump, the bug is in label assignment / overlay
    rendering; if it isn't, the bug is in the AX walk / filter
    chain.
-4. **`perch --dump-ax-tree`** — print the **raw** AX tree
+4. **`perch ax --tree`** — print the **raw** AX tree
    (depth-first, pre-filter) of the focused window. Reach for
-   this when `--dump-ax` shows nothing where you expected a
+   this when `ax --dump` shows nothing where you expected a
    hint — most often a web shell (Chrome / Electron /
    WKWebView) where the element isn't even reaching the filter
    chain because the AX backend hasn't surfaced it yet. Look
    for `*WEB*` markers and inspect what's below them; the
    walker lifts its depth ceiling once it crosses one, so
    leaves 40+ levels below the web area now reach the dump.
-5. **`perch --dump-regions`** — same shape as `--dump-ax` but
-   for `perch --regional` (issue #34). Lists the large
+5. **`perch ax --regions`** — same shape as `ax --dump` but
+   for `perch overlay --regional` (issue #34). Lists the large
    containers regional mode would label, with the current
    `[regional].min-width / min-height` floor applied. Useful
    to tune the floor for a specific app ("Books labels nothing"
@@ -736,7 +739,7 @@ filter / AX enumeration → labeling → dispatch).
 
 **AX grant after rebuild:** `swift build` ad-hoc re-signs the
 binary, which can drop the Accessibility grant — the symptom is
-`AXIsProcessTrusted() = false` in `perch --doctor`, or
+`AXIsProcessTrusted() = false` in `perch config --doctor`, or
 `kAXErrorAPIDisabled` (-25211) on every AX call in
 `/tmp/perch.log` while the user reports "hints stopped appearing".
 Persistent fix: run `./setup-signing-cert.sh` once;
@@ -762,59 +765,73 @@ stray instances before relaunching.
 
 ### CLI surface
 
-- **Flags**: `--validate` / `--doctor` / `--dump-ax` /
-  `--dump-ax-tree` / `--dump-regions` / `--help` (standalone),
-  `--activate` / `--scroll` / `--search` / `--regional` /
-  `--menu` / `--windows` / `--emoji` / `--grid` / `--rgrid` /
-  `--nudge` / `--drag` / `--vision` / `--cancel` / `--reload` /
-  `--quit` / `--status` / `--theme=<name>` (client). There is no
-  `--debug` flag — verbose logging is driven by the `PERCH_DEBUG`
-  env var (see Logging). Any unrecognised flag exits `2` with a
-  stderr message (no silent fallback — facet's *Rule of Repair*
-  discipline). **`--theme=<name>` is the lone `=value` flag** —
-  Main.swift's recognition loop branches on it explicitly so the
-  bare-name unknown-flag check doesn't trip.
-- **`--doctor`** reports Accessibility (`AXTrust.isTrusted()`),
+- **Grammar**: `perch <domain> --<verb> [VALUE]` (yabai-style
+  domain-verb). Four domains: `config` / `ax` (standalone),
+  `overlay` / `daemon` (need a running daemon, exit `3` if none).
+  `config --validate` / `config --doctor` / `config --emit-schema`;
+  `ax --dump` / `ax --tree` / `ax --regions`;
+  `overlay --activate` / `overlay --scroll` / `overlay --search` /
+  `overlay --regional` / `overlay --menu` / `overlay --windows` /
+  `overlay --emoji` / `overlay --grid` / `overlay --rgrid` /
+  `overlay --nudge` / `overlay --drag` / `overlay --vision` /
+  `overlay --cancel` / `overlay --theme NAME`;
+  `daemon --reload` / `daemon --quit` / `daemon --show`. Bare
+  `perch` runs as agent / server; `--help` / `-h` is standalone.
+  There is no `--debug` flag — verbose logging is driven by the
+  `PERCH_DEBUG` env var (see Logging). Each domain takes exactly
+  ONE verb — combining verbs (`daemon --reload --quit`) or using a
+  flag outside its domain exits `2` with a stderr message (no
+  silent fallback — facet's *Rule of Repair* discipline; an
+  unknown flag prints a "did you mean …?" hint). **`overlay
+  --theme NAME` takes a space-separated value** (`overlay --theme
+  ''` clears the override; bare `--theme` with no value is an
+  error). Powered by the shared sill `CLIKit` tokenizer; perch
+  keeps its own verb vocabulary.
+- **`config --doctor`** reports Accessibility (`AXTrust.isTrusted()`),
   config, daemon liveness, configured hotkey, and alphabet length.
   Exit 1 if AX fails.
-- **`--activate` / `--scroll` / `--search` / `--cancel` are the
+- **`overlay --activate` / `overlay --scroll` / `overlay --search` /
+  `overlay --cancel` are the
   CLI mirror of the global hotkey**, posted over the same DNC
-  channel as `--reload`. They let Karabiner / skhd / Raycast
+  channel as `daemon --reload`. They let Karabiner / skhd / Raycast
   script commands trigger any of the three modes without giving
   up perch's built-in Carbon hotkey, and make shell-script
   triggers cheap. Each is symmetric with its entry point: a
   second invocation while the mode is up cancels (same path as
-  `--cancel`). All three modes are **mutually exclusive** —
+  `overlay --cancel`). All three modes are **mutually exclusive** —
   entering one while any other is up tears the first one down
   first so the single session-level KeyTap installs cleanly.
   Don't tee these through a second IPC mechanism —
   `installControlObserver` is the single observer.
-- **`--reload` / `--quit` talk to the running daemon over
+- **`daemon --reload` / `daemon --quit` talk to the running daemon over
   Distributed Notification Center** (`com.perch.app.control`,
   see
   [Sources/PerchApp/Control.swift](Sources/PerchApp/Control.swift)
   + `Controller.installControlObserver`) — same pattern as
   stroke / facet. Don't invent a different IPC. They exit `3`
   if no daemon is running.
-- **`--status` is one-way the other direction**: DNC can't reply,
+- **`daemon --show` is one-way the other direction**: DNC can't reply,
   so the daemon rewrites a small status file (`statusPath` =
   `/tmp/perch.status`) on start / reload / each hint press, and
-  `--status` just reads it.
+  `daemon --show` just reads it.
 - **CLI surface conventions when adding new flags** — same shape
   as the Configuration rules (memory `user-collaboration-style`):
-  - **Prefer the dominant style.** The current surface is
-    overwhelmingly bare `--<name>`; `--theme=<name>` is the lone
-    `=value` flag and pays for itself by giving the user a
-    one-shot string. Don't introduce a *second* `=value` flag, a
-    `--<verb>-<noun>` style, or a positional argument without a
-    real need. Mode entries are always `--<mode-name>` (no
-    `--enter-<mode>` / `--start-<mode>` ceremony).
-  - **Match the existing family naming.** Diagnostics start with
-    `--dump-` (`--dump-ax` / `--dump-ax-tree` / `--dump-regions`).
-    Mode entries are bare nouns (`--grid` / `--vision`).
-    Daemon-control verbs are bare imperatives (`--reload` /
-    `--quit` / `--cancel`). Pick the matching family before
-    inventing a new prefix.
+  - **Prefer the dominant style.** The surface is `perch <domain>
+    --<verb> [VALUE]`; verbs are overwhelmingly bare `--<name>`,
+    with `overlay --theme NAME` the lone value-taking verb (a
+    space-separated string, never `--theme=NAME`) — it pays for
+    itself by giving the user a one-shot override. Don't introduce a
+    *second* value-taking verb, a `--<verb>-<noun>` style, or a
+    positional argument without a real need. Mode entries are always
+    `overlay --<mode-name>` (no `--enter-<mode>` / `--start-<mode>`
+    ceremony).
+  - **Match the existing family naming.** AX diagnostics live under
+    the `ax` domain (`ax --dump` / `ax --tree` / `ax --regions`).
+    Mode entries are bare nouns under `overlay` (`overlay --grid` /
+    `overlay --vision`). Daemon-control verbs are bare imperatives
+    under `daemon` (`daemon --reload` / `daemon --quit`) — `overlay
+    --cancel` mirrors the mode-cancel path. Pick the matching domain
+    + family before inventing a new verb.
   - **Breaking renames are OK when they buy consistency.** Same
     stance as the config-knob rule (the user's repeated
     "破壊的変更OK / 一貫性の方が重要だから"). Unrecognised flags
@@ -826,7 +843,7 @@ stray instances before relaunching.
   - **No nested-flag forms** (`--overlay.theme=<name>`,
     `--effect:appear=<kind>`). The TOML file is the right surface
     for nested knobs; the CLI is for *modes* + *one-shot session
-    overrides* (`--theme=<name>`). If the urge to nest comes up,
+    overrides* (`overlay --theme NAME`). If the urge to nest comes up,
     add a TOML knob and reload, don't invent CLI namespacing.
 
 ## Conventions

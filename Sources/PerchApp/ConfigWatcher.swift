@@ -1,6 +1,6 @@
 // Filesystem watcher for `~/.config/perch/config.toml`. Calls
 // `onChange()` when the file changes so the Controller can hot-reload
-// the daemon without a `perch --reload` round trip.
+// the daemon without a `perch daemon --reload` round trip.
 //
 // Uses `DispatchSourceFileSystemObject` (kqueue under the hood) —
 // same primitive AppKit uses internally. Doesn't poll, doesn't burn
@@ -45,12 +45,12 @@ final class ConfigWatcher {
     /// Start watching. Returns `false` if the file doesn't exist yet
     /// — Controller logs that and continues without reload-on-save.
     /// Editing the file later won't auto-create the watcher (kept
-    /// minimal — `perch --reload` still works as the explicit path).
+    /// minimal — `perch daemon --reload` still works as the explicit path).
     @discardableResult
     func start() -> Bool {
         guard FileManager.default.fileExists(atPath: path) else {
             Log.line("config-watcher: \(path) not found — "
-                     + "hot-reload disabled (run `perch --reload` manually)")
+                     + "hot-reload disabled (run `perch daemon --reload` manually)")
             return false
         }
         return install()

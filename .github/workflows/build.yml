@@ -22,8 +22,9 @@ jobs:
       # Shared Swift build (setup-xcode + SPM cache + build + test).
       - uses: akira-toriyama/.github/actions/swift-build@main
 
-      # Smoke-check the CLI parser path (no AX touched).
-      - name: Smoke (--help, --validate)
+      # Smoke-check the CLI parser path (no AX touched). yabai-style CLI
+      # (atelier Phase 3 M3): validate moved under the `config` domain.
+      - name: Smoke (--help, config --validate)
         run: |
           .build/release/perch --help > /dev/null
-          .build/release/perch --validate
+          .build/release/perch config --validate

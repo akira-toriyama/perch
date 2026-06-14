@@ -5,7 +5,7 @@
 //   • the decode of the UNIFORM scalar sections (`PerchConfig.parse` →
 //     `configSpec.decode` into a flat `Staged` struct the sub-structs are
 //     then assembled from)
-//   • the JSON Schema (`perch --emit-schema`) taplo uses for editor
+//   • the JSON Schema (`perch config --emit-schema`) taplo uses for editor
 //     completion + validation
 //
 // so a uniform key can never be in the parser but missing from the schema
@@ -100,7 +100,7 @@ public extension PerchConfig {
     }
 
     /// The single declarative spec. Drives the uniform-section decode and
-    /// `--emit-schema`. Computed (not a stored `let`) so it needn't be
+    /// `config --emit-schema`. Computed (not a stored `let`) so it needn't be
     /// `Sendable` — the `apply` closures capture keypaths; rebuilding the
     /// fields on the rare config (re)load is free.
     ///
@@ -191,7 +191,7 @@ public extension PerchConfig {
                    + "effect to its instant baseline."),
             .bool("shortcut-badge", \.showShortcuts, default: true,
                 doc: "Show AX-bound keyboard-shortcut annotations on "
-                   + "--menu pills."),
+                   + "overlay --menu pills."),
             .strLower("peek-key", \.peekKey, default: "space",
                 doc: "Hold-to-peek key (trimmed + lowercased). Empty "
                    + "disables; unknown names disable silently."),
@@ -352,19 +352,19 @@ public extension PerchConfig {
                 + "nested-grid threshold.", fields: [
                 .intRangeFallback("cols", \.gridCols, min: 2, max: 32,
                     default: 12,
-                    doc: "Single-pass --grid columns. Clamped 2..32."),
+                    doc: "Single-pass overlay --grid columns. Clamped 2..32."),
                 .intRangeFallback("rows", \.gridRows, min: 2, max: 32,
                     default: 8,
-                    doc: "Single-pass --grid rows. Clamped 2..32."),
+                    doc: "Single-pass overlay --grid rows. Clamped 2..32."),
                 .intRangeFallback("recursive-cols", \.recursiveCols,
                     min: 2, max: 32, default: 3,
-                    doc: "--rgrid columns per drill level. Clamped 2..32."),
+                    doc: "overlay --rgrid columns per drill level. Clamped 2..32."),
                 .intRangeFallback("recursive-rows", \.recursiveRows,
                     min: 2, max: 32, default: 3,
-                    doc: "--rgrid rows per drill level. Clamped 2..32."),
+                    doc: "overlay --rgrid rows per drill level. Clamped 2..32."),
                 .intRangeFallback("max-depth", \.maxDepth, min: 1, max: 10,
                     default: 3,
-                    doc: "Max recursive --rgrid drill depth. Clamped 1..10."),
+                    doc: "Max recursive overlay --rgrid drill depth. Clamped 1..10."),
                 .dblRangeFallback("nest-min-size", \.nestMinSize,
                     min: 1, max: 1000, default: 100,
                     doc: "`,g` chord falls back to AXPress below this frame "
@@ -387,7 +387,8 @@ public extension PerchConfig {
     private static var searchSynonymsSection: Sec {
         .init("search.synonyms", kind: .dynamicTable,
                 doc: "`[search.synonyms]` fuzzy-match expansion table for "
-                   + "--search / --menu / --windows / --emoji. Each key maps "
+                   + "overlay --search / overlay --menu / overlay --windows / "
+                   + "overlay --emoji. Each key maps "
                    + "to a string array of synonyms (bidirectional; the key "
                    + "itself and empties are dropped).")
     }
@@ -395,7 +396,7 @@ public extension PerchConfig {
     // MARK: - JSON Schema (taplo) — emitted from the SAME `configSpec`
 
     /// The `config.toml` JSON Schema (Draft-07). Drives `perch
-    /// --emit-schema` and the sidecar install — emitted by sill's shared
+    /// config --emit-schema` and the sidecar install — emitted by sill's shared
     /// `ConfigSchema.Spec.jsonSchema()` from the one `configSpec`, so it
     /// can never drift from the decode. sill folds perch's genuinely
     /// NESTED headers (`[overlay.effect]`, `[behavior."<id>"]`,

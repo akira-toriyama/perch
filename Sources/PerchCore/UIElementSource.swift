@@ -52,7 +52,7 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// pickable.
     ///
     /// Dispatch is synthetic mouse click at the recognized
-    /// centroid (no AX target — same path as `--grid`). The
+    /// centroid (no AX target — same path as `overlay --grid`). The
     /// adapter encodes the centroid in the id so dispatch can
     /// click without a side-table lookup. Returns `[]` from the
     /// default implementation; the real impl is on
@@ -65,7 +65,7 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// set to the entry's search keywords (so `SearchFilter` can
     /// fuzzy-match on `"thinking"` / `"thumbs up good ok"` etc.),
     /// id of the form `"emoji:<glyph>"`, and `.zero` frame —
-    /// emoji ship to the same vertical-list render as `--menu`.
+    /// emoji ship to the same vertical-list render as `overlay --menu`.
     ///
     /// `.press` against an emoji-role element should type the
     /// glyph at the focused field's caret via `CGEvent`'s Unicode
