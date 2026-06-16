@@ -38,9 +38,10 @@ let package = Package(
         // Shared theming foundation (plan atelier). perch is the
         // "pure twin": PerchCore consumes the AppKit-free `Palette`
         // module (ThemeSpec / paletteFor / FontKind / canonicalThemeNames),
-        // the `Toml` module — the family's ONE hand-rolled TOML subset
-        // parser (perch's in-tree TOML.swift folded into sill in atelier
-        // Phase 1.6) — and, since 0.9.0, the `ConfigSchema` module: one
+        // the `Toml` module — the family's ONE TOML implementation (perch's
+        // in-tree TOML.swift folded into sill in Phase 1.6, then moved out to
+        // the standalone swift-toml-edit repo at sill 0.11.0) — and, since
+        // 0.9.0, the `ConfigSchema` module: one
         // declarative `Spec` drives BOTH the config.toml decode and the
         // JSON Schema emitted for taplo completion (`perch config --emit-schema`),
         // so the two never drift. PerchCore reads config via
@@ -52,23 +53,30 @@ let package = Package(
         // PaletteKit. Pinned to a SemVer tag for release/CI
         // reproducibility; `.upToNextMinor` keeps it on a single pre-1.0
         // minor (a pre-1.0 minor can break, so don't auto-jump). Floor
-        // 0.10.0 = the `CLIKit` module — the family's shared pure argv
-        // tokenizer (atelier Phase 3 M3). PerchApp consumes it so the
-        // yabai-style `perch <domain> --<verb> VALUE` grammar gets
-        // arity-driven value consumption (negative coords, `--theme ''`
-        // empty-clear, loud unknown-flag exit 2) for free, replacing
-        // perch's old flat `argv.contains` parser. For local, atomic
-        // sill↔perch editing, temporarily swap this line for
+        // 0.11.0 = the release that removed sill's in-tree `Toml` (moved to
+        // the standalone swift-toml-edit repo, below) and the floor for the
+        // `CLIKit` module — the family's shared pure argv tokenizer (atelier
+        // Phase 3 M3). PerchApp consumes CLIKit so the yabai-style `perch
+        // <domain> --<verb> VALUE` grammar gets arity-driven value consumption
+        // (negative coords, `--theme ''` empty-clear, loud unknown-flag exit
+        // 2) for free, replacing perch's old flat `argv.contains` parser. For
+        // local, atomic sill↔perch editing, temporarily swap this line for
         // `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.10.0")),
+                 .upToNextMinor(from: "0.11.0")),
+        // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
+        // Provides the `Toml` module PerchCore reads config with
+        // (`Toml.parseFlat`); the module name is unchanged so `import Toml`
+        // survives. Lives in its own repo since sill 0.11.0.
+        .package(url: "https://github.com/akira-toriyama/swift-toml-edit.git",
+                 .upToNextMinor(from: "1.0.0")),
     ],
     targets: [
         .target(
             name: "PerchCore",
             dependencies: [
                 .product(name: "Palette", package: "sill"),
-                .product(name: "Toml", package: "sill"),
+                .product(name: "Toml", package: "swift-toml-edit"),
                 // ConfigSchema: one declarative `Spec` drives BOTH the
                 // config.toml decode and the JSON Schema emitted for taplo
                 // completion (`perch config --emit-schema`) — so the two never drift.
