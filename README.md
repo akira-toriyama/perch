@@ -527,7 +527,7 @@ through hint mode.
 ### Emoji picker
 
 `perch overlay --emoji` enters a `overlay --search` variant whose target set is
-a **curated emoji name table** (≈250 entries: faces, hands,
+a **curated emoji name table** (≈400 entries: faces, hands,
 hearts, animals, food, weather, common symbols). Type the
 name; matches render in the same Spotlight-style vertical
 list as `overlay --menu`. Press a digit:

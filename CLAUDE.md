@@ -565,7 +565,7 @@ frontmost app's focused window**. The seam is captured at
   else — no special menu IPC.
 - **Emoji picker (issue #55)** is a `SearchMode` variant that
   doesn't touch AX at all — `enumerateEmoji()` projects the
-  curated `EmojiTable.entries` (≈250 rows, pure Core data) into
+  curated `EmojiTable.entries` (≈400 rows, pure Core data) into
   `UIElement`s with ids of the form `"emoji:<glyph>"` and no
   `liveById` entry. `AXUIElementSource.act(id:.press)` checks
   the `"emoji:"` prefix and dispatches through
