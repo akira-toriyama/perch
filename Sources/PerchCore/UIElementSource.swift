@@ -101,13 +101,6 @@ public protocol UIElementSource: AnyObject, Sendable {
 }
 
 public extension UIElementSource {
-    /// Shorthand for the default `.press` action. Tests written
-    /// before action-modes use this; new callers should pass the
-    /// explicit action.
-    func press(id: String) -> Bool {
-        act(id: id, as: .press)
-    }
-
     /// Default: regional mode opts in. Sources without a meaningful
     /// region notion (synthetic tests, future backends that don't
     /// expose containers) get an empty list, and the Controller

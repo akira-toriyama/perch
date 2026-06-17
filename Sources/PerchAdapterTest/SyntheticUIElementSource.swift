@@ -1,5 +1,5 @@
 // Drop-in `UIElementSource` for tests. Feeds a fixed array of
-// elements and records every `press(id:)` call so the integration
+// elements and records every `act(id:as:)` call so the integration
 // suite can assert the dispatch path end-to-end without touching a
 // real AX tree.
 

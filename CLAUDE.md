@@ -116,9 +116,9 @@ frontmost app's focused window**. The seam is captured at
   Don't put `AXUIElement` inside it — Core must stay free of
   Application Services types. The adapter keeps a side-table
   (`liveById: [String: AXUIElement]`) keyed by the synthetic
-  id and looks it up in `press(id:)`. The serialised
+  id and looks it up in `act(id:as:)`. The serialised
   `UIElement` is what flows through Core.
-- **`press(id:)` uses `AXUIElementPerformAction(_,
+- **`act(id:as:)` uses `AXUIElementPerformAction(_,
   kAXPressAction)`** for AX-anchored dispatches (hint, regional,
   search, menu, windows). AX press is less disruptive (no focus
   change, no cursor jump) and matches the way native UI tests
