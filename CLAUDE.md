@@ -217,13 +217,15 @@ frontmost app's focused window**. The seam is captured at
 
 ### TOML parser
 
-- **`TOML.parse` is hand-rolled** in
-  [Sources/PerchCore/TOML.swift](Sources/PerchCore/TOML.swift)
-  — ported from stroke / facet's subset parser. Inline tables
-  (`{a=1, b=2}`) and arrays-of-tables (`[[rows]]`) are **not**
-  supported because perch's config doesn't need them. Don't add
-  parser surface without a real need; the dotted-key form keeps
-  the parser ~150 lines.
+- **TOML parsing is delegated to swift-toml-edit's `Toml` module**
+  (Sill-1 — the family's one TOML implementation). perch reads its
+  config via `Toml.parseFlat` (Config.swift). The former hand-rolled
+  `Sources/PerchCore/TOML.swift` (ported from stroke / facet's subset
+  parser) was removed when perch moved onto the shared lib — there is
+  no in-tree perch parser any more.
+- perch's `config.toml` only uses a flat, dotted-section subset, but
+  the underlying lib is full TOML 1.0, so there is no local
+  "~150-line parser budget" to defend.
 
 ### Label assignment
 
@@ -919,11 +921,10 @@ re-confirmation.
 ### Formats / conventions
 
 - [TOML 1.0.0 spec](https://toml.io/en/v1.0.0)
-  *(reviewed 2026-05-24)* — what the hand-rolled
-  `TOML.parse` approximates. We intentionally support a strict
-  subset (no inline tables, no arrays-of-tables). New `.toml`
-  features must justify the added parser surface against the
-  "≈150-line parser" budget.
+  *(reviewed 2026-05-24)* — perch's config is parsed by
+  swift-toml-edit's `Toml.parseFlat` (Sill-1, full TOML 1.0). perch's
+  `config.toml` uses a flat dotted-section subset, but new `.toml`
+  surface is bounded by the shared lib, not a local parser budget.
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
   *(reviewed 2026-05-24)* — type / scope grammar
   `<type>(<scope>)<!>: <subject>`. `docs/commit-convention.md`
@@ -992,6 +993,8 @@ re-confirmation.
 
 - **[sill](https://github.com/akira-toriyama/sill)** — 共有 theming / CLI 基盤。設計 → [`docs/DESIGN.md`](https://github.com/akira-toriyama/sill/blob/main/docs/DESIGN.md)。perch が使う: `Palette`（theme catalog）/ `CLIKit`（CLI tokenizer）/ `ConfigSchema`（taplo schema）。
 - **[swift-toml-edit](https://github.com/akira-toriyama/swift-toml-edit)** — family 唯一の TOML 実装（`Toml` module・Swift 版 toml_edit）。perch は config.toml パースに使用。
+
+**自己完結しない — 共有候補は sill に PR を模索**: app 単独で実装する前に「2 つ以上の app で冗長になりそうか」を問い、そうなら sill への PR を検討する（過剰共通化はしない・zero-debt ≠ 全部共有）。
 
 ## Roadmap board (GitHub Projects)
 
