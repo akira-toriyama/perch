@@ -67,7 +67,7 @@ or by a fixture (`SyntheticUIElementSource` in
 ```
 
 `PerchCore` defines `UIElementSource` — the protocol that emits
-labelable elements and accepts a `press(id:)` call. The Controller
+labelable elements and accepts an `act(id:as:)` call. The Controller
 only ever sees `UIElementSource`. Real vs synthetic is picked at
 app startup.
 
