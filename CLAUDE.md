@@ -984,6 +984,15 @@ re-confirmation.
   Mac path — Surfingkeys' value here is on the keyboarding UX,
   not the element-enumeration mechanism.
 
+## Shared libraries (atelier)
+
+このアプリは swift app family の共有ライブラリに乗る（plan [atelier](https://github.com/akira-toriyama/atelier)）。
+共有 lib が持つ責務は**再実装せずライブラリ側を拡張**する（北極星＝「facet の theme を真似て」を二度と言わない）。
+モジュール → target の正確な配線は [Package.swift](Package.swift) を正とする。
+
+- **[sill](https://github.com/akira-toriyama/sill)** — 共有 theming / CLI 基盤。設計 → [`docs/DESIGN.md`](https://github.com/akira-toriyama/sill/blob/main/docs/DESIGN.md)。perch が使う: `Palette`（theme catalog）/ `CLIKit`（CLI tokenizer）/ `ConfigSchema`（taplo schema）。
+- **[swift-toml-edit](https://github.com/akira-toriyama/swift-toml-edit)** — family 唯一の TOML 実装（`Toml` module・Swift 版 toml_edit）。perch は config.toml パースに使用。
+
 ## Roadmap board (GitHub Projects)
 
 issue 運用（集約 Project「roadmap」#5・Inbox 既定 / Status フロー / `Closes #N`）は
