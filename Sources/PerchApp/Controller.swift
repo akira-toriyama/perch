@@ -475,7 +475,7 @@ final class Controller {
     }
 
     /// Emoji picker (issue #55) — `SearchMode` over the curated
-    /// `EmojiTable` (~250 entries; see [Sources/PerchCore/EmojiTable.swift]).
+    /// `EmojiTable` (~400 entries; see [Sources/PerchCore/EmojiTable.swift]).
     /// `.press` types the chosen glyph at the focused field's
     /// caret via `CGEvent.keyboardSetUnicodeString` (handled
     /// adapter-side when the id has the `"emoji:"` prefix) —
