@@ -34,9 +34,7 @@ perch は **ヘキサゴナル 3 層分割**（[docs/architecture.md](architectu
 flowchart TB
   subgraph CORE["PerchCore — pure logic"]
     SOURCE["UIElementSource (port)"]
-    CTRL["Controller"]
     LABELER["Labeler"]
-    TOML["TOML.parse (hand-rolled)"]
     LOG["Log"]
   end
   subgraph ADAPTER["PerchAdapterMacOS — AX + AppKit + Carbon"]
@@ -50,6 +48,7 @@ flowchart TB
     SYNTH["Synthetic UIElementSource"]
   end
   USER["ユーザー"]
+  CTRL["Controller (PerchApp — app-layer orchestrator)"]
   HOTKEY -->|shift+space| CTRL
   CTRL --> AXENUM
   AXENUM --> SOURCE
@@ -70,8 +69,8 @@ flowchart TB
 **純ロジック層**。CoreGraphics OK、AppKit / AX / Carbon は持ち込まない。
 XCTest で単体検証可能。
 - 場所: [`Sources/PerchCore/`](../Sources/PerchCore/)
-- 含むもの: `Models`, `UIElementSource` protocol, `Controller`, `Labeler`,
-  `TOML.parse`, `Log`
+- 含むもの: `Models`, `UIElementSource` protocol, `Labeler`, `Log`
+  （`Controller` は app 層 [`Sources/PerchApp/`](../Sources/PerchApp/)・config の parse は外部 swift-toml-edit `Toml`）
 - **Don't call it:** domain layer, business logic, ドメイン層
 
 ### PerchAdapterMacOS
@@ -480,7 +479,7 @@ issue #55。`SearchMode` の派生で、enumerator が
 `.verticalList`。発火は **`CGEvent.keyboardSetUnicodeString` で
 focus を奪わず caret に Unicode 直接注入**（adapter 側で
 `emoji:` prefix を見て分岐）— **pasteboard を一切触らない**。
-`.copyTitle` のみグリフを pasteboard へ。テーブルは ≈250 件の
+`.copyTitle` のみグリフを pasteboard へ。テーブルは ≈400 件の
 厳選セット（全 CLDR ≈3700 件は long-tail のためカバーしない —
 ニッチな絵文字は OS 標準ピッカーに譲る）。エントリは
 `perch overlay --emoji`（CLI only）。
