@@ -100,9 +100,20 @@ let package = Package(
                 // hand-rolled hue-rotation table. The pure half is
                 // Sendable/no-AppKit; the @MainActor drawing half is consumed
                 // ONLY here in the AppKit adapter, so PerchCore stays
-                // AppKit-free (Effects does not depend on PaletteKit, so the
-                // hexagonal graph stays acyclic).
+                // AppKit-free.
                 .product(name: "Effects", package: "sill"),
+                // PaletteKit: sill's @MainActor theme RESOLVER (ROADMAP #5).
+                // `HintPainter.resolvePalette` now hands the chosen `ThemeSpec`
+                // to `PaletteKit.resolve`, which materialises every role
+                // (foreground / error / the system-primary sentinel →
+                // controlAccentColor) as an `NSColor`, replacing perch's
+                // hand-rolled `color(hex:)` math. perch keeps ONLY the two
+                // overlays sill doesn't model — the translucent pill surface
+                // and the per-app accent override. Also supplies the shared
+                // sRGB `NSColor(hex:)` used by the particle/search canvases.
+                // AppKit-side, so consumed ONLY here in the adapter; PerchCore
+                // stays pure (depends on `Palette` alone).
+                .product(name: "PaletteKit", package: "sill"),
             ]),
         .target(name: "PerchAdapterTest", dependencies: ["PerchCore"]),
         .executableTarget(
@@ -148,6 +159,10 @@ let package = Package(
                 // catalog (`borderEffectFor`) after the 1.10 convergence.
                 "PerchCore",
                 .product(name: "Effects", package: "sill"),
+                // PaletteResolveMappingTests pins the sill-PaletteKit colour
+                // convergence (ROADMAP #5): `resolvePalette` reads sill's
+                // resolved roles + sentinel and layers perch's accent override.
+                .product(name: "PaletteKit", package: "sill"),
             ]),
     ]
 )
