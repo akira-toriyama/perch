@@ -247,10 +247,13 @@ particle の速度に効く。wand 互換語彙。
 - 設定: `[overlay.effect].duration-scale`
 
 ### border cycle
-[[pill]] 周囲のネオン ボーダーが色相を周期回転するエフェクト。facet の
-`[border]` 移植。30Hz tick で hue を回し続ける。
+[[pill]] 周囲のネオン ボーダーが時間で色を周期変化させるエフェクト。sill 1.10
+以降は facet と**同じ** `Effects` を共有（`borderEffectFor` →
+`resolveBorder`／自前の hue 回転テーブルは廃止）。neon/cyber/vapor/kawaii は
+各プリセットのパレットを blend、rainbow は全色相を回転。30Hz tick は redraw
+を回すだけ（位相計算は sill 側＝純粋）。
 - 設定: `[overlay.border]` (effect / glow / width / cycle-seconds)
-- 駆動: `OverlayCanvas.startBorderCycle`
+- 駆動: `OverlayCanvas.startBorderCycle`（perch が redraw クロックを所有）
 - **Don't call it:** rainbow border, hue rotation
 
 ### modifier badge

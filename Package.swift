@@ -50,20 +50,25 @@ let package = Package(
         // silently skipped now parses correctly. The adapter resolves the
         // spec to NSColors itself (perch keeps its own `[overlay].accent`
         // override + pill-surface treatment), so it does NOT link
-        // PaletteKit. Pinned to a SemVer tag for release/CI
-        // reproducibility; `.upToNextMinor` keeps it on a single pre-1.0
-        // minor (a pre-1.0 minor can break, so don't auto-jump). Floor
-        // 0.11.0 = the release that removed sill's in-tree `Toml` (moved to
-        // the standalone swift-toml-edit repo, below) and the floor for the
-        // `CLIKit` module — the family's shared pure argv tokenizer (atelier
-        // Phase 3 M3). PerchApp consumes CLIKit so the yabai-style `perch
+        // PaletteKit. Since 1.10.0 the adapter DOES link `Effects` — sill's
+        // shared dynamic-theming atom — so the overlay's animated neon
+        // border stops re-implementing facet's `[border]` hue table and
+        // shares ONE border vocabulary with the family (see the
+        // PerchAdapterMacOS target dep below). Pinned to a SemVer tag for
+        // release/CI reproducibility; `.upToNextMinor` keeps it on a single
+        // minor (a sill minor can still break, so don't auto-jump). Floor
+        // 1.10.0 = the release whose `Effects` module ships the border
+        // animator perch adopts here; it also clears the older 0.11.0 floor
+        // (sill removing its in-tree `Toml`, moved to the standalone
+        // swift-toml-edit repo below) and the `CLIKit` module — the
+        // family's shared pure argv tokenizer (atelier Phase 3 M3). PerchApp consumes CLIKit so the yabai-style `perch
         // <domain> --<verb> VALUE` grammar gets arity-driven value consumption
         // (negative coords, `--theme ''` empty-clear, loud unknown-flag exit
         // 2) for free, replacing perch's old flat `argv.contains` parser. For
         // local, atomic sill↔perch editing, temporarily swap this line for
         // `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "0.11.0")),
+                 .upToNextMinor(from: "1.10.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module PerchCore reads config with
         // (`Toml.parseFlat`); the module name is unchanged so `import Toml`
@@ -87,6 +92,17 @@ let package = Package(
             dependencies: [
                 "PerchCore",
                 .product(name: "Palette", package: "sill"),
+                // Effects: sill's shared dynamic-theming atom. The overlay's
+                // animated neon border resolves through Effects' `EffectSpec`
+                // catalog + the pure `resolveBorder` (perch stays the
+                // redraw-clock owner + NSColor materializer + glow compositor
+                // — sill's app-side border contract), replacing perch's own
+                // hand-rolled hue-rotation table. The pure half is
+                // Sendable/no-AppKit; the @MainActor drawing half is consumed
+                // ONLY here in the AppKit adapter, so PerchCore stays
+                // AppKit-free (Effects does not depend on PaletteKit, so the
+                // hexagonal graph stays acyclic).
+                .product(name: "Effects", package: "sill"),
             ]),
         .target(name: "PerchAdapterTest", dependencies: ["PerchCore"]),
         .executableTarget(
@@ -125,6 +141,13 @@ let package = Package(
         // testable in isolation.
         .testTarget(
             name: "PerchAdapterMacOSTests",
-            dependencies: ["PerchAdapterMacOS"]),
+            dependencies: [
+                "PerchAdapterMacOS",
+                // BorderEffectMappingTests asserts perch's `BorderEffect`
+                // case names still resolve in sill's shared `Effects`
+                // catalog (`borderEffectFor`) after the 1.10 convergence.
+                "PerchCore",
+                .product(name: "Effects", package: "sill"),
+            ]),
     ]
 )

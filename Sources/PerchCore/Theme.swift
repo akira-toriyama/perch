@@ -15,11 +15,15 @@
 //     translucency (`perchPillAlpha`), plus perch's own dark-pill
 //     `system` spec;
 //   * the pill geometry (`PillShape`) and the transient hint-overlay
-//     effects (`MatchEffect` / `UnmatchEffect` / `AppearEffect` /
-//     `BorderEffect`) and the modifier-badge style — none of which are
-//     shared theming atoms. (`EffectIntensity` is sill's shared knob
-//     since 0.6.x adoption — typealiased below with a CGFloat `scale`
-//     shim.)
+//     MOTION effects (`MatchEffect` / `UnmatchEffect` / `AppearEffect`)
+//     and the modifier-badge style — perch-specific pill choreography
+//     sill's color-only `Effects` deliberately doesn't cover.
+//     (`BorderEffect` stays here as a config token too, but since sill
+//     1.10 its DRAWING delegates to sill's shared `Effects` atom —
+//     `borderEffectFor` + `resolveBorder` in the adapter — so the neon
+//     border shares ONE vocabulary with facet instead of a perch-local
+//     hue table. `EffectIntensity` is sill's shared knob since 0.6.x
+//     adoption — typealiased below with a CGFloat `scale` shim.)
 //
 // Stays in Core (no AppKit / CoreGraphics colors): the parsed config
 // carries `ThemeSpec` + the enums across the seam; the Adapter
@@ -303,11 +307,14 @@ public enum AppearEffect: String, Sendable, CaseIterable {
     }
 }
 
-/// Neon border preset for the pill perimeter — ports facet's
-/// `[border]` vocabulary onto perch's pill geometry. Layered on
-/// top of the theme palette; the theme picks pill body colors,
-/// this picks the border's identity. Off by default — every pill
-/// keeps the existing 1pt accent-tinted hairline.
+/// Neon border preset for the pill perimeter. The case names map
+/// 1:1 onto sill `Effects`' shared `EffectSpec` catalog — the macOS
+/// adapter resolves each via `borderEffectFor(rawValue)` and draws
+/// it with sill's pure `resolveBorder`, so perch and facet share ONE
+/// border vocabulary (perch's own hue table lived here until sill
+/// 1.10). Layered on top of the theme palette; the theme picks pill
+/// body colors, this picks the border's identity. Off by default —
+/// every pill keeps the existing 1pt accent-tinted hairline.
 public enum BorderEffect: String, Sendable, CaseIterable {
     case off
     case neon                   // electric cyan on blue base
@@ -328,21 +335,6 @@ public enum BorderEffect: String, Sendable, CaseIterable {
         guard self == .random else { return self }
         let pool = BorderEffect.allCases.filter { $0 != .random && $0 != .off }
         return pool.randomElement() ?? .neon
-    }
-
-    /// Base color the painter strokes the border with at hue
-    /// offset 0. Returns nil for `.off` (caller falls back to the
-    /// accent palette). Hues are picked to match facet's neon
-    /// family — same intent: "this looks like a neon tube".
-    public var baseHex: UInt32? {
-        switch self.resolvingRandom() {
-        case .off, .random:    return nil
-        case .neon:            return 0x00E5FF
-        case .cyber:           return 0x00FFCC
-        case .vapor:           return 0xFF6EC7
-        case .kawaii:          return 0xFFB6E1
-        case .rainbow:         return 0xFFFFFF   // hue cycles, sat fixed
-        }
     }
 }
 
