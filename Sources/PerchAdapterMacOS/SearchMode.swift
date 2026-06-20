@@ -32,6 +32,7 @@ import ApplicationServices
 import AppKit
 import CoreGraphics
 import Foundation
+import PaletteKit
 import PerchCore
 
 /// How `SearchMode` paints its matches. The query strip + filter
@@ -333,8 +334,8 @@ private final class SearchCanvas: NSView {
             roundedRect: stripRect, xRadius: 12, yRadius: 12)
         // Strip body uses the theme's pill bg (less opaque so the
         // user can still see what's behind), border in accent.
-        HintPainter.color(hex: palette.pillBgHex,
-                          alpha: min(palette.pillBgAlpha + 0.4, 1))
+        NSColor(hex: palette.pillBgHex,
+                min(palette.pillBgAlpha + 0.4, 1))
             .setFill()
         stripPath.fill()
         accent.withAlphaComponent(0.9).setStroke()

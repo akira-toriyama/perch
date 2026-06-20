@@ -20,6 +20,7 @@ import CoreGraphics
 import Effects
 import Foundation
 import Palette
+import PaletteKit
 import PerchCore
 
 @MainActor
@@ -201,9 +202,9 @@ final class HintPainter: NSView {
         let label = Self.labelFont(palette.font, size: cfg.overlay.fontSize)
 
         let frosted = cfg.overlay.blurEnabled
-        let pillBgIdle = Self.color(
+        let pillBgIdle = NSColor(
             hex: palette.pillBgHex,
-            alpha: frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
+            frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
         let pillBgMiss = palette.missColor.withAlphaComponent(
             frosted ? 0.55 : 0.85)
 
@@ -456,9 +457,9 @@ final class HintPainter: NSView {
         let shape = Self.shapeFor(
             cfg: cfg, hint: g.hint, rect: g.baseRect)
         let path = shape.path
-        let pillBg = Self.color(
+        let pillBg = NSColor(
             hex: palette.pillBgHex,
-            alpha: frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
+            frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
         if shape.drawBody {
             pillBg.setFill()
             path.fill()
@@ -525,8 +526,8 @@ final class HintPainter: NSView {
     }
 
     /// Materialize a sill `BorderColor` (from `resolveBorder`) into an
-    /// AppKit color. `.rgb` is sRGB (matching `color(hex:)` so blends
-    /// read uniformly); `.rainbowHue` uses the calibrated `NSColor(hue:…)`
+    /// AppKit color. `.rgb` is sRGB (matching PaletteKit's `NSColor(hex:)`
+    /// so blends read uniformly); `.rainbowHue` uses the calibrated `NSColor(hue:…)`
     /// space sill prescribes so the spectrum reads identically to
     /// facet/halo; `.off` falls back to the theme accent (defensive — the
     /// caller only draws when an effect is configured).
@@ -706,7 +707,9 @@ final class HintPainter: NSView {
     ///    (a full sill `ThemeSpec` parsed from config).
     /// 2. sill's canonical palette via `perchThemeSpec(name)` (sill
     ///    `paletteFor` + perch's translucency / themed-miss overlays).
-    /// 3. System sentinel (`spec.usesSystemPrimary` → controlAccentColor).
+    /// The chosen spec is then handed to sill's `PaletteKit.resolve`, which
+    /// materialises the role colours (and the system-primary sentinel);
+    /// perch layers its accent override on top.
     static func resolvePalette(cfg: PerchConfig) -> ResolvedPalette {
         let spec: ThemeSpec
         if let custom = cfg.overlay.customThemeName,
@@ -715,18 +718,24 @@ final class HintPainter: NSView {
         } else {
             spec = perchThemeSpec(cfg.overlay.theme)
         }
-        // sill's `primary` sentinel (0) ⇒ OS control-accent (perch's
-        // `system` theme + any preset whose primary is pure black —
-        // same collision sill itself accepts). Otherwise the spec's
-        // concrete hue.
-        let themeAccent: NSColor = spec.usesSystemPrimary
-            ? .controlAccentColor
-            : color(hex: spec.primary.rgb, alpha: 1)
+        // sill's PaletteKit owns the colour computation now (ROADMAP #5):
+        // `resolve` materialises every role as an `NSColor` through the
+        // same sRGB bridge perch used to hand-roll — INCLUDING the
+        // `primary` sentinel (0 ⇒ OS `controlAccentColor`, for perch's
+        // `system` theme + any preset whose primary is pure black). Every
+        // spec perch passes is `.fixed` (`system` is intercepted upstream
+        // as a concrete-bg `perchSystemSpec`, custom palettes always carry
+        // a `pill-bg`), so `resolve` takes the fixed branch and the result
+        // is byte-identical to the old hand-roll. perch keeps only the two
+        // overlays sill doesn't model: the translucent pill surface
+        // (`pillBg*`, frosted later in `draw`) and the accent override.
+        let resolved = resolve(spec)
+        let themeAccent = resolved.primary
         // `[overlay].accent` overrides the theme accent when set to a
         // concrete hex (lets users mix a theme body — dracula pill colors
-        // / rounded font — with a personal highlight). Layered AFTER
-        // the sentinel resolution, perch-side: sill has no per-app
-        // accent override.
+        // / rounded font — with a personal highlight). Layered AFTER sill's
+        // resolution, perch-side: sill has no per-app accent override and
+        // by design (ROADMAP #5) keeps none — it stays this overlay's knob.
         let accent: NSColor
         if cfg.overlay.accent == "system" {
             accent = themeAccent
@@ -734,27 +743,17 @@ final class HintPainter: NSView {
             accent = parseAccent(cfg.overlay.accent) ?? themeAccent
         }
         return ResolvedPalette(
-            // sill's `system` spec carries background == nil (vibrancy
-            // panel); perch's pill needs a concrete dark fill — fall back
-            // to the historical black. Every other spec (built-in +
-            // custom) has a background.
+            // The pill is perch's own translucent surface, not a sill role:
+            // read the spec's bg hex directly (sill's `system` spec carries
+            // background == nil — perch's pill needs a concrete dark fill,
+            // so fall back to the historical black) and pair it with perch's
+            // frost alpha. `draw` boosts the alpha further when blur is off.
             pillBgHex: spec.background?.rgb ?? perchSystemPillBgHex,
             pillBgAlpha: spec.backgroundAlpha.map { CGFloat($0) } ?? 0.30,
             accentColor: accent,
-            textColor: color(hex: spec.foreground.rgb, alpha: 1),
-            missColor: color(hex: spec.error.rgb, alpha: 1),
-            font: spec.font)
-    }
-
-    /// Translate a `0xRRGGBB` int + alpha into an `NSColor` in the
-    /// sRGB color space (matches NSColor.controlAccentColor's color
-    /// space so blends look uniform).
-    static func color(hex: UInt32, alpha: CGFloat) -> NSColor {
-        NSColor(
-            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
-            green:    CGFloat((hex >> 8) & 0xFF) / 255,
-            blue:     CGFloat(hex & 0xFF) / 255,
-            alpha: alpha)
+            textColor: resolved.foreground,
+            missColor: resolved.error,
+            font: resolved.font)
     }
 
     /// `[overlay].accent` parser used as the user-override path
@@ -764,10 +763,11 @@ final class HintPainter: NSView {
     private static func parseAccent(_ s: String) -> NSColor? {
         if s == "system" { return nil }
         // sill's shared colour grammar (named / #rgb / #rrggbb /
-        // #rrggbbaa), materialized through the same sRGB helper the
-        // rest of the painter uses.
+        // #rrggbbaa), materialized through PaletteKit's sRGB `NSColor(hex:)`
+        // — the same bridge `resolve` uses, so the override blends
+        // uniformly with the resolved roles.
         guard let hex = parseColorToken(s) else { return nil }
-        return color(hex: hex.rgb, alpha: CGFloat(hex.alpha))
+        return NSColor(hex: hex.rgb, CGFloat(hex.alpha))
     }
 
     /// Map sill's `FontKind` → an AppKit font instance. Mono uses

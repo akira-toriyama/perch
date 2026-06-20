@@ -13,6 +13,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import PaletteKit
 import PerchCore
 
 /// Particle emission pattern.
@@ -48,9 +49,9 @@ final class ParticleDriver {
     ) {
         guard let painter else { completion(); return }
         let colors: [NSColor] = [
-            Self.color(hex: 0xFFD700, alpha: 1),    // gold
-            Self.color(hex: 0xFF6EC7, alpha: 1),    // pink
-            Self.color(hex: 0x00E5FF, alpha: 1),    // cyan
+            NSColor(hex: 0xFFD700),    // gold
+            NSColor(hex: 0xFF6EC7),    // pink
+            NSColor(hex: 0x00E5FF),    // cyan
             accent,
         ]
         // Per-emitter particle count. Scale with intensity but
@@ -148,15 +149,5 @@ final class ParticleDriver {
         let dx = CGFloat.random(in: -120...120) * intensity.scale
         let dy = CGFloat.random(in: 20...160) * intensity.scale
         return CGVector(dx: dx, dy: dy)
-    }
-
-    /// 0xRRGGBB int → NSColor (sRGB). Duplicated from HintPainter
-    /// to keep this file independent.
-    private static func color(hex: UInt32, alpha: CGFloat) -> NSColor {
-        NSColor(
-            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
-            green:    CGFloat((hex >> 8) & 0xFF) / 255,
-            blue:     CGFloat(hex & 0xFF) / 255,
-            alpha: alpha)
     }
 }
