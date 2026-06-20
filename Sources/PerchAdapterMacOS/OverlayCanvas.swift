@@ -655,24 +655,25 @@ final class OverlayCanvas: NSView {
               config.border.cycleSeconds > 0,
               !borderCycleActive else { return }
         borderCycleActive = true
-        borderCycleStart = CACurrentMediaTime()
+        painter.setBorderCycling(true)
         tickBorderCycle()
     }
 
     func stopBorderCycle() {
         borderCycleActive = false
-        painter.setBorderHueOffset(0)
+        painter.setBorderCycling(false)
     }
 
     private var borderCycleActive = false
-    private var borderCycleStart: TimeInterval = 0
 
+    /// Pump the overlay repaint at ~30Hz while the border cycles. The
+    /// color math is sill's (`resolveBorder` reads `CACurrentMediaTime()`
+    /// in `draw`); this loop just keeps the surface refreshing so the
+    /// shared phase advances. perch owns this redraw clock by design —
+    /// sill's border resolve stays pure/stateless.
     private func tickBorderCycle() {
         guard borderCycleActive else { return }
-        let elapsed = CACurrentMediaTime() - borderCycleStart
-        let period = max(0.1, config.border.cycleSeconds)
-        let progress = (elapsed.truncatingRemainder(dividingBy: period)) / period
-        painter.setBorderHueOffset(CGFloat(progress))
+        painter.needsDisplay = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 30) {
             [weak self] in
             MainActor.assumeIsolated { self?.tickBorderCycle() }
