@@ -7,13 +7,13 @@ body:
     attributes:
       value: |
         Thanks for the report. The most useful single thing you can attach is the
-        output of `perch --doctor` plus the relevant tail of `/tmp/perch.log`
+        output of `perch config --doctor` plus the relevant tail of `/tmp/perch.log`
         (run the daemon with `PERCH_DEBUG=1 perch` for a full trace).
 
   - type: textarea
     id: doctor
     attributes:
-      label: perch --doctor
+      label: perch config --doctor
       description: Paste the output. It includes the version, Accessibility state, config path, hotkey, and alphabet length.
       placeholder: |
         perch doctor

@@ -1,0 +1,446 @@
+{
+  "$schema" : "http://json-schema.org/draft-07/schema#",
+  "additionalProperties" : false,
+  "properties" : {
+    "behavior" : {
+      "additionalProperties" : true,
+      "description" : "`[behavior.\"<bundle-id>\"]` per-app overrides — set only the keys to override: roles / min-size / auto-click-on-unique / appear-effect / match-effect / unmatch-effect / narrow-effect. Missing keys inherit the global [behavior] / [overlay.effect] value.",
+      "properties" : {
+        "auto-click-on-unique" : {
+          "default" : true,
+          "description" : "Auto-click when one candidate remains after partial input.",
+          "type" : "boolean"
+        },
+        "min-size" : {
+          "default" : 6,
+          "description" : "Min frame size (pt, either axis) for an element to be labeled. Clamped >= 0. 0 disables.",
+          "minimum" : 0,
+          "type" : "number"
+        },
+        "roles" : {
+          "default" : [
+            "Button",
+            "MenuItem",
+            "MenuButton",
+            "CheckBox",
+            "RadioButton",
+            "PopUpButton",
+            "Link",
+            "TabGroup",
+            "Tab",
+            "TextField",
+            "SearchField"
+          ],
+          "description" : "AX roles to label (no `AX` prefix). Empty entries dropped.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        },
+        "web" : {
+          "additionalProperties" : false,
+          "description" : "Role allow-list used inside an AXWebArea subtree; falls back to [behavior].roles.",
+          "properties" : {
+            "roles" : {
+              "description" : "Web-context AX roles to label; unset inherits [behavior].roles.",
+              "items" : {
+                "type" : "string"
+              },
+              "type" : "array"
+            }
+          },
+          "type" : "object"
+        }
+      },
+      "type" : "object"
+    },
+    "chord" : {
+      "additionalProperties" : false,
+      "description" : "Chord-suffix action mode (#57).",
+      "properties" : {
+        "leader" : {
+          "default" : "",
+          "description" : "Chord leader (first char only after trim+lowercase). Empty (default) disables chord mode.",
+          "type" : "string"
+        },
+        "timeout-ms" : {
+          "default" : 600,
+          "description" : "Per-phase chord wait (ms). Clamped 0..5000.",
+          "maximum" : 5000,
+          "minimum" : 0,
+          "type" : "number"
+        }
+      },
+      "type" : "object"
+    },
+    "exclude" : {
+      "additionalProperties" : false,
+      "description" : "Bundle IDs perch never activates over.",
+      "properties" : {
+        "apps" : {
+          "default" : [
+
+          ],
+          "description" : "Bundle-id globs (`*` / `?`) perch ignores; `[]` = none.",
+          "items" : {
+            "type" : "string"
+          },
+          "type" : "array"
+        }
+      },
+      "type" : "object"
+    },
+    "grid" : {
+      "additionalProperties" : false,
+      "description" : "Single-pass + recursive grid density + nested-grid threshold.",
+      "properties" : {
+        "cols" : {
+          "default" : 12,
+          "description" : "Single-pass overlay --grid columns. Clamped 2..32.",
+          "maximum" : 32,
+          "minimum" : 2,
+          "type" : "integer"
+        },
+        "max-depth" : {
+          "default" : 3,
+          "description" : "Max recursive overlay --rgrid drill depth. Clamped 1..10.",
+          "maximum" : 10,
+          "minimum" : 1,
+          "type" : "integer"
+        },
+        "nest-min-size" : {
+          "default" : 100,
+          "description" : "`,g` chord falls back to AXPress below this frame floor (pt). Clamped 1..1000.",
+          "maximum" : 1000,
+          "minimum" : 1,
+          "type" : "number"
+        },
+        "recursive-cols" : {
+          "default" : 3,
+          "description" : "overlay --rgrid columns per drill level. Clamped 2..32.",
+          "maximum" : 32,
+          "minimum" : 2,
+          "type" : "integer"
+        },
+        "recursive-rows" : {
+          "default" : 3,
+          "description" : "overlay --rgrid rows per drill level. Clamped 2..32.",
+          "maximum" : 32,
+          "minimum" : 2,
+          "type" : "integer"
+        },
+        "rows" : {
+          "default" : 8,
+          "description" : "Single-pass overlay --grid rows. Clamped 2..32.",
+          "maximum" : 32,
+          "minimum" : 2,
+          "type" : "integer"
+        }
+      },
+      "type" : "object"
+    },
+    "hotkey" : {
+      "additionalProperties" : false,
+      "description" : "Activation + cancel binding.",
+      "properties" : {
+        "active" : {
+          "default" : "shift+space",
+          "description" : "Global hotkey that activates hint mode. Modifiers shift|ctrl|alt|cmd joined with `+`, then a key (e.g. \"shift+space\", \"ctrl+alt+j\").",
+          "type" : "string"
+        },
+        "cancel" : {
+          "default" : "esc",
+          "description" : "Key that dismisses an active overlay (single key, no modifiers). Unknown names fall back to esc.",
+          "type" : "string"
+        }
+      },
+      "type" : "object"
+    },
+    "labels" : {
+      "additionalProperties" : false,
+      "description" : "Label alphabet + assignment priority.",
+      "properties" : {
+        "alphabet" : {
+          "default" : "asdfjklghqweruiopzxcvbnm",
+          "description" : "Characters used to label elements, in priority order. De-duplicated, non-letters dropped, lowercased; empty after cleaning = default.",
+          "type" : "string"
+        },
+        "prioritise-center" : {
+          "default" : true,
+          "description" : "Assign the easiest keys to elements closest to screen center when elements outnumber first-tier letters.",
+          "type" : "boolean"
+        }
+      },
+      "type" : "object"
+    },
+    "overlay" : {
+      "additionalProperties" : false,
+      "description" : "Pill rendering knobs (theme + shape + font + a few overlay behaviour flags).",
+      "properties" : {
+        "accent" : {
+          "default" : "system",
+          "description" : "Accent override layered over the theme. \"system\" (default) keeps the theme accent; a sill colour token (named / #rgb / #rrggbb / #rrggbbaa) overrides it. Unrecognised falls back to \"system\".",
+          "type" : "string"
+        },
+        "anim-enabled" : {
+          "default" : true,
+          "description" : "Global motion kill-switch — false collapses every effect to its instant baseline.",
+          "type" : "boolean"
+        },
+        "blur-enabled" : {
+          "default" : true,
+          "description" : "Frosted-glass NSVisualEffectView under the pills; false = solid dark fill.",
+          "type" : "boolean"
+        },
+        "border" : {
+          "additionalProperties" : false,
+          "description" : "Neon-border preset around each pill.",
+          "properties" : {
+            "color-cycle-ms" : {
+              "default" : 3000,
+              "description" : "Hue rotation period (integer ms). Clamped 0..120000 (0 locks the color); out-of-range falls back to 3000ms.",
+              "maximum" : 120000,
+              "minimum" : 0,
+              "type" : "integer"
+            },
+            "effect" : {
+              "default" : "off",
+              "description" : "Border preset: off / neon / cyber / vapor / kawaii / rainbow / random.",
+              "enum" : [
+                "off",
+                "neon",
+                "cyber",
+                "vapor",
+                "kawaii",
+                "rainbow",
+                "random"
+              ],
+              "type" : "string"
+            },
+            "glow" : {
+              "default" : true,
+              "description" : "NSShadow bloom under the stroke (the neon-tube feel).",
+              "type" : "boolean"
+            },
+            "width" : {
+              "default" : 1.5,
+              "description" : "Border line width (pt). Clamped 0.5..30; out-of-range falls back to 1.5.",
+              "maximum" : 30,
+              "minimum" : 0.5,
+              "type" : "number"
+            }
+          },
+          "type" : "object"
+        },
+        "effect" : {
+          "additionalProperties" : false,
+          "description" : "Hint-flow animations (appear / match / unmatch / narrow) plus shared knobs.",
+          "properties" : {
+            "appear" : {
+              "default" : "pop",
+              "description" : "Entrance animation as the overlay appears: off / pop / cascade / fade-in / drop-in / bloom / random.",
+              "enum" : [
+                "off",
+                "pop",
+                "cascade",
+                "fade-in",
+                "drop-in",
+                "bloom",
+                "random"
+              ],
+              "type" : "string"
+            },
+            "duration-scale" : {
+              "default" : 1,
+              "description" : "Multiplier on every animation duration. Clamped 0.1..5.0; out-of-range falls back to 1.0.",
+              "maximum" : 5,
+              "minimum" : 0.10000000000000001,
+              "type" : "number"
+            },
+            "intensity" : {
+              "default" : "normal",
+              "description" : "Spatial magnitude scaler: subtle / normal / bold / wild (does not lengthen duration).",
+              "enum" : [
+                "subtle",
+                "normal",
+                "bold",
+                "wild"
+              ],
+              "type" : "string"
+            },
+            "match" : {
+              "default" : "off",
+              "description" : "Animation on the winning pill at resolve. Unknown clamps to \"off\".",
+              "enum" : [
+                "off",
+                "fade",
+                "explode",
+                "drop",
+                "rise",
+                "slide-left",
+                "slide-right",
+                "vibrate",
+                "fireworks",
+                "confetti",
+                "random"
+              ],
+              "type" : "string"
+            },
+            "narrow" : {
+              "default" : "off",
+              "description" : "Per-pill exit animation when a typed prefix filters a pill out. fireworks/confetti downgrade to fade at runtime.",
+              "enum" : [
+                "off",
+                "fade",
+                "explode",
+                "drop",
+                "rise",
+                "slide-left",
+                "slide-right",
+                "vibrate",
+                "fireworks",
+                "confetti",
+                "random"
+              ],
+              "type" : "string"
+            },
+            "unmatch" : {
+              "default" : "off",
+              "description" : "Animation layered on the 200ms red flash for a missed key. Unknown clamps to \"off\".",
+              "enum" : [
+                "off",
+                "shake",
+                "fade",
+                "drop",
+                "rise",
+                "slide-left",
+                "slide-right",
+                "vibrate",
+                "fireworks",
+                "confetti",
+                "random"
+              ],
+              "type" : "string"
+            }
+          },
+          "type" : "object"
+        },
+        "font-size" : {
+          "default" : 15,
+          "description" : "Pill label font size (pt). Clamped 8..32.",
+          "maximum" : 32,
+          "minimum" : 8,
+          "type" : "number"
+        },
+        "peek-key" : {
+          "default" : "space",
+          "description" : "Hold-to-peek key (trimmed + lowercased). Empty disables; unknown names disable silently.",
+          "type" : "string"
+        },
+        "pill-shape" : {
+          "default" : "pill",
+          "description" : "Pill geometry: pill / square / circle / underline / tag. Unknown clamps to \"pill\".",
+          "enum" : [
+            "pill",
+            "square",
+            "circle",
+            "underline",
+            "tag"
+          ],
+          "type" : "string"
+        },
+        "shortcut-badge" : {
+          "default" : true,
+          "description" : "Show AX-bound keyboard-shortcut annotations on overlay --menu pills.",
+          "type" : "boolean"
+        },
+        "show-modifier-badge" : {
+          "default" : "off",
+          "description" : "Modifier-badge corner annotation: off / glyph / action. Legacy bools true/false map to glyph/off.",
+          "enum" : [
+            "off",
+            "glyph",
+            "action",
+            "true",
+            "false",
+            "yes",
+            "no"
+          ],
+          "type" : "string"
+        },
+        "sound" : {
+          "additionalProperties" : false,
+          "description" : "Audio feedback. match / unmatch / activate take a macOS system-sound name OR a file path (tilde-expanded); empty silences.",
+          "properties" : {
+            "activate" : {
+              "default" : "",
+              "description" : "Sound when hint mode activates.",
+              "type" : "string"
+            },
+            "match" : {
+              "default" : "",
+              "description" : "Sound on hint resolve (system-sound name or path).",
+              "type" : "string"
+            },
+            "unmatch" : {
+              "default" : "",
+              "description" : "Sound on a missed keypress.",
+              "type" : "string"
+            },
+            "volume" : {
+              "default" : 0.5,
+              "description" : "Master volume 0..1.",
+              "maximum" : 1,
+              "minimum" : 0,
+              "type" : "number"
+            }
+          },
+          "type" : "object"
+        },
+        "theme" : {
+          "default" : "system",
+          "description" : "Pill color/typography theme. A sill catalog name (terminal / dracula / github-dark / … / system / random) OR a [overlay.themes.<name>] custom palette name. Unknown clamps to \"system\".",
+          "type" : "string"
+        },
+        "themes" : {
+          "additionalProperties" : true,
+          "description" : "`[overlay.themes.<name>]` user-defined palettes — set `[overlay].theme = \"<name>\"` to select one. Keys: pill-bg / accent / text / miss (colour tokens), pill-bg-alpha (0..1), font (mono / rounded / system / menu). Names shadowing a built-in are ignored.",
+          "type" : "object"
+        }
+      },
+      "type" : "object"
+    },
+    "regional" : {
+      "additionalProperties" : false,
+      "description" : "Frame floor for regional-mode container labeling.",
+      "properties" : {
+        "min-height" : {
+          "default" : 100,
+          "description" : "Min container height (pt) to label. Clamped >= 0.",
+          "minimum" : 0,
+          "type" : "number"
+        },
+        "min-width" : {
+          "default" : 200,
+          "description" : "Min container width (pt) to label. Clamped >= 0.",
+          "minimum" : 0,
+          "type" : "number"
+        }
+      },
+      "type" : "object"
+    },
+    "search" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "synonyms" : {
+          "additionalProperties" : true,
+          "description" : "`[search.synonyms]` fuzzy-match expansion table for overlay --search / overlay --menu / overlay --windows / overlay --emoji. Each key maps to a string array of synonyms (bidirectional; the key itself and empties are dropped).",
+          "type" : "object"
+        }
+      },
+      "type" : "object"
+    }
+  },
+  "title" : "perch config.toml",
+  "type" : "object"
+}

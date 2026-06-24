@@ -44,7 +44,7 @@ final class GhostDriver {
         // user-facing warning. Per-event logging would spam.
         let safe: MatchEffect =
             (kind == .fireworks || kind == .confetti) ? .fade : kind
-        guard safe != .none, safe != .random else { return }
+        guard safe != .off, safe != .random else { return }
         let now = CACurrentMediaTime()
         for (h, r) in eliminated {
             live.append(LiveGhost(
@@ -107,7 +107,7 @@ final class GhostDriver {
         let e = CGFloat(eased)
         let i = g.intensity.scale
         switch g.kind {
-        case .none, .random:
+        case .off, .random:
             break
         case .fade:
             g.alpha = 1 - e

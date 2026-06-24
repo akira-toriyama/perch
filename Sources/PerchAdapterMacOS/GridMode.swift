@@ -4,8 +4,8 @@
 // perch overlays a labeled grid across the screen union and warps
 // the cursor to the picked cell's center via synthetic `CGEvent`.
 //
-// `--grid` enters with `maxDepth = 1` — a single grid pass, label
-// pick → click. `--rgrid` (M4-β) enters with `maxDepth = config.
+// `overlay --grid` enters with `maxDepth = 1` — a single grid pass, label
+// pick → click. `overlay --rgrid` (M4-β) enters with `maxDepth = config.
 // gridMaxDepth` (default 3) — each label pick subdivides the
 // chosen cell and re-renders a finer grid until the depth budget
 // runs out. The terminal action (click) happens either at the
@@ -38,7 +38,7 @@
 // makes sense):
 //   bare        →  warp + left click
 //   Shift       →  warp + right click
-//   Cmd         →  warp only (no click — useful before --drag)
+//   Cmd         →  warp only (no click — useful before overlay --drag)
 //   Cmd+Shift   →  warp + left click + re-enter grid mode
 //                  (chained operations: many quick clicks)
 
@@ -51,9 +51,9 @@ import PerchCore
 public final class GridMode {
 
     private let config: PerchConfig
-    /// Max subdivision depth. `1` (the `--grid` entry) means single
+    /// Max subdivision depth. `1` (the `overlay --grid` entry) means single
     /// pass: label pick fires the terminal action immediately.
-    /// `>1` (the `--rgrid` entry, M4-β) means each label drills
+    /// `>1` (the `overlay --rgrid` entry, M4-β) means each label drills
     /// into the picked cell up to `maxDepth` times.
     private let maxDepth: Int
     private let onExit: () -> Void
@@ -229,8 +229,8 @@ public final class GridMode {
         return true
     }
 
-    /// `(cols, rows)` to subdivide with. `--grid` (maxDepth == 1)
-    /// uses `gridCols × gridRows`; `--rgrid` (maxDepth > 1) uses
+    /// `(cols, rows)` to subdivide with. `overlay --grid` (maxDepth == 1)
+    /// uses `gridCols × gridRows`; `overlay --rgrid` (maxDepth > 1) uses
     /// `gridRecursiveCols × gridRecursiveRows` at every level so a
     /// 3-level drill is `3×3×3` rather than `12×8×12×8×12×8`.
     private var cellsCount: (cols: Int, rows: Int) {
@@ -452,7 +452,7 @@ public final class GridMode {
     }
 
     /// Synthesise the mouse events. `warpOnly` skips the click —
-    /// useful for "park the cursor, then enter `--drag`" workflows.
+    /// useful for "park the cursor, then enter `overlay --drag`" workflows.
     /// For `leftClick` / `rightClick` / `leftClickContinuous` the
     /// mouseDown+mouseUp pair is posted at `cghidEventTap` so the
     /// focused window receives it without perch needing to be

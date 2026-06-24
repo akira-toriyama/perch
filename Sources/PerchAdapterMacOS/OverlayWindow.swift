@@ -361,7 +361,7 @@ public final class OverlayWindow {
     /// into the chord wait state; otherwise the existing snappy
     /// path runs unchanged.
     ///
-    /// When `[overlay.effect].match != "none"` AND animations are
+    /// When `[overlay.effect].match != "off"` AND animations are
     /// enabled overall, the winning pill plays its match animation
     /// while AXPress fires in parallel — the user sees the visual
     /// ack riding on top of an already-firing click rather than
@@ -379,7 +379,7 @@ public final class OverlayWindow {
         // overlay until the animation completes. The KeyTap stays
         // installed until hide() so the user can't snag stray keys.
         let matchKind = canvas.effectiveMatch()
-        if config.overlay.animEnabled, matchKind != .none {
+        if config.overlay.animEnabled, matchKind != .off {
             cb?(hint, action)
             self.onResolve = nil
             canvas.animateMatch(
@@ -497,7 +497,7 @@ public final class OverlayWindow {
         sound?.playMatch()
         let cb = onResolve
         let matchKind = canvas.effectiveMatch()
-        if config.overlay.animEnabled, matchKind != .none {
+        if config.overlay.animEnabled, matchKind != .off {
             cb?(hint, action)
             self.onResolve = nil
             canvas.animateMatch(

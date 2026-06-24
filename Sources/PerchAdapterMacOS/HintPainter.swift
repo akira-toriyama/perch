@@ -17,7 +17,10 @@
 
 import AppKit
 import CoreGraphics
+import Effects
 import Foundation
+import Palette
+import PaletteKit
 import PerchCore
 
 @MainActor
@@ -88,17 +91,30 @@ final class HintPainter: NSView {
     /// `[overlay].show-modifier-badge` is on.
     private var modifierFlags: CGEventFlags = []
 
-    /// Normalised hue rotation for the border effect (0..1). The
-    /// OverlayCanvas cycle driver updates this each tick when
-    /// `[overlay.border].cycle-seconds > 0`. 0 = base hue; 0.5 =
-    /// 180° around the wheel; 1 ≡ 0.
-    private var borderHueOffset: CGFloat = 0
+    /// The resolved sill `EffectSpec` for the configured border preset,
+    /// or nil when the effect is `off`/unknown. Resolved ONCE in
+    /// `updateConfig` (via sill's shared `borderEffectFor` catalog) so a
+    /// `.random` border settles on a single kind for the overlay's
+    /// lifetime instead of re-rolling on every repaint.
+    private var borderSpec: EffectSpec?
+
+    /// Whether the border is mid hue-cycle. The OverlayCanvas cycle
+    /// driver flips this on start/stop; while true the border blends
+    /// through the effect's palette (`resolveBorder` with `cycleColors`),
+    /// otherwise it rests on the effect's `steady` hue. The wall-clock
+    /// phase itself is read in `draw` — perch owns the redraw clock.
+    private var borderCycling = false
 
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     func updateConfig(_ cfg: PerchConfig) {
         config = cfg
+        // Resolve the border preset to its sill `EffectSpec` ONCE here —
+        // `.random` settles on a single kind for the overlay's lifetime
+        // instead of re-rolling every repaint, and the name maps straight
+        // onto sill's shared catalog (`.off`/unknown → nil → no border).
+        borderSpec = borderEffectFor(cfg.border.effect.resolvingRandom().rawValue)
         needsDisplay = true
     }
 
@@ -171,11 +187,12 @@ final class HintPainter: NSView {
         needsDisplay = true
     }
 
-    /// Set the border hue offset for the neon-border effect.
-    /// Driver in OverlayCanvas updates this each tick while
-    /// `[overlay.border].cycle-seconds > 0`.
-    func setBorderHueOffset(_ offset: CGFloat) {
-        borderHueOffset = offset
+    /// Flip the border hue-cycle on or off. The OverlayCanvas cycle
+    /// driver calls this on start/stop; the wall-clock phase itself is
+    /// read in `draw` via `CACurrentMediaTime()` (perch owns the redraw
+    /// clock, sill's `resolveBorder` stays pure/clockless).
+    func setBorderCycling(_ on: Bool) {
+        borderCycling = on
         needsDisplay = true
     }
 
@@ -185,11 +202,9 @@ final class HintPainter: NSView {
         let label = Self.labelFont(palette.font, size: cfg.overlay.fontSize)
 
         let frosted = cfg.overlay.blurEnabled
-        let pillBgIdle = Self.color(
+        let pillBgIdle = NSColor(
             hex: palette.pillBgHex,
-            alpha: frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
-        let pillBgMatched = palette.accentColor.withAlphaComponent(
-            frosted ? 0.55 : 0.85)
+            frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
         let pillBgMiss = palette.missColor.withAlphaComponent(
             frosted ? 0.55 : 0.85)
 
@@ -264,14 +279,16 @@ final class HintPainter: NSView {
                 path.stroke()
                 NSGraphicsContext.restoreGraphicsState()
 
-                // Fill. Theme palette provides the pill bg; matched /
-                // miss states swap to accent / red tints respectively.
+                // Fill. Idle pills (matched or not) keep the theme pill
+                // bg — a narrowed/matched pill is NOT re-tinted with the
+                // accent; it stands out via the glow + accent border +
+                // typed-prefix highlight below. Only a miss swaps the fill.
                 let fill: NSColor
                 switch state {
                 case .miss:
                     fill = pillBgMiss
                 case .idle:
-                    fill = p.matched ? pillBgMatched : pillBgIdle
+                    fill = pillBgIdle
                 }
                 fill.setFill()
                 path.fill()
@@ -440,9 +457,9 @@ final class HintPainter: NSView {
         let shape = Self.shapeFor(
             cfg: cfg, hint: g.hint, rect: g.baseRect)
         let path = shape.path
-        let pillBg = Self.color(
+        let pillBg = NSColor(
             hex: palette.pillBgHex,
-            alpha: frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
+            frosted ? palette.pillBgAlpha : min(palette.pillBgAlpha + 0.45, 1))
         if shape.drawBody {
             pillBg.setFill()
             path.fill()
@@ -472,26 +489,29 @@ final class HintPainter: NSView {
 
     // MARK: - Neon border
 
-    /// Stroke the pill border with the configured neon preset.
-    /// Uses `cfg.border.width` + an optional NSShadow glow when
-    /// `cfg.border.glow` is true. The base color comes from the
-    /// `BorderEffect` palette (or `palette.accentColor` if the
-    /// effect somehow lacks a hex), then rotated by
-    /// `borderHueOffset` so a cycle period rotates the hue.
+    /// Stroke the pill border with the configured effect preset,
+    /// resolved through sill `Effects` rather than perch's old
+    /// hand-rolled hue table: sill's pure `resolveBorder` picks the
+    /// frame color (blended through the effect's palette while
+    /// `borderCycling`, else its `steady` hue; `rainbow` rotates the
+    /// full spectrum) and perch materializes it, adds the optional
+    /// NSShadow glow, and strokes at `cfg.border.width`. perch owns the
+    /// redraw clock (`CACurrentMediaTime()`), the glow compositing, and
+    /// the `off` fallback — exactly sill's app-side border contract.
     private func drawNeonBorder(
         path: NSBezierPath,
         cfg: PerchConfig,
         palette: ResolvedPalette
     ) {
-        let baseHex = cfg.border.effect.baseHex ?? 0xFFFFFF
-        var color = Self.color(hex: baseHex, alpha: 1)
-        // Rotate hue around the wheel. For `.rainbow` the base is
-        // white so saturation jumps from 0 to 1 — produce a
-        // saturated color at the rotated hue. For colored bases,
-        // shift the existing hue.
-        if borderHueOffset != 0 {
-            color = Self.rotateHue(color, by: borderHueOffset)
-        }
+        let frame = resolveBorder(
+            spec: borderSpec,
+            baseWidth: cfg.border.width,
+            minWidth: nil, maxWidth: nil,   // perch keeps a fixed width
+            cycleSeconds: cfg.border.cycleSeconds,
+            cycleColors: borderCycling,
+            now: CACurrentMediaTime(),
+            flash: nil)                     // perch has no border flash
+        let color = Self.borderColor(frame.color, fallback: palette.accentColor)
         NSGraphicsContext.saveGraphicsState()
         if cfg.border.glow {
             let glow = NSShadow()
@@ -500,27 +520,28 @@ final class HintPainter: NSView {
             glow.set()
         }
         color.withAlphaComponent(0.95).setStroke()
-        path.lineWidth = CGFloat(cfg.border.width)
+        path.lineWidth = CGFloat(frame.width)
         path.stroke()
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    /// Rotate the given color's hue by `offset` (0..1) around the
-    /// color wheel. White input lands with saturation pulled up to
-    /// 1.0 so the rotation actually produces visible color — the
-    /// `.rainbow` border preset depends on this so its white base
-    /// hex doesn't render as a stationary grey.
-    static func rotateHue(_ color: NSColor, by offset: CGFloat) -> NSColor {
-        let conv = color.usingColorSpace(.deviceRGB) ?? color
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 1, a: CGFloat = 1
-        conv.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        let newH = (h + offset).truncatingRemainder(dividingBy: 1)
-        let newS = max(s, 0.9)        // ensure white inputs colourise
-        return NSColor(
-            hue: newH < 0 ? newH + 1 : newH,
-            saturation: newS,
-            brightness: max(b, 0.85),
-            alpha: a)
+    /// Materialize a sill `BorderColor` (from `resolveBorder`) into an
+    /// AppKit color. `.rgb` is sRGB (matching PaletteKit's `NSColor(hex:)`
+    /// so blends read uniformly); `.rainbowHue` uses the calibrated `NSColor(hue:…)`
+    /// space sill prescribes so the spectrum reads identically to
+    /// facet/halo; `.off` falls back to the theme accent (defensive — the
+    /// caller only draws when an effect is configured).
+    static func borderColor(_ c: BorderColor, fallback: NSColor) -> NSColor {
+        switch c {
+        case .off:
+            return fallback
+        case let .rgb(r, g, b):
+            return NSColor(srgbRed: CGFloat(r), green: CGFloat(g),
+                           blue: CGFloat(b), alpha: 1)
+        case let .rainbowHue(h):
+            return NSColor(hue: CGFloat(h), saturation: 0.9,
+                           brightness: 1, alpha: 1)
+        }
     }
 
     // MARK: - Modifier badge
@@ -675,35 +696,46 @@ final class HintPainter: NSView {
         let accentColor: NSColor
         let textColor: NSColor
         let missColor: NSColor
-        let font: ThemeFont
+        let font: FontKind
     }
 
     /// Module-internal so OverlayCanvas's particle driver can read
     /// the accent color for tinting bursts.
     ///
     /// Resolution order:
-    /// 1. User-defined `[overlay.theme.<name>]` matching `theme = <name>`
-    /// 2. Built-in palette from `Theme.builtinPalettes`
-    /// 3. System sentinel (NSColor.controlAccentColor)
+    /// 1. User-defined `[overlay.themes.<name>]` matching `theme = <name>`
+    ///    (a full sill `ThemeSpec` parsed from config).
+    /// 2. sill's canonical palette via `perchThemeSpec(name)` (sill
+    ///    `paletteFor` + perch's translucency / themed-miss overlays).
+    /// The chosen spec is then handed to sill's `PaletteKit.resolve`, which
+    /// materialises the role colours (and the system-primary sentinel);
+    /// perch layers its accent override on top.
     static func resolvePalette(cfg: PerchConfig) -> ResolvedPalette {
-        let raw: ThemePalette
+        let spec: ThemeSpec
         if let custom = cfg.overlay.customThemeName,
            let palette = cfg.overlay.customPalettes[custom] {
-            raw = palette
+            spec = palette
         } else {
-            raw = cfg.overlay.theme.palette()
+            spec = perchThemeSpec(cfg.overlay.theme)
         }
-        // `.system` palette uses `accentHex == 0` as a sentinel — fall
-        // back to NSColor.controlAccentColor so light/dark + the user's
-        // chosen macOS accent are honored.
-        let themeAccent: NSColor =
-            raw.accentHex == 0
-                ? .controlAccentColor
-                : color(hex: raw.accentHex, alpha: 1)
-        // `[overlay].accent` overrides the palette's accent when set
-        // to anything other than the default "system". Lets users mix
-        // a theme body (nord pill colors / rounded font) with a
-        // personal highlight.
+        // sill's PaletteKit owns the colour computation now (ROADMAP #5):
+        // `resolve` materialises every role as an `NSColor` through the
+        // same sRGB bridge perch used to hand-roll — INCLUDING the
+        // `primary` sentinel (0 ⇒ OS `controlAccentColor`, for perch's
+        // `system` theme + any preset whose primary is pure black). Every
+        // spec perch passes is `.fixed` (`system` is intercepted upstream
+        // as a concrete-bg `perchSystemSpec`, custom palettes always carry
+        // a `pill-bg`), so `resolve` takes the fixed branch and the result
+        // is byte-identical to the old hand-roll. perch keeps only the two
+        // overlays sill doesn't model: the translucent pill surface
+        // (`pillBg*`, frosted later in `draw`) and the accent override.
+        let resolved = resolve(spec)
+        let themeAccent = resolved.primary
+        // `[overlay].accent` overrides the theme accent when set to a
+        // concrete hex (lets users mix a theme body — dracula pill colors
+        // / rounded font — with a personal highlight). Layered AFTER sill's
+        // resolution, perch-side: sill has no per-app accent override and
+        // by design (ROADMAP #5) keeps none — it stays this overlay's knob.
         let accent: NSColor
         if cfg.overlay.accent == "system" {
             accent = themeAccent
@@ -711,23 +743,17 @@ final class HintPainter: NSView {
             accent = parseAccent(cfg.overlay.accent) ?? themeAccent
         }
         return ResolvedPalette(
-            pillBgHex: raw.pillBgHex,
-            pillBgAlpha: raw.pillBgAlpha,
+            // The pill is perch's own translucent surface, not a sill role:
+            // read the spec's bg hex directly (sill's `system` spec carries
+            // background == nil — perch's pill needs a concrete dark fill,
+            // so fall back to the historical black) and pair it with perch's
+            // frost alpha. `draw` boosts the alpha further when blur is off.
+            pillBgHex: spec.background?.rgb ?? perchSystemPillBgHex,
+            pillBgAlpha: spec.backgroundAlpha.map { CGFloat($0) } ?? 0.30,
             accentColor: accent,
-            textColor: color(hex: raw.textHex, alpha: 1),
-            missColor: color(hex: raw.missHex, alpha: 1),
-            font: raw.font)
-    }
-
-    /// Translate a `0xRRGGBB` int + alpha into an `NSColor` in the
-    /// sRGB color space (matches NSColor.controlAccentColor's color
-    /// space so blends look uniform).
-    static func color(hex: UInt32, alpha: CGFloat) -> NSColor {
-        NSColor(
-            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
-            green:    CGFloat((hex >> 8) & 0xFF) / 255,
-            blue:     CGFloat(hex & 0xFF) / 255,
-            alpha: alpha)
+            textColor: resolved.foreground,
+            missColor: resolved.error,
+            font: resolved.font)
     }
 
     /// `[overlay].accent` parser used as the user-override path
@@ -736,27 +762,30 @@ final class HintPainter: NSView {
     /// "system" — return nil so the theme accent wins.
     private static func parseAccent(_ s: String) -> NSColor? {
         if s == "system" { return nil }
-        var t = s
-        if t.hasPrefix("#") { t.removeFirst() }
-        guard t.count == 6, let v = UInt32(t, radix: 16) else {
-            return nil
-        }
-        return color(hex: v, alpha: 1)
+        // sill's shared colour grammar (named / #rgb / #rrggbb /
+        // #rrggbbaa), materialized through PaletteKit's sRGB `NSColor(hex:)`
+        // — the same bridge `resolve` uses, so the override blends
+        // uniformly with the resolved roles.
+        guard let hex = parseColorToken(s) else { return nil }
+        return NSColor(hex: hex.rgb, CGFloat(hex.alpha))
     }
 
-    /// Map `ThemeFont` → an AppKit font instance. Mono uses
+    /// Map sill's `FontKind` → an AppKit font instance. Mono uses
     /// monospacedSystemFont (the existing default), rounded asks
-    /// NSFontDescriptor for `.rounded` design, system is the
-    /// default system font. Falls back to mono on any descriptor
+    /// NSFontDescriptor for `.rounded` design, system is the default
+    /// system font. `.menu` (sill's `system` preset) renders as the
+    /// system font at perch's pill weight — pills aren't menus, so the
+    /// native menu typeface isn't wanted, and this keeps the default
+    /// theme's glyphs semibold. Falls back to mono on any descriptor
     /// failure so a misconfigured environment never breaks layout.
     /// Module-internal so `OverlayCanvas.pillRect(...)` sizes the
     /// pill width with the same font family the painter will use.
-    static func labelFont(_ kind: ThemeFont, size: Double) -> NSFont {
+    static func labelFont(_ kind: FontKind, size: Double) -> NSFont {
         let pt = CGFloat(size)
         switch kind {
         case .mono:
             return NSFont.monospacedSystemFont(ofSize: pt, weight: .semibold)
-        case .system:
+        case .system, .menu:
             return NSFont.systemFont(ofSize: pt, weight: .semibold)
         case .rounded:
             let base = NSFont.systemFont(ofSize: pt, weight: .semibold)

@@ -1,4 +1,13 @@
+#:schema ./config.schema.json
 # perch — keyboard-driven UI navigator for macOS.
+#
+# The `#:schema` line above gives editors (taplo / Even Better TOML)
+# key + value completion and inline validation. perch writes this
+# schema next to your config on launch, and it's generated from
+# perch's own config parser (`perch config --emit-schema`) — so it always
+# matches the binary. Out-of-range / unknown values are clamped to
+# safe defaults at runtime regardless; the schema just surfaces the
+# mistake in your editor before you save.
 #
 # This file is the SOURCE OF TRUTH for what perch does. The app
 # never writes to it and never auto-generates an example — what
@@ -8,7 +17,7 @@
 #   curl --create-dirs -o ~/.config/perch/config.toml \
 #     https://raw.githubusercontent.com/akira-toriyama/perch/main/config.toml
 #
-# Reload after edits: perch --reload  (or just save — perch watches
+# Reload after edits: perch daemon --reload  (or just save — perch watches
 # the file for changes when running as a daemon).
 
 # ---- Activation ---------------------------------------------------
@@ -21,8 +30,8 @@
 # under your thumb.
 #
 # You can also activate from the CLI without the hotkey:
-#   perch --activate    request the running daemon to show hints
-#   perch --cancel      dismiss hints if any are showing
+#   perch overlay --activate    request the running daemon to show hints
+#   perch overlay --cancel      dismiss hints if any are showing
 # Bind these from Karabiner / skhd / Raycast if you prefer a different
 # trigger or want multiple triggers.
 active = "shift+space"
@@ -56,59 +65,60 @@ prioritise-center = true
 [overlay]
 # Color / typography theme for hint pills. Picks the pill background
 # tint, accent (border + matched-glow + typed-prefix), text color,
-# and font family (mono / rounded / system) in one knob. Mirrors
-# facet's `[overlay] theme` vocabulary — drop a familiar theme name
-# here if you carry the facet config around.
+# and font family (mono / rounded / system) in one knob. The catalog
+# is SHARED with facet (the `sill` theming library) — the exact same
+# accent / text / font, so a theme name carried over from a facet
+# config paints identically. perch layers its own pill translucency
+# on top (light themes ride a higher opacity so the pale fill stays
+# legible under the frost).
 #
-# Dark, monospace (editor-style):
-#   "terminal"   — Tokyo-Night green accent on near-black.
-#   "nord"       — cool polar-night blue-grey; frost-cyan accent.
-#   "dracula"    — vivid dark; purple accent.
-#   "gruvbox"    — retro warm dark; orange accent.
-#   "catppuccin" — soft pastel dark (Mocha); mauve accent.
-#   "rosepine"   — muted aubergine; iris accent.
-#   "everforest" — soft forest dark; green accent.
-#   "solarized"  — classic teal-base dark; blue accent.
-#   "onedark"    — Atom One Dark; blue accent.
-#   "monokai"    — high-energy dark; lime accent.
-#   "hacker"     — black base, neon-green accent (green-on-black).
+# Favorites:
+#   "terminal"         — classic phosphor green on near-black (vivid
+#                        green accent, amber secondary), mono.
+#   "chomp"            — arcade Pac-Man: pellet-yellow on a black maze,
+#                        ghost-red miss-flash, neon-blue secondary.
+#   "rainbow"          — loud max-saturation pink accent on near-black,
+#                        rounded font. (The STATIC palette — perch
+#                        doesn't cycle the hue.)
 #
-# Neon (vivid electric on hue-tinted near-black):
-#   "neon"       — electric cyan on blue-black; magenta miss-flash.
-#   "cyber"      — aqua/teal on teal-black; hot-pink miss-flash.
-#   "vapor"      — synthwave pink on purple-black; gold miss-flash.
+# Reference (VS Code favorites):
+#   "cobalt2"          — deep cobalt-blue; bright-gold accent (Wes Bos).
+#   "shades-of-purple" — purple-indigo; golden-yellow accent.
+#   "tokyo-hack"       — midnight-indigo; red-orange chrome (Tokyo Night).
 #
-# Light (rounded / system font, dark text on light pill):
-#   "cute"       — soft pastel pink; rounded font.
-#   "kawaii"     — candy lavender; rounded font.
-#   "paper"      — clean daytime white; system font.
+# Popular dark, monospace:
+#   "github-dark"      — the most-installed theme; link-blue accent.
+#   "dracula"          — vivid dark; signature purple, pink secondary.
+#   "catppuccin-mocha" — soft pastel dark; mauve accent.
+#   "gruvbox"          — retro warm dark; orange accent.
 #
-# Monochrome:
-#   "mono-light" — stark black-on-white, mono font.
-#   "mono-dark"  — stark white-on-black / OLED, mono font.
-#   "monotone"   — soft graphite greyscale, system font.
+# Light (dark text on a light pill):
+#   "github-light"     — clean daytime white; link-blue, system font.
+#   "catppuccin-latte" — warm-grey lavender light; purple accent.
 #
 # Adaptive:
-#   "system"     — NSColor.controlAccentColor + dark pill tint —
-#                  the historical perch default; follows the user's
-#                  macOS accent + light/dark appearance.
+#   "system"           — NSColor.controlAccentColor + dark pill tint —
+#                        the historical perch default; follows the
+#                        user's macOS accent (text + pill stay the dark
+#                        frosted chip regardless of light/dark).
 #
 # Special:
-#   "random"     — pick a random theme at each launch / `--reload`
-#                  (excludes "system").
+#   "random"           — pick a random theme at each launch / `daemon --reload`
+#                        (excludes "system").
 #
-# Unknown names clamp to "system" silently. Animated themes
-# (rainbow / theme-cycle-seconds in facet) are NOT supported —
-# perch's overlay is typically up for sub-seconds, so cycling
-# accents adds no value.
+# Unknown names clamp to "system" silently. perch always uses the
+# STATIC palette for a theme — the animated border / hue-cycling that
+# facet & wand layer on rainbow / chomp aren't part of perch's
+# transient overlay.
 theme = "system"
 
 # Accent override. Use to layer a personal highlight color on TOP
-# of `theme` — e.g. nord pill body + hot-pink typed-prefix:
-#   theme  = "nord"
+# of `theme` — e.g. dracula pill body + hot-pink typed-prefix:
+#   theme  = "dracula"
 #   accent = "#ff85b3"
 # "system" (the default) lets the theme's palette accent win.
-# A `#rrggbb` literal overrides it. Anything else falls back to
+# Any sill colour token overrides it — named colours (red / cyan /
+# …), `#rgb`, `#rrggbb`, `#rrggbbaa`. Anything else falls back to
 # "system" silently (typo can't break the daemon).
 accent = "system"
 
@@ -117,7 +127,7 @@ accent = "system"
 # section becomes a selectable theme — just set `theme = "<name>"`
 # above. Resolution order:
 #   1. Custom palette here (if `theme` matches a section name)
-#   2. Built-in catalog (terminal / nord / dracula / ...)
+#   2. Built-in catalog (terminal / dracula / github-dark / ...)
 #   3. System default
 #
 # Names that shadow built-ins are silently ignored (a warning lands
@@ -154,7 +164,7 @@ pill-shape = "pill"
 # Hint pill font size (pt). Clamped 8..32. The font FAMILY is
 # picked by `theme` (mono / rounded / system); this knob only
 # controls the size.
-font-size = 14
+font-size = 15
 
 # Frosted-glass background under each pill (NSVisualEffectView,
 # .hudWindow material). Turn off for a flat dark fill if your Mac
@@ -167,19 +177,19 @@ blur-enabled = true
 # you find effects distracting.
 anim-enabled = true
 
-# Show the AX-bound keyboard shortcut (⌘Q, ⇧⌘N, …) on `--menu`
+# Show the AX-bound keyboard shortcut (⌘Q, ⇧⌘N, …) on `overlay --menu`
 # pills as a right-aligned, dimmer annotation. Lets you discover
 # the native shortcut while still picking the menu item with 1-9.
 # Set to false if menu titles already include their own shortcut
 # hint, or for screenshot / demo work where the annotation clutters.
-show-shortcuts = true
+shortcut-badge = true
 
 # Hold-to-peek key — while held during hint mode, the overlay
 # temporarily hides so you can see the UI underneath. Release to
 # restore the pills. Single key, no modifiers (e.g. "space", "tab").
 # Empty disables the feature; unknown names silently disable per
-# typo-tolerance. Only applies to hint mode (`--activate` /
-# `--regional`); search / menu / grid modes are unaffected.
+# typo-tolerance. Only applies to hint mode (`overlay --activate` /
+# `overlay --regional`); search / menu / grid modes are unaffected.
 peek-key = "space"
 
 # Modifier-key badge — when a modifier is held during hint mode,
@@ -200,7 +210,7 @@ show-modifier-badge = "off"
 # ---- Overlay effects ---------------------------------------------
 # Animations layered on top of the hint flow. Mirrors wand's
 # `[gesture.effect]` vocabulary, scoped to perch's single-pill
-# resolve target. Both directions default to "none" so the snappy
+# resolve target. Both directions default to "off" so the snappy
 # bare-resolve UX is preserved.
 #
 # Requires `[overlay].anim-enabled = true` (the global motion
@@ -216,14 +226,14 @@ show-modifier-badge = "off"
 # Exit-side kinds (`fade` / `explode` / `drop` / etc.) silently
 # fall back to `"pop"` here — `appear` does not accept them.
 #
-#   "none"      — pills paint at full size, no delay.
+#   "off"       — pills paint at full size, no delay.
 #   "pop"       — historical 150ms scale-in (default).
 #   "cascade"   — pills appear one after another (30ms × index)
 #                 with a bloom + alpha chain. Reads as a wave.
 #   "fade-in"   — alpha 0 → 1, no scale.
 #   "drop-in"   — pills fall from 40pt above into their slot.
 #   "bloom"     — 0.4 → 1.0 scale + alpha (explode in reverse).
-#   "random"    — pick a non-none non-random kind each activation.
+#   "random"    — pick a non-off non-random kind each activation.
 appear = "pop"
 
 # What happens to the WINNING pill at hint-resolve time. AXPress
@@ -234,7 +244,7 @@ appear = "pop"
 #
 # Vocabulary mirrors wand's `[gesture.effect] match` verbatim:
 #
-#   "none"        — pill vanishes instantly (default — no latency).
+#   "off"         — pill vanishes instantly (default — no latency).
 #   "fade"        — fades to transparent over 120ms.
 #   "explode"     — scales 1.0 → ~1.4 and fades over 140ms.
 #   "drop"        — translates downward off-screen while fading.
@@ -246,10 +256,10 @@ appear = "pop"
 #                   center (most attention-grabbing — natural for
 #                   the moment a click actually fires).
 #   "confetti"    — particles rain past the pill with gravity.
-#   "random"      — pick a random non-none kind each resolve.
+#   "random"      — pick a random non-off kind each resolve.
 #
-# Unknown kinds clamp to "none" silently.
-match = "none"
+# Unknown kinds clamp to "off" silently.
+match = "off"
 
 # What happens on a missed keypress (a typed key that no label
 # starts with, or a non-letter key). The existing 200ms RED FLASH
@@ -270,14 +280,14 @@ match = "none"
 #   - `fireworks` / `confetti` emit from EVERY visible pill (vs
 #     the winning-only emission on `match`) so the miss feedback
 #     fills the screen.
-#   - `random` excludes `none` so a miss always shows motion.
+#   - `random` excludes `off` so a miss always shows motion.
 #
-# Unknown kinds clamp to "none" silently.
-unmatch = "none"
+# Unknown kinds clamp to "off" silently.
+unmatch = "off"
 
 # What happens to pills that get FILTERED OUT mid-typing — e.g.
 # the user types `a` while `aa, ab, ac, xx` are on screen, so `xx`
-# disappears because its label doesn't start with `a`. Off (`"none"`,
+# disappears because its label doesn't start with `a`. Off (`"off"`,
 # the default) is instant removal — the historical perch behavior.
 # Set to any `match` kind to give each disappearing pill a visual
 # exit at its original position.
@@ -292,7 +302,7 @@ unmatch = "none"
 #
 # Tip: pair `narrow = "drop"` with `match = "explode"` so the
 # typing rhythm reads as "candidates drop out / picked one bursts".
-narrow = "none"
+narrow = "off"
 
 # Overall magnitude scaler for ALL three directions — multiplies the
 # spatial dimension (explode peak scale, shake amplitude, slide
@@ -352,11 +362,12 @@ glow = true
 # pairs cleanly with the pill 10pt corner radius.
 width = 1.5
 
-# Hue rotation period in seconds — the border's hue rotates
-# around the color wheel over this many seconds, returning to its
-# base color every cycle. Set to 0 to lock the color (rainbow
-# then collapses to a static white border). Clamped 0..120.
-cycle-seconds = 3.0
+# Hue rotation period in integer milliseconds (the family
+# spelling) — the border's hue rotates around the color wheel over
+# this period, returning to its base color every cycle. Set to 0
+# to lock the color (rainbow then collapses to a static white
+# border). Clamped 0..120000.
+color-cycle-ms = 3000
 
 
 # ---- Overlay sound -----------------------------------------------
@@ -375,7 +386,8 @@ cycle-seconds = 3.0
 #       match = "~/Library/Sounds/click.mp3"
 #       match = "/Users/me/sounds/typewriter.wav"
 #
-#   - "none" / "off" / empty — silenced for that direction.
+#   - empty ("") — silenced for that direction (the family sentinel
+#     for path/name string keys).
 #
 # Path interpretation wins over system-name when both could match
 # (so `~/Pop.mp3` beats the system `Pop`). Unresolved specs log
@@ -383,16 +395,16 @@ cycle-seconds = 3.0
 [overlay.sound]
 
 # Plays on hint resolve (any modifier).
-match = "none"
+match = ""
 
 # Plays on a missed keypress (non-matching letter or non-letter
 # key). Layered with the existing 200ms red flash + unmatch motion.
-unmatch = "none"
+unmatch = ""
 
 # Plays when hint mode activates (hotkey fires, AX walk completes,
 # panel paints). Helpful as an "ah, perch heard me" cue when
 # Reduce Motion is on and the visual entrance is muted.
-activate = "none"
+activate = ""
 
 # Master volume for all sounds, 0.0..1.0. Default 0.5 keeps system
 # sounds at half their natural volume.
@@ -400,6 +412,13 @@ volume = 0.5
 
 
 # ---- Behaviour ---------------------------------------------------
+[exclude]
+# Bundle IDs perch never activates over — array of globs (`*` / `?`),
+# the family-shared shape (same grammar as wand / halo [exclude].apps).
+# Useful for things that handle their own keyboard nav.
+apps = []
+
+
 [behavior]
 # When ONE candidate remains after partial input, auto-click without
 # waiting for the user to finish typing. Saves a keystroke on the
@@ -423,9 +442,6 @@ roles = [
   "SearchField",
 ]
 
-# Bundle IDs to ignore (perch won't activate over these apps).
-# Useful for things that handle their own keyboard nav.
-exclude-apps = []
 
 # Skip AX elements whose frame is smaller than this on either axis
 # (points). Default 6 — historical floor that drops 1×1 hidden
@@ -487,10 +503,10 @@ min-size = 6
 # min-size = 12                     # Xcode toolbar density
 #
 # [behavior."com.figma.Desktop"]
-# match-effect   = "none"            # Silence flashy match-effect inside
-# appear-effect  = "none"            #   Figma so the canvas stays calm
-# unmatch-effect = "none"            #   even with a wild global config
-# narrow-effect  = "none"
+# match-effect   = "off"             # Silence flashy match-effect inside
+# appear-effect  = "off"             #   Figma so the canvas stays calm
+# unmatch-effect = "off"             #   even with a wild global config
+# narrow-effect  = "off"
 
 
 # ---- Chord-suffix action mode ------------------------------------
@@ -518,7 +534,7 @@ min-size = 6
 
 
 # ---- Search-mode synonyms ----------------------------------------
-# `perch --search` / `perch --menu` rank labels with a fuzzy
+# `perch overlay --search` / `perch overlay --menu` rank labels with a fuzzy
 # subsequence matcher (so `Cls` finds "Close Tab", `prfs` finds
 # "Preferences…"). Synonym groups extend that with intent matching:
 # typing any form in a group surfaces labels that contain ANY other
@@ -533,7 +549,7 @@ min-size = 6
 
 
 # ---- Coordinate grid (M4-α, issue #66) --------------------------
-# `perch --grid` overlays a labeled grid across the screen union
+# `perch overlay --grid` overlays a labeled grid across the screen union
 # and warps the cursor + clicks via synthetic CGEvent when the user
 # types a label. The AX-bypass fallback for Figma canvas /
 # Photoshop / web <canvas> / custom-drawn UIs where hint mode is
@@ -547,9 +563,9 @@ min-size = 6
 cols = 12
 rows = 8
 
-# Recursive grid (`perch --rgrid`, M4-β) drills into the picked
+# Recursive grid (`perch overlay --rgrid`, M4-β) drills into the picked
 # cell up to `max-depth` levels before clicking. 1 collapses to
-# regular `--grid` (click on first label).
+# regular `overlay --grid` (click on first label).
 #
 # With the default 3×3 `recursive-cols/rows`:
 #   depth 3 → 27 cells per axis (~80px terminal on 4K)
@@ -560,8 +576,8 @@ rows = 8
 # exceeds the alphabet length AND is sub-pixel on any display.
 max-depth = 3
 
-# Density used by `--rgrid` at EVERY drill level. Distinct from
-# `cols`/`rows` (which are the single-pass `--grid` density)
+# Density used by `overlay --rgrid` at EVERY drill level. Distinct from
+# `cols`/`rows` (which are the single-pass `overlay --grid` density)
 # because the recursive case wants FEWER cells per step so each
 # pick is a single-letter label (no 2-letter `aa`/`ab` chains).
 # Default 3×3 → at depth 3 you address 27 effective spots with
@@ -580,7 +596,7 @@ nest-min-size = 100
 
 
 # ---- Regional hint mode ------------------------------------------
-# Entered via `perch --regional`. Labels large containers (article
+# Entered via `perch overlay --regional`. Labels large containers (article
 # body, sidebar pane, embedded image, scroll area, outline view)
 # instead of every clickable leaf — for "select / copy / focus on
 # broader strokes" tasks. See README.md / docs/glossary.md.

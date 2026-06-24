@@ -52,7 +52,7 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// pickable.
     ///
     /// Dispatch is synthetic mouse click at the recognized
-    /// centroid (no AX target — same path as `--grid`). The
+    /// centroid (no AX target — same path as `overlay --grid`). The
     /// adapter encodes the centroid in the id so dispatch can
     /// click without a side-table lookup. Returns `[]` from the
     /// default implementation; the real impl is on
@@ -65,7 +65,7 @@ public protocol UIElementSource: AnyObject, Sendable {
     /// set to the entry's search keywords (so `SearchFilter` can
     /// fuzzy-match on `"thinking"` / `"thumbs up good ok"` etc.),
     /// id of the form `"emoji:<glyph>"`, and `.zero` frame —
-    /// emoji ship to the same vertical-list render as `--menu`.
+    /// emoji ship to the same vertical-list render as `overlay --menu`.
     ///
     /// `.press` against an emoji-role element should type the
     /// glyph at the focused field's caret via `CGEvent`'s Unicode
@@ -101,13 +101,6 @@ public protocol UIElementSource: AnyObject, Sendable {
 }
 
 public extension UIElementSource {
-    /// Shorthand for the default `.press` action. Tests written
-    /// before action-modes use this; new callers should pass the
-    /// explicit action.
-    func press(id: String) -> Bool {
-        act(id: id, as: .press)
-    }
-
     /// Default: regional mode opts in. Sources without a meaningful
     /// region notion (synthetic tests, future backends that don't
     /// expose containers) get an empty list, and the Controller

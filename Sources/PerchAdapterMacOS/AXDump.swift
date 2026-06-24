@@ -1,16 +1,16 @@
-// Raw AX tree dumper for diagnostic use (`perch --dump-ax-tree`).
+// Raw AX tree dumper for diagnostic use (`perch ax --tree`).
 //
-// `--dump-ax` shows what the filter chain ACTUALLY labels.
-// `--dump-ax-tree` shows the underlying RAW tree before any filter —
+// `ax --dump` shows what the filter chain ACTUALLY labels.
+// `ax --tree` shows the underlying RAW tree before any filter —
 // every AX node depth-first, with role / frame / action support /
 // child counts / a web-area marker. Essential when triaging "why
 // isn't <element> visible to perch?" against shell-rendered apps
 // (Chrome / Electron / WKWebView hosts):
 //
-//   - If a node doesn't appear in --dump-ax-tree at all, the AX
+//   - If a node doesn't appear in ax --tree at all, the AX
 //     backend is hiding it (Chrome's lazy renderer, an Electron
 //     content area that hasn't been awakened yet, …).
-//   - If it appears but is missing from --dump-ax, the filter chain
+//   - If it appears but is missing from ax --dump, the filter chain
 //     dropped it — read the per-line annotation to see why.
 //
 // Kept separate from AXSource so the dump path doesn't accidentally

@@ -77,7 +77,9 @@ final class ConfigTests: XCTestCase {
         let src = """
         [behavior]
         roles = ["Button", "Link"]
-        exclude-apps = ["com.evil.app"]
+
+        [exclude]
+        apps = ["com.evil.app"]
         """
         let cfg = PerchConfig.parse(src)
         XCTAssertEqual(cfg.behavior.roles, ["Button", "Link"])
@@ -258,7 +260,7 @@ final class ConfigTests: XCTestCase {
 
     /// A section header with no recognised keys is dropped — adding
     /// `[behavior."com.foo"]` alone shouldn't inflate the
-    /// per-app-override count surfaced by `perch --validate`.
+    /// per-app-override count surfaced by `perch config --validate`.
     func testEmptyPerAppSectionIsDropped() {
         let src = """
         [behavior."com.foo.Bar"]

@@ -51,7 +51,7 @@ final class OverlayCanvas: NSView {
     /// Bundle id of the app the controller resolved as frontmost
     /// when hint mode entered. Used by `effectiveAppearEffect` /
     /// `effectiveMatchEffect` / ... lookups so a per-app override
-    /// (e.g. `[behavior."com.figma.Desktop"] match-effect = "none"`)
+    /// (e.g. `[behavior."com.figma.Desktop"] match-effect = "off"`)
     /// wins over the global default. nil for app-agnostic modes
     /// (grid / search) — lookups then return the global default.
     var activeBundleID: String?
@@ -180,7 +180,7 @@ final class OverlayCanvas: NSView {
         var eliminated: [(Hint, CGRect)] = []
         if !firstFrame,
            config.overlay.animEnabled,
-           effectiveNarrow() != .none {
+           effectiveNarrow() != .off {
             let newKeys = Set(hints.map { $0.keys })
             for old in pills where !newKeys.contains(old.hint.keys) {
                 eliminated.append((old.hint, old.rect))
@@ -190,7 +190,7 @@ final class OverlayCanvas: NSView {
         self.typed = typed
         self.state = .idle
         let kind = config.overlay.animEnabled
-            ? effectiveAppear().resolvingRandom() : .none
+            ? effectiveAppear().resolvingRandom() : .off
         pills = hints.enumerated().map { idx, h in
             // Cascade staggers entrance by pill index — 30ms per
             // pill is enough to read as "wave" without the last
@@ -207,7 +207,7 @@ final class OverlayCanvas: NSView {
                 matched: !typed.isEmpty && h.keys.hasPrefix(typed),
                 appearDelay: delay)
         }
-        if firstFrame, config.overlay.animEnabled, kind != .none {
+        if firstFrame, config.overlay.animEnabled, kind != .off {
             appearedAt = CACurrentMediaTime()
         }
         layoutPills()
@@ -259,7 +259,7 @@ final class OverlayCanvas: NSView {
     ) {
         let resolved = kind.resolvingRandom()
         switch resolved {
-        case .none, .random:
+        case .off, .random:
             DispatchQueue.main.asyncAfter(deadline: .now() + scaled(0.2)) {
                 MainActor.assumeIsolated { completion() }
             }
@@ -378,7 +378,7 @@ final class OverlayCanvas: NSView {
     ) {
         let resolved = kind.resolvingRandom()
         switch resolved {
-        case .none, .random:
+        case .off, .random:
             completion()
         case .fade:
             runMatchAnim(
@@ -655,24 +655,25 @@ final class OverlayCanvas: NSView {
               config.border.cycleSeconds > 0,
               !borderCycleActive else { return }
         borderCycleActive = true
-        borderCycleStart = CACurrentMediaTime()
+        painter.setBorderCycling(true)
         tickBorderCycle()
     }
 
     func stopBorderCycle() {
         borderCycleActive = false
-        painter.setBorderHueOffset(0)
+        painter.setBorderCycling(false)
     }
 
     private var borderCycleActive = false
-    private var borderCycleStart: TimeInterval = 0
 
+    /// Pump the overlay repaint at ~30Hz while the border cycles. The
+    /// color math is sill's (`resolveBorder` reads `CACurrentMediaTime()`
+    /// in `draw`); this loop just keeps the surface refreshing so the
+    /// shared phase advances. perch owns this redraw clock by design —
+    /// sill's border resolve stays pure/stateless.
     private func tickBorderCycle() {
         guard borderCycleActive else { return }
-        let elapsed = CACurrentMediaTime() - borderCycleStart
-        let period = max(0.1, config.border.cycleSeconds)
-        let progress = (elapsed.truncatingRemainder(dividingBy: period)) / period
-        painter.setBorderHueOffset(CGFloat(progress))
+        painter.needsDisplay = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0 / 30) {
             [weak self] in
             MainActor.assumeIsolated { self?.tickBorderCycle() }
@@ -708,8 +709,13 @@ final class OverlayCanvas: NSView {
     /// targets). If a pill would clip against the canvas edge,
     /// AppKit clips it naturally — far better than displacing.
     private func pillRect(for hint: Hint) -> CGRect {
+        // Size with the SAME resolved font the painter draws with —
+        // routes through resolvePalette so a `[overlay.themes.<name>]`
+        // custom palette's font (rounded / system) drives pill width
+        // too, not just the built-in catalog's.
         let font = HintPainter.labelFont(
-            config.overlay.theme.palette().font, size: config.overlay.fontSize)
+            HintPainter.resolvePalette(cfg: config).font,
+            size: config.overlay.fontSize)
         let label = hint.keys.uppercased()
         let textW = (label as NSString).size(
             withAttributes: [.font: font]).width
@@ -762,7 +768,7 @@ final class OverlayCanvas: NSView {
     private func layoutPills() {
         // Compute per-pill appear state for this tick.
         let kind = config.overlay.animEnabled
-            ? effectiveAppear().resolvingRandom() : .none
+            ? effectiveAppear().resolvingRandom() : .off
         let now = CACurrentMediaTime()
         var anyInFlight = false
         for i in pills.indices {
@@ -825,7 +831,7 @@ final class OverlayCanvas: NSView {
         now: TimeInterval
     ) -> (scale: CGFloat, dx: CGFloat, dy: CGFloat,
           alpha: CGFloat, inFlight: Bool) {
-        guard let t0 = appearedAt, kind != .none else {
+        guard let t0 = appearedAt, kind != .off else {
             return (1, 0, 0, 1, false)
         }
         let perPillDuration: TimeInterval = 0.15 * config.effect.durationScale
@@ -842,7 +848,7 @@ final class OverlayCanvas: NSView {
         let i = config.effect.intensity.scale
         let done = local >= perPillDuration
         switch kind {
-        case .none, .random:
+        case .off, .random:
             return (1, 0, 0, 1, false)
         case .pop:
             // Historical scale-in 0.85 → 1.0.

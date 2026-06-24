@@ -1,4 +1,4 @@
-// Curated emoji name table for `--emoji` (issue #55).
+// Curated emoji name table for `overlay --emoji` (issue #55).
 //
 // Each entry is `(glyph, keywords)` where `keywords` is a single
 // space-joined string of search terms — CLDR short name first,
@@ -7,7 +7,7 @@
 // against `keywords`, so this file ONLY has to hold a useful
 // vocabulary; ranking is the SearchMode pipeline's job.
 //
-// Coverage is intentionally curated (≈250 entries), not the full
+// Coverage is intentionally curated (≈400 entries), not the full
 // CLDR set (≈3700). The long tail is rarely typed by name —
 // niche emoji are easier to reach via the system picker
 // (Ctrl+Cmd+Space). When a user reports "I typed X and nothing

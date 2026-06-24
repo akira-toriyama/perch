@@ -1,150 +1,120 @@
-// Hint-pill palette presets. Ports facet's `[overlay] theme` knob
-// vocabulary (see https://github.com/akira-toriyama/facet) into
-// perch's single-surface UI: a `Theme` picks the **pill fill** /
-// **accent (border + matched glow + typed-prefix)** / **text color**
-// triple, plus the font family (monospaced vs rounded vs system).
+// Theme bridge + pill/effect vocabulary.
 //
-// Stays in Core because the parsed config carries the enum across
-// the seam; the Adapter (HintPainter) resolves it into NSColors at
-// draw time. `paletteHex` therefore returns plain `0xRRGGBB` ints —
-// no AppKit / CoreGraphics types here.
+// The STATIC palette catalog (the `terminal` / `dracula` / `gruvbox` /
+// … presets, their primary / foreground / background / font) now lives
+// in the shared `sill` library (plan atelier's north star: "facet の
+// theme 真似て" never said twice). perch consumes only sill's pure,
+// AppKit-free `Palette` module — `ThemeSpec`, `paletteFor`, `FontKind`,
+// `canonicalThemeNames` — and is the family's "pure twin", proving the
+// pure layer is reusable by a non-facet Core.
 //
-// All palettes are paired (primary, secondary) following facet's
-// convention. perch only uses one accent today, so `accent` is the
-// primary; `pillBg` is the background tint applied behind the label
-// glyphs (drawn over the frosted blur). Most themes share white text
-// (`textHex = 0xFFFFFF`) — the light themes (paper / cute / kawaii /
-// mono-light) flip to dark text because the bg is light enough that
-// white reads as washed-out.
+// What stays perch-side here:
+//   * the THEME-NAME bridge (`perchThemeSpec` / `perchCanonicalThemeName`)
+//     that adapts sill's spec to perch's pill — adding the one
+//     app-specific overlay sill deliberately omits: the frosted-pill
+//     translucency (`perchPillAlpha`), plus perch's own dark-pill
+//     `system` spec;
+//   * the pill geometry (`PillShape`) and the transient hint-overlay
+//     MOTION effects (`MatchEffect` / `UnmatchEffect` / `AppearEffect`)
+//     and the modifier-badge style — perch-specific pill choreography
+//     sill's color-only `Effects` deliberately doesn't cover.
+//     (`BorderEffect` stays here as a config token too, but since sill
+//     1.10 its DRAWING delegates to sill's shared `Effects` atom —
+//     `borderEffectFor` + `resolveBorder` in the adapter — so the neon
+//     border shares ONE vocabulary with facet instead of a perch-local
+//     hue table. `EffectIntensity` is sill's shared knob since 0.6.x
+//     adoption — typealiased below with a CGFloat `scale` shim.)
+//
+// Stays in Core (no AppKit / CoreGraphics colors): the parsed config
+// carries `ThemeSpec` + the enums across the seam; the Adapter
+// (HintPainter) resolves them into NSColors at draw time.
 
 import CoreGraphics
 import Foundation
+import Palette
 
-/// Color palette + typography preset for hint pills. Mirrors facet's
-/// `[overlay] theme` vocabulary so users carrying a facet config over
-/// see the same names.
-///
-/// Unknown / out-of-range values clamp to `.system` per the
-/// typo-tolerance policy (see `PerchConfig`).
-public enum Theme: String, Sendable, CaseIterable {
+// MARK: - Theme name → ThemeSpec (sill bridge)
 
-    // Adaptive — follows macOS light/dark; pills use NSColor.controlAccentColor.
-    case system
-
-    // Dark, monospace.
-    case terminal
-    case nord
-    case dracula
-    case gruvbox
-    case catppuccin
-    case rosepine
-    case everforest
-    case solarized
-    case onedark
-    case monokai
-    case hacker
-
-    // Neon — vivid electric on hue-tinted near-black.
-    case neon
-    case cyber
-    case vapor
-
-    // Light.
-    case cute
-    case kawaii
-    case paper
-
-    // Monochrome.
-    case monoLight = "mono-light"
-    case monoDark = "mono-dark"
-    case monotone
-
-    // Special — pick a random theme on each launch / --reload
-    // (excludes `system` so a randomly-chosen palette never falls
-    // back to the adaptive default mid-session).
-    case random
-
-    /// Parse a config value into a `Theme`. Whitespace tolerant,
-    /// case-insensitive. Returns `nil` for unknown names so the
-    /// caller can clamp to the default.
-    public static func parse(_ s: String) -> Theme? {
-        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
-        if t.isEmpty { return nil }
-        return Theme(rawValue: t)
-    }
-
-    /// Resolve `.random` to a concrete palette by picking from every
-    /// other case (so the chosen theme stays stable for the rest of
-    /// the session). Other cases pass through unchanged.
-    public func resolvingRandom() -> Theme {
-        guard self == .random else { return self }
-        let pool = Theme.allCases.filter { $0 != .random && $0 != .system }
-        return pool.randomElement() ?? .terminal
-    }
+/// Pill-background opacity perch paints behind the hint glyphs. This is
+/// perch's app-specific pill-surface treatment (the frosted translucent
+/// pill), NOT part of the shared `sill` palette — sill's `ThemeSpec`s
+/// leave `backgroundAlpha` nil because facet's panels are opaque. Light
+/// themes ride higher (the pale fill would wash out under the frost
+/// otherwise); dark themes keep the historical 0.30. Derived from sill's
+/// `isLight` luminance test (background brightness) rather than a
+/// theme-name list, so new catalog light themes (`github-light` /
+/// `catppuccin-latte`, …) are handled automatically — no perch-local
+/// theme-name list to drift out of sync with sill (atelier north star).
+public func perchPillAlpha(for spec: ThemeSpec) -> Double {
+    spec.isLight ? 0.85 : 0.30
 }
 
-/// Backend-neutral palette emitted by `Theme.palette(...)`. Color
-/// channels are `0xRRGGBB` ints so PerchCore stays free of
-/// AppKit / CoreGraphics types — the Adapter splits each into
-/// NSColor components at draw time.
-public struct ThemePalette: Sendable, Equatable {
+/// Fallback pill background for the `system` theme. sill's `system`
+/// `ThemeSpec` carries `background == nil` (vibrancy fall-through for
+/// facet's adaptive panel); perch's pill is a dark frosted chip
+/// regardless of the macOS appearance, so it needs a concrete fill.
+/// Black at the default translucency = the historical perch `system`
+/// look.
+public let perchSystemPillBgHex: UInt32 = 0x000000
 
-    /// Pill background tint. Drawn over the frost blur (or a solid
-    /// dark fill when `blur-enabled = false`), so it's typically a
-    /// translucent accent — see `pillBgAlpha`.
-    public let pillBgHex: UInt32
+/// perch's `system` theme spec. NOT sill's `system` preset (an adaptive
+/// vibrancy panel with `background == nil` + dynamic label colors):
+/// perch's surface is a dark translucent pill that does NOT flip with
+/// the OS appearance, so it keeps white text on a black fill and only
+/// borrows the OS control-accent via the `primary` sentinel (0). This is
+/// the legitimate "bg は app 別" surface difference between facet's panel
+/// and perch's pill (atelier Q6: the dark pill stays a divergence; the
+/// concrete black `background` auto-derives `backgroundMode == .fixed`).
+/// `muted` is a placeholder — perch never reads it.
+public let perchSystemSpec = ThemeSpec(
+    background: HexColor(perchSystemPillBgHex),
+    foreground: HexColor(0xFFFFFF),
+    muted: HexColor(0xFFFFFF),
+    primary: HexColor(systemPrimarySentinel),
+    font: .system,
+    error: HexColor(defaultErrorHex),
+    backgroundAlpha: 0.30)   // dark pill → the historical default frost
 
-    /// Pill border + matched-glow + typed-prefix highlight. The
-    /// "accent" the user perceives as the theme's identity color.
-    public let accentHex: UInt32
+/// Resolve a canonical theme name into the `ThemeSpec` perch renders:
+/// sill's authoritative palette plus perch's one app-specific overlay,
+/// the frosted-pill translucency (`backgroundAlpha`). `system` returns
+/// perch's own dark-pill spec. The name is assumed already canonical
+/// (validated + `random`-resolved at config parse via
+/// `perchCanonicalThemeName`); an unknown name falls through to sill's
+/// `paletteFor`, which clamps to `terminal`.
+public func perchThemeSpec(_ name: String) -> ThemeSpec {
+    let n = name.lowercased()
+    if n == "system" { return perchSystemSpec }
+    var spec = paletteFor(n)                    // sill canonical palette
+    spec.backgroundAlpha = perchPillAlpha(for: spec)  // perch frost overlay
+    return spec
+}
 
-    /// Hint label text color (the unrolled half of the label —
-    /// everything after the already-typed prefix). White on dark
-    /// themes, near-black on light themes.
-    public let textHex: UInt32
-
-    /// Color used for the "missed key" red flash. Most themes
-    /// reuse `0xEF4444` (the wand miss-color), but some palettes
-    /// override it to keep contrast against an unusual pill bg.
-    public let missHex: UInt32
-
-    /// Pill bg alpha when frost is on (.hudWindow blur layer
-    /// underneath). Lower → more frost shows through; higher →
-    /// more theme tint. `0.30` is the historical perch default.
-    public let pillBgAlpha: CGFloat
-
-    /// Font family used for hint labels. Monospaced is the
-    /// historical default; rounded reads warmer on light/playful
-    /// themes (cute / kawaii / rainbow); system is the macOS
-    /// default sans, paired with the `paper` / `monotone` /
-    /// `system` adaptive presets.
-    public let font: ThemeFont
-
-    public init(
-        pillBgHex: UInt32,
-        accentHex: UInt32,
-        textHex: UInt32 = 0xFFFFFF,
-        missHex: UInt32 = 0xEF4444,
-        pillBgAlpha: CGFloat = 0.30,
-        font: ThemeFont = .mono
-    ) {
-        self.pillBgHex = pillBgHex
-        self.accentHex = accentHex
-        self.textHex = textHex
-        self.missHex = missHex
-        self.pillBgAlpha = pillBgAlpha
-        self.font = font
+/// Validate a raw `[overlay].theme` / `overlay --theme ''` value against sill's
+/// `canonicalThemeNames`, returning the canonical name or `nil` for an
+/// unknown name so the caller can clamp to `system` + log (perch's
+/// loud-typo-rejection discipline — sill's `paletteFor` is silent and
+/// would mask a typo as `terminal`). `random` resolves HERE to a
+/// concrete name (excluding `system` / `random`) so the chosen theme is
+/// stable for the session; `system` and the built-ins pass through.
+public func perchCanonicalThemeName(_ raw: String) -> String? {
+    let t = raw.trimmingCharacters(in: .whitespaces).lowercased()
+    if t.isEmpty { return nil }
+    if t == "random" {
+        let pool = canonicalThemeNames.filter { $0 != "random" && $0 != "system" }
+        return pool.randomElement() ?? "terminal"
     }
+    // Membership + normalization delegate to sill's shared mechanism
+    // (`random` was intercepted above, so its passthrough is unreachable).
+    return canonical(t)
 }
 
-/// Font family for hint labels. The adapter maps these to AppKit
-/// fonts at draw time (`NSFont.monospacedSystemFont` /
-/// `NSFont.systemFont` with `roundedFontDescriptor` etc.).
-public enum ThemeFont: Sendable, Equatable {
-    case mono
-    case rounded
-    case system
-}
+/// "Did you mean" hint for an unknown theme name — sill's `suggest(_:)`
+/// surfaced through PerchCore so PerchApp (which doesn't link Palette)
+/// can enrich its loud CLI reject. `nil` when nothing is close enough.
+public func perchThemeNameSuggestion(_ raw: String) -> String? { suggest(raw) }
+
+// MARK: - Modifier badge
 
 /// What the modifier-badge corner annotation shows when a modifier
 /// is held during hint mode.
@@ -196,62 +166,6 @@ public enum PillShape: String, Sendable, CaseIterable {
     }
 }
 
-extension Theme {
-
-    /// Catalog of built-in palettes keyed by theme case. `.system`
-    /// and `.random` aren't in the dict — they have special handling
-    /// in `palette()`. Centralising the table (vs the old switch)
-    /// makes new themes a one-entry diff and enables a future
-    /// `[overlay.theme.<name>]` user-defined palette to write into
-    /// the same shape.
-    public static let builtinPalettes: [Theme: ThemePalette] = [
-        // Dark / mono.
-        .terminal:   ThemePalette(pillBgHex: 0x0E1117, accentHex: 0x9ECE6A, textHex: 0xE6EDF3, font: .mono),
-        .nord:       ThemePalette(pillBgHex: 0x2E3440, accentHex: 0x88C0D0, textHex: 0xECEFF4, font: .mono),
-        .dracula:    ThemePalette(pillBgHex: 0x282A36, accentHex: 0xBD93F9, textHex: 0xF8F8F2, font: .mono),
-        .gruvbox:    ThemePalette(pillBgHex: 0x282828, accentHex: 0xFE8019, textHex: 0xEBDBB2, font: .mono),
-        .catppuccin: ThemePalette(pillBgHex: 0x1E1E2E, accentHex: 0xCBA6F7, textHex: 0xCDD6F4, font: .mono),
-        .rosepine:   ThemePalette(pillBgHex: 0x191724, accentHex: 0xC4A7E7, textHex: 0xE0DEF4, font: .mono),
-        .everforest: ThemePalette(pillBgHex: 0x2D353B, accentHex: 0xA7C080, textHex: 0xD3C6AA, font: .mono),
-        .solarized:  ThemePalette(pillBgHex: 0x002B36, accentHex: 0x268BD2, textHex: 0x93A1A1, font: .mono),
-        .onedark:    ThemePalette(pillBgHex: 0x282C34, accentHex: 0x61AFEF, textHex: 0xABB2BF, font: .mono),
-        .monokai:    ThemePalette(pillBgHex: 0x272822, accentHex: 0xA6E22E, textHex: 0xF8F8F2, font: .mono),
-        .hacker:     ThemePalette(pillBgHex: 0x000000, accentHex: 0x00FF41, textHex: 0xCFFFCF, font: .mono),
-
-        // Neon — vivid electric on hue-tinted near-black; custom miss color.
-        .neon:       ThemePalette(pillBgHex: 0x0A0E27, accentHex: 0x00E5FF, textHex: 0xE0F7FA, missHex: 0xFF00AA, font: .mono),
-        .cyber:      ThemePalette(pillBgHex: 0x001A1F, accentHex: 0x00FFCC, textHex: 0xCCFFF7, missHex: 0xFF1493, font: .mono),
-        .vapor:      ThemePalette(pillBgHex: 0x1A0E2E, accentHex: 0xFF6EC7, textHex: 0xF7D7FF, missHex: 0xFFD700, font: .mono),
-
-        // Light — text flips dark because bg is light.
-        .cute:       ThemePalette(pillBgHex: 0xFFE4F0, accentHex: 0xFF85B3, textHex: 0x4A1F38, missHex: 0xD63384, pillBgAlpha: 0.85, font: .rounded),
-        .kawaii:     ThemePalette(pillBgHex: 0xF3E5F5, accentHex: 0x9B6BFF, textHex: 0x311B47, missHex: 0xFF5C8A, pillBgAlpha: 0.85, font: .rounded),
-        .paper:      ThemePalette(pillBgHex: 0xFAFAFA, accentHex: 0x3366FF, textHex: 0x1A1A1A, missHex: 0xDC2626, pillBgAlpha: 0.90, font: .system),
-
-        // Monochrome.
-        .monoLight:  ThemePalette(pillBgHex: 0xFFFFFF, accentHex: 0x000000, textHex: 0x000000, missHex: 0xCC0000, pillBgAlpha: 0.92, font: .mono),
-        .monoDark:   ThemePalette(pillBgHex: 0x000000, accentHex: 0xFFFFFF, textHex: 0xFFFFFF, missHex: 0xFF3344, pillBgAlpha: 0.92, font: .mono),
-        .monotone:   ThemePalette(pillBgHex: 0x2A2A2A, accentHex: 0xB0B0B0, textHex: 0xE6E6E6, missHex: 0xE07070, pillBgAlpha: 0.55, font: .system),
-    ]
-
-    /// Sentinel palette for `.system` — `accentHex == 0` tells the
-    /// Adapter to substitute `NSColor.controlAccentColor` so the
-    /// daemon picks up the user's live macOS accent + light/dark.
-    public static let systemPalette = ThemePalette(
-        pillBgHex: 0x000000, accentHex: 0,
-        textHex: 0xFFFFFF, missHex: 0xEF4444,
-        pillBgAlpha: 0.30, font: .system)
-
-    /// Resolve this theme into a backend-neutral palette. `.system`
-    /// returns the sentinel `systemPalette`; `.random` resolves to a
-    /// concrete case first; everything else is a dict lookup.
-    public func palette() -> ThemePalette {
-        let resolved = self.resolvingRandom()
-        if resolved == .system { return Theme.systemPalette }
-        return Theme.builtinPalettes[resolved] ?? Theme.systemPalette
-    }
-}
-
 // MARK: - Effects
 
 /// What perch does to the resolving (winning) pill on hint match.
@@ -267,7 +181,7 @@ extension Theme {
 /// of that window.
 public enum MatchEffect: String, Sendable, CaseIterable {
     /// Default — pill vanishes the instant the hint resolves.
-    case none
+    case off
     /// Pill fades to alpha 0 over 120ms.
     case fade
     /// Pill scales 1.0 → ~1.4 and fades simultaneously over 140ms.
@@ -299,12 +213,12 @@ public enum MatchEffect: String, Sendable, CaseIterable {
         return MatchEffect(rawValue: t)
     }
 
-    /// Resolve `.random` to a concrete kind. Excludes `.none` (so
+    /// Resolve `.random` to a concrete kind. Excludes `.off` (so
     /// random never collapses to no animation) and `.random` itself.
     /// Other cases pass through unchanged.
     public func resolvingRandom() -> MatchEffect {
         guard self == .random else { return self }
-        let pool = MatchEffect.allCases.filter { $0 != .random && $0 != .none }
+        let pool = MatchEffect.allCases.filter { $0 != .random && $0 != .off }
         return pool.randomElement() ?? .fade
     }
 }
@@ -315,7 +229,7 @@ public enum MatchEffect: String, Sendable, CaseIterable {
 /// motion on top so the user FEELS the miss (motion is faster to
 /// process than color).
 public enum UnmatchEffect: String, Sendable, CaseIterable {
-    case none
+    case off
     /// Pills shake horizontally ±4pt over 200ms (3 oscillations).
     case shake
     /// Pills fade out during the 200ms window.
@@ -345,7 +259,7 @@ public enum UnmatchEffect: String, Sendable, CaseIterable {
 
     public func resolvingRandom() -> UnmatchEffect {
         guard self == .random else { return self }
-        let pool = UnmatchEffect.allCases.filter { $0 != .random && $0 != .none }
+        let pool = UnmatchEffect.allCases.filter { $0 != .random && $0 != .off }
         return pool.randomElement() ?? .shake
     }
 }
@@ -362,7 +276,7 @@ public enum UnmatchEffect: String, Sendable, CaseIterable {
 /// `duration + perPillDelay * pillCount`.
 public enum AppearEffect: String, Sendable, CaseIterable {
     /// No appear animation — pills paint at full size, no delay.
-    case none
+    case off
     /// 150ms scale-in 0.85 → 1.0 ease-out cubic — the historical
     /// perch default. Stays as the new default because it's the
     /// subtle option that doesn't shock the user on every activate.
@@ -387,17 +301,20 @@ public enum AppearEffect: String, Sendable, CaseIterable {
     public func resolvingRandom() -> AppearEffect {
         guard self == .random else { return self }
         let pool = AppearEffect.allCases.filter {
-            $0 != .random && $0 != .none
+            $0 != .random && $0 != .off
         }
         return pool.randomElement() ?? .pop
     }
 }
 
-/// Neon border preset for the pill perimeter — ports facet's
-/// `[border]` vocabulary onto perch's pill geometry. Layered on
-/// top of the theme palette; the theme picks pill body colors,
-/// this picks the border's identity. Off by default — every pill
-/// keeps the existing 1pt accent-tinted hairline.
+/// Neon border preset for the pill perimeter. The case names map
+/// 1:1 onto sill `Effects`' shared `EffectSpec` catalog — the macOS
+/// adapter resolves each via `borderEffectFor(rawValue)` and draws
+/// it with sill's pure `resolveBorder`, so perch and facet share ONE
+/// border vocabulary (perch's own hue table lived here until sill
+/// 1.10). Layered on top of the theme palette; the theme picks pill
+/// body colors, this picks the border's identity. Off by default —
+/// every pill keeps the existing 1pt accent-tinted hairline.
 public enum BorderEffect: String, Sendable, CaseIterable {
     case off
     case neon                   // electric cyan on blue base
@@ -419,44 +336,19 @@ public enum BorderEffect: String, Sendable, CaseIterable {
         let pool = BorderEffect.allCases.filter { $0 != .random && $0 != .off }
         return pool.randomElement() ?? .neon
     }
-
-    /// Base color the painter strokes the border with at hue
-    /// offset 0. Returns nil for `.off` (caller falls back to the
-    /// accent palette). Hues are picked to match facet's neon
-    /// family — same intent: "this looks like a neon tube".
-    public var baseHex: UInt32? {
-        switch self.resolvingRandom() {
-        case .off, .random:    return nil
-        case .neon:            return 0x00E5FF
-        case .cyber:           return 0x00FFCC
-        case .vapor:           return 0xFF6EC7
-        case .kawaii:          return 0xFFB6E1
-        case .rainbow:         return 0xFFFFFF   // hue cycles, sat fixed
-        }
-    }
 }
 
-/// Overall magnitude scaler for `match` / `unmatch` effects.
-/// Ports wand's `intensity` vocabulary verbatim. Multiplies the
-/// effect's spatial dimension (explode scale, shake amplitude) but
-/// not its duration — the latency budget is fixed.
-public enum EffectIntensity: String, Sendable, CaseIterable {
-    case subtle  // 0.6× — calm
-    case normal  // 1.0× — the calibrated baseline
-    case bold    // 1.6× — more attention-grabbing
-    case wild    // 2.5× — over-the-top
+/// Overall magnitude scaler for `match` / `unmatch` effects — sill
+/// Palette's shared knob (subtle 0.6× / normal 1.0× / bold 1.6× /
+/// wild 2.5×, identical `parse`). The typealias keeps every PerchCore
+/// signature compiling without an `import Palette` in each adapter
+/// file; the `scale` shim preserves perch's CGFloat spelling of sill's
+/// `multiplier` (Double). Multiplies the effect's spatial dimension
+/// (explode scale, shake amplitude) but not its duration — the latency
+/// budget is fixed.
+public typealias EffectIntensity = Palette.EffectIntensity
 
-    public var scale: CGFloat {
-        switch self {
-        case .subtle: return 0.6
-        case .normal: return 1.0
-        case .bold:   return 1.6
-        case .wild:   return 2.5
-        }
-    }
-
-    public static func parse(_ s: String) -> EffectIntensity? {
-        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
-        return EffectIntensity(rawValue: t)
-    }
+public extension EffectIntensity {
+    /// perch's CGFloat view of sill's `multiplier`.
+    var scale: CGFloat { CGFloat(multiplier) }
 }

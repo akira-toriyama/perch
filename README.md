@@ -100,9 +100,9 @@ show-modifier-badge = "off"      # off / glyph / action — show ⌃⌥⇧⌘ on
 # Animations — see "Effects" below for the kind vocabulary.
 [overlay.effect]
 appear         = "pop"           # entrance: none / pop / cascade / fade-in / drop-in / bloom / random
-match          = "none"          # on resolve (winning pill only)
-unmatch        = "none"          # on missed key (layered over red flash)
-narrow         = "none"          # on prefix-filtered pills (the ones leaving)
+match          = "off"           # on resolve (winning pill only)
+unmatch        = "off"           # on missed key (layered over red flash)
+narrow         = "off"          # on prefix-filtered pills (the ones leaving)
 intensity      = "normal"        # subtle / normal / bold / wild
 duration-scale = 1.0             # 0.1..5.0 — global tempo multiplier
 
@@ -111,20 +111,22 @@ duration-scale = 1.0             # 0.1..5.0 — global tempo multiplier
 effect        = "off"            # off / neon / cyber / vapor / kawaii / rainbow / random
 glow          = true             # NSShadow bloom
 width         = 1.5
-cycle-seconds = 3.0              # hue rotation period
+color-cycle-ms = 3000            # hue rotation period (integer ms)
 
 # Audio feedback. Each value: system-sound name ("Tink" / "Pop" / ...)
-# OR a file path ("~/foo.mp3" / "/path/click.wav"). Empty / "none" silences.
+# OR a file path ("~/foo.mp3" / "/path/click.wav"). Empty ("") silences.
 [overlay.sound]
 match    = ""                    # plays on resolve
 unmatch  = ""                    # plays on miss
 activate = ""                    # plays on hint mode entry
 volume   = 0.5                   # 0..1
 
+[exclude]
+apps = []                        # bundle-id globs perch ignores (family shape)
+
 [behavior]
 auto-click-on-unique = true      # fire as soon as one candidate remains
 roles = ["Button", "MenuItem", "Link", "Tab", ...]
-exclude-apps = []                # bundle IDs perch ignores
 
 # Per-app overrides — `roles`, `min-size`, `auto-click-on-unique`,
 # AND any of the effect kinds (`match-effect`, `appear-effect`,
@@ -133,21 +135,25 @@ exclude-apps = []                # bundle IDs perch ignores
 min-size = 20
 
 [behavior."com.figma.Desktop"]
-match-effect = "none"            # silence flashy effects inside Figma
+match-effect = "off"            # silence flashy effects inside Figma
 ```
 
 ### Themes
 
-`[overlay].theme` picks pill background, accent, text, miss-flash color,
-and font family in one knob. Ports facet's vocabulary:
+`[overlay].theme` picks pill background, accent, text, and font family
+in one knob. The catalog is **shared with facet** (the [`sill`](https://github.com/akira-toriyama/sill)
+theming library) — identical background / accent / text / font, so a
+theme name carried over from a facet config paints the same. perch
+layers its own pill translucency on top (light themes ride a higher
+opacity so the pale fill stays legible under the frost).
 
-- **Dark / mono**: `terminal`, `nord`, `dracula`, `gruvbox`, `catppuccin`,
-  `rosepine`, `everforest`, `solarized`, `onedark`, `monokai`, `hacker`
-- **Neon**: `neon`, `cyber`, `vapor`
-- **Light**: `cute`, `kawaii`, `paper`
-- **Monochrome**: `mono-light`, `mono-dark`, `monotone`
-- **Adaptive**: `system` (default — follows macOS accent + light/dark)
-- **Special**: `random` (picks a built-in per `--reload`)
+- **Favorites**: `terminal` (classic green-on-black), `chomp` (arcade
+  Pac-Man), `rainbow` (loud full-spectrum)
+- **Reference**: `cobalt2`, `shades-of-purple`, `tokyo-hack`
+- **Popular dark**: `github-dark`, `dracula`, `catppuccin-mocha`, `gruvbox`
+- **Light**: `github-light`, `catppuccin-latte`
+- **Adaptive**: `system` (default — follows the macOS accent; the pill itself stays a dark frosted chip)
+- **Special**: `random` (picks a built-in per `daemon --reload`)
 
 Define your own under `[overlay.themes.<name>]`:
 
@@ -199,14 +205,14 @@ activate = "~/Music/click.mp3"   # your own audio (mp3/m4a/wav/aiff)
 volume   = 0.5
 ```
 
-Reload after edits: `perch --reload` (or just save — perch
+Reload after edits: `perch daemon --reload` (or just save — perch
 watches the file for changes when running as a daemon).
 
 The snippet above covers the most-edited knobs. The full reference
 — including `[behavior].min-size`, `[behavior.web].roles` (web-context
 role override), `[search.synonyms]` (fuzzy-match expansion), `[grid]`
 density / depth / nest-min-size, `[chord]` leader + timeout, and
-`[overlay].show-shortcuts` — lives in [config.toml](config.toml).
+`[overlay].shortcut-badge` — lives in [config.toml](config.toml).
 Every knob has a heredoc explaining what it does + the clamp range.
 
 ## CLI
@@ -214,39 +220,65 @@ Every knob has a heredoc explaining what it does + the clamp range.
 | Flag | Mode | Purpose |
 |---|---|---|
 | *(none)* | server | run the daemon |
-| `--validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
-| `--doctor` | standalone | health check (AX, config, daemon, hotkey) |
-| `--activate` | client | show hint overlay now (CLI alternative to the hotkey) |
-| `--scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
-| `--search` | client | enter search mode (type text, `1-9` picks a match) |
-| `--regional` | client | enter regional mode — label large containers (article / pane / image) instead of every clickable leaf |
-| `--menu` | client | enter menu-search mode — fuzzy-match every menu bar item (deep / hidden commands incl.); pick with `1-9` |
-| `--windows` | client | enter cross-app window switcher — fuzzy-match every window across every running app; `1-9` raises the window and activates its owning app |
-| `--emoji` | client | enter emoji picker — fuzzy-match a curated emoji table by name; `1-9` types the glyph at the caret (Unicode injection — no pasteboard write) |
-| `--grid` | client | enter coordinate grid — divide the screen into labeled cells, type a label to warp the cursor + left-click via synthetic `CGEvent` (AX-bypass fallback for Figma canvas / Photoshop / custom-drawn UI) |
-| `--rgrid` | client | enter recursive grid — each label drills into the chosen cell up to `[grid].max-depth` levels (default 3, ≈ pixel precision on 4K). `space` clicks at current cell center; `Backspace` pops one level |
-| `--nudge` | client | enter arrow-nudge cursor mode — arrows move cursor 1/10/100/edge px (modifier-stepped), `space` clicks + exits. The last-mile precision after `--grid` or `--rgrid` |
-| `--drag` | client | enter keyboard drag — nudge to A, press `d` to grab (mouseDown), nudge to B, press `d` again to release (mouseUp). For drag-and-drop, splitter resize, reorder, etc. |
-| `--vision` | client | enter Vision-OCR hint mode — Apple Vision text recognition on the main display, every visible word becomes a hint. Requires the Screen Recording grant. Use when AX is blind AND grid is too coarse (Figma layer panel labels, web canvas text). |
-| `--cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge / drag / vision) |
-| `--reload` | client | tell running daemon to re-read config (clears any `--theme=` override) |
-| `--quit` | client | terminate running daemon |
-| `--status` | client | dump active hotkey + last activation |
-| `--theme=<name>` | client | live theme override (built-in or `[overlay.themes.<name>]` custom) — persists until `--reload` or `--theme=` clears it. Combine with `--activate` to apply immediately: `perch --theme=neon --activate` |
-| `--dump-ax` | standalone | print every AX element perch would label in the frontmost app — for bug reports |
-| `--dump-ax-tree` | standalone | print the raw AX tree of the focused window (depth-first, pre-filter) — for diagnosing web/Electron blind spots |
-| `--dump-regions` | standalone | same shape as `--dump-ax` but for `--regional` containers |
+| `config --validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
+| `config --doctor` | standalone | health check (AX, config, daemon, hotkey) |
+| `config --emit-schema` | standalone | print the config.toml JSON Schema (Draft-07) to stdout |
+| `overlay --activate` | client | show hint overlay now (CLI alternative to the hotkey) |
+| `overlay --scroll` | client | enter scroll mode (`j/k/d/u/gg/G`, `esc` to exit) |
+| `overlay --search` | client | enter search mode (type text, `1-9` picks a match) |
+| `overlay --regional` | client | enter regional mode — label large containers (article / pane / image) instead of every clickable leaf |
+| `overlay --menu` | client | enter menu-search mode — fuzzy-match every menu bar item (deep / hidden commands incl.); pick with `1-9` |
+| `overlay --windows` | client | enter cross-app window switcher — fuzzy-match every window across every running app; `1-9` raises the window and activates its owning app |
+| `overlay --emoji` | client | enter emoji picker — fuzzy-match a curated emoji table by name; `1-9` types the glyph at the caret (Unicode injection — no pasteboard write) |
+| `overlay --grid` | client | enter coordinate grid — divide the screen into labeled cells, type a label to warp the cursor + left-click via synthetic `CGEvent` (AX-bypass fallback for Figma canvas / Photoshop / custom-drawn UI) |
+| `overlay --rgrid` | client | enter recursive grid — each label drills into the chosen cell up to `[grid].max-depth` levels (default 3, ≈ pixel precision on 4K). `space` clicks at current cell center; `Backspace` pops one level |
+| `overlay --nudge` | client | enter arrow-nudge cursor mode — arrows move cursor 1/10/100/edge px (modifier-stepped), `space` clicks + exits. The last-mile precision after `overlay --grid` or `overlay --rgrid` |
+| `overlay --drag` | client | enter keyboard drag — nudge to A, press `d` to grab (mouseDown), nudge to B, press `d` again to release (mouseUp). For drag-and-drop, splitter resize, reorder, etc. |
+| `overlay --vision` | client | enter Vision-OCR hint mode — Apple Vision text recognition on the main display, every visible word becomes a hint. Requires the Screen Recording grant. Use when AX is blind AND grid is too coarse (Figma layer panel labels, web canvas text). |
+| `overlay --cancel` | client | dismiss whichever mode is up (hint / scroll / search / regional / menu / windows / emoji / grid / rgrid / nudge / drag / vision) |
+| `daemon --reload` | client | tell running daemon to re-read config (clears any `overlay --theme` override) |
+| `daemon --quit` | client | terminate running daemon |
+| `daemon --show` | client | dump active hotkey + last activation |
+| `overlay --theme <name>` | client | live theme override (built-in or `[overlay.themes.<name>]` custom) — persists until `daemon --reload` or `overlay --theme ''` clears it. Combine with `overlay --activate` to apply immediately: `perch overlay --activate --theme dracula` |
+| `ax --dump` | standalone | print every AX element perch would label in the frontmost app — for bug reports |
+| `ax --tree` | standalone | print the raw AX tree of the focused window (depth-first, pre-filter) — for diagnosing web/Electron blind spots |
+| `ax --regions` | standalone | same shape as `ax --dump` but for `overlay --regional` containers |
 | `--help` | standalone | show help |
 
-`--activate` / `--scroll` / `--cancel` let you bind a different
+`overlay --activate` / `overlay --scroll` / `overlay --cancel` let you bind a different
 trigger (Karabiner, skhd, Raycast script command) without giving
 up perch's built-in hotkey, or trigger from scripts. Inside the
 overlay, `Esc` always cancels — type a non-matching letter to
 cancel too.
 
+Each domain takes exactly one verb; combining verbs (e.g.
+`daemon --reload --quit`) or using a flag outside its domain exits 2
+with a "did you mean …?" hint — no silent fallback. Values are
+space-separated (`overlay --theme NAME`), never `--theme=NAME`. The
+tokenizer is the shared sill `CLIKit`; perch keeps its own verb
+vocabulary.
+
+### Migration (flat flags → yabai-style domains)
+
+There is **no deprecation shim** — the old flat flags exit 2. Map:
+
+| old | new |
+|---|---|
+| `perch --activate` / `--cancel` / `--scroll` / `--search` / `--regional` / `--menu` / `--windows` / `--emoji` / `--grid` / `--rgrid` / `--nudge` / `--drag` / `--vision` | `perch overlay --activate` / … (same verb, now under `overlay`) |
+| `perch --theme=NAME` / `--theme=` (clear) | `perch overlay --theme NAME` / `overlay --theme ''` |
+| `perch --reload` / `--status` / `--quit` | `perch daemon --reload` / `daemon --show` / `daemon --quit` |
+| `perch --validate` / `--doctor` / `--emit-schema` | `perch config --validate` / `config --doctor` / `config --emit-schema` |
+| `perch --dump-ax` / `--dump-ax-tree` / `--dump-regions` | `perch ax --dump` / `ax --tree` / `ax --regions` |
+
+Four flags were **renamed** (not just re-homed): `--status` → `daemon
+--show`, `--dump-ax` → `ax --dump`, `--dump-ax-tree` → `ax --tree`,
+`--dump-regions` → `ax --regions`. Everything else keeps its verb and
+only gains a domain prefix. Unchanged: bare `perch` (server mode),
+`perch --help` / `-h`, and the `PERCH_DEBUG=1` env var.
+
 ### Scroll mode
 
-`perch --scroll` (bind it to a hotkey externally for one-key
+`perch overlay --scroll` (bind it to a hotkey externally for one-key
 entry) puts perch into scroll mode and intercepts:
 
 | Key | Effect |
@@ -277,7 +309,7 @@ lands wherever the user's caret was.
 
 ### Search mode
 
-`perch --search` enters search mode for apps with many
+`perch overlay --search` enters search mode for apps with many
 clickables (Xcode, Logic, the System Settings sidebar). Type a
 substring of the element's visible title; matching elements get
 numbered pills `1` through `9` overlaid on them. Press a digit
@@ -301,7 +333,7 @@ is treated as a query character so you can still search for
 
 ### Menu-search mode
 
-`perch --menu` enters a `--search` variant whose target set is
+`perch overlay --menu` enters a `overlay --search` variant whose target set is
 **every menu bar item** in the frontmost app, recursively. Matches
 are rendered as a Spotlight-style vertical list (menu items have
 no on-screen position until macOS opens the menu, so per-item pill
@@ -315,19 +347,19 @@ through the menu:
 - System Settings sidebar items, app menus that need 3 levels of
   hover to reach — all surface in one keystroke + 1-9 pick.
 
-Action-mode modifiers behave as in `--search`: Cmd-1 copies the
+Action-mode modifiers behave as in `overlay --search`: Cmd-1 copies the
 menu path, Shift-1 opens its context menu, Alt-1 focuses without
 firing, Cmd+Shift-1 fires + re-enters menu mode for chaining.
 
 Each pill shows the AX-bound keyboard shortcut on the right
 (e.g. `1  File > Quit  ⌘Q`) when one exists — a Superkey-style
 learning loop: discover the native shortcut while picking the
-menu item with `1-9`. Set `[overlay].show-shortcuts = false`
+menu item with `1-9`. Set `[overlay].shortcut-badge = false`
 in `config.toml` to hide.
 
 ### Grid mode (AX-bypass)
 
-`perch --grid` is the explicit fallback for UIs that hint mode
+`perch overlay --grid` is the explicit fallback for UIs that hint mode
 **can't see**: Figma canvas, Photoshop, Logic, web `<canvas>`,
 custom-drawn views. Instead of asking the AX layer where the
 clickables are, perch divides the screen into a `[grid].cols ×
@@ -338,33 +370,33 @@ same alphabet hint mode uses.
 |---|---|
 | `<label>` | warp cursor to cell center + left click |
 | `Shift+<label>` | warp + right click |
-| `Cmd+<label>` | warp only (no click) — set up the cursor for `--drag` |
+| `Cmd+<label>` | warp only (no click) — set up the cursor for `overlay --drag` |
 | `Cmd+Shift+<label>` | left click + re-enter grid for chained operations |
 | `esc` | exit silently |
 
 Dispatch is **synthetic `CGEvent` mouse events**, not AX — the
 cursor WILL visibly jump on click. That's the accepted trade-off
 for reaching AX-invisible UI. Hint mode (`shift+space` /
-`--activate`) remains the snappy, no-cursor-jump default; reach
-for `--grid` only when hint mode can't help.
+`overlay --activate`) remains the snappy, no-cursor-jump default; reach
+for `overlay --grid` only when hint mode can't help.
 
-For pixel-precise targeting, **recursive grid** (`perch --rgrid`)
+For pixel-precise targeting, **recursive grid** (`perch overlay --rgrid`)
 drills into the picked cell instead of clicking immediately, up
 to `[grid].max-depth` levels (default 3). On a 4K display three
 drills lands the cursor inside a ~5px region.
 
-| Key | Effect (in `--rgrid`) |
+| Key | Effect (in `overlay --rgrid`) |
 |---|---|
 | `<label>` | drill into the chosen cell (until depth budget runs out, then click) |
 | `space` / `Enter` | "good enough, click here" — terminal click at the current cell center |
 | `Backspace` | pop one level (return to parent grid) |
-| `Shift` / `Cmd` / `Cmd+Shift` modifiers | same action mapping as `--grid` — applied at click time |
+| `Shift` / `Cmd` / `Cmd+Shift` modifiers | same action mapping as `overlay --grid` — applied at click time |
 | `esc` | exit silently |
 
 ### Arrow-nudge cursor (last-mile precision)
 
-`perch --nudge` is the cursor-movement complement to `--grid` /
-`--rgrid`. After grid mode lands the cursor close to the target,
+`perch overlay --nudge` is the cursor-movement complement to `overlay --grid` /
+`overlay --rgrid`. After grid mode lands the cursor close to the target,
 nudge mode walks it the rest of the way with arrow keys.
 
 | Key | Effect |
@@ -380,14 +412,14 @@ nudge mode walks it the rest of the way with arrow keys.
 | any other key | exit + let through |
 
 There's **no overlay** — the cursor is the visual feedback. If
-you're not sure you're in nudge mode, `perch --status` confirms.
+you're not sure you're in nudge mode, `perch daemon --show` confirms.
 
 Ctrl is intentionally NOT bound to a step size; Ctrl+arrow is
 reserved for macOS Mission Control / Spaces shortcuts.
 
 ### Drag mode (keyboard-driven drag-and-drop)
 
-`perch --drag` performs UI drag operations that aren't reachable
+`perch overlay --drag` performs UI drag operations that aren't reachable
 through hint mode — Finder column resize, Safari tab reorder,
 drag-to-select-text, NSSplitView drag, drag-to-reorder lists.
 
@@ -402,14 +434,14 @@ drag-to-select-text, NSSplitView drag, drag-to-reorder lists.
 | `d` / `space` / `Enter` | **release** — fire `mouseUp` + exit |
 | `Esc` | **safety release** — fires `mouseUp` first, then exits (don't strand a `mouseDown`) |
 
-Pre-position the cursor with `--grid` / `--rgrid` for a coarse
-jump, then `--drag` to perform the actual operation; nudging
+Pre-position the cursor with `overlay --grid` / `overlay --rgrid` for a coarse
+jump, then `overlay --drag` to perform the actual operation; nudging
 inside drag mode tunes the start / end points.
 
 ### Vision-OCR hint mode
 
-`perch --vision` is the **last AX-bypass layer**, complementing
-`--grid`. Where grid picks coordinates by labelled cells, vision
+`perch overlay --vision` is the **last AX-bypass layer**, complementing
+`overlay --grid`. Where grid picks coordinates by labelled cells, vision
 picks by **what the text says**: Apple Vision recognises every
 visible string on the main display, perch labels each, and a
 label pick warps the cursor + clicks at the recognised centroid.
@@ -439,11 +471,11 @@ file / spoken-text source data isn't available.
 
 ### Window switcher
 
-`perch --windows` enters a `--search` variant whose target set is
+`perch overlay --windows` enters a `overlay --search` variant whose target set is
 **every window across every running app**. Labels read
 `"<App> — <Window Title>"` (`(min)` annotation for minimised
 windows); matches render as the same Spotlight-style vertical
-list as `--menu`. Press a digit:
+list as `overlay --menu`. Press a digit:
 
 - `1` raises that window AND activates its owning app
   (`AXUIElementPerformAction(kAXRaiseAction)` +
@@ -454,7 +486,7 @@ list as `--menu`. Press a digit:
   (raise five windows in a row without re-pressing the flag).
 
 Where `Cmd+Tab` shows one tile per app and Mission Control needs
-visual scanning, `--windows` lets you reach any specific window
+visual scanning, `overlay --windows` lets you reach any specific window
 by name in one keystroke + digit.
 
 ### Chord-suffix action mode
@@ -494,11 +526,11 @@ through hint mode.
 
 ### Emoji picker
 
-`perch --emoji` enters a `--search` variant whose target set is
-a **curated emoji name table** (≈250 entries: faces, hands,
+`perch overlay --emoji` enters a `overlay --search` variant whose target set is
+a **curated emoji name table** (≈400 entries: faces, hands,
 hearts, animals, food, weather, common symbols). Type the
 name; matches render in the same Spotlight-style vertical
-list as `--menu`. Press a digit:
+list as `overlay --menu`. Press a digit:
 
 - `1` types that emoji at the focused field's caret. Dispatch
   uses `CGEvent.keyboardSetUnicodeString` (same approach the
@@ -516,7 +548,7 @@ File an issue to add an entry you typed and didn't find.
 
 ### Regional mode
 
-`perch --regional` labels **large containers** (article / pane /
+`perch overlay --regional` labels **large containers** (article / pane /
 image / sidebar) instead of every clickable leaf — for "select
 this article" / "copy this image" / "focus that pane" tasks.
 
@@ -538,7 +570,8 @@ filtered to frame >= `[regional].min-width` × `min-height` (default
 to >= 0). `kAXPressAction` is **not** required (regional picks are
 typically copy / focus).
 
-Exit codes: 0 = ok · 1 = `--doctor` red · 2 = bad flag /
+Exit codes: 0 = ok · 1 = diagnostic check failed (`config --doctor`
+red, or `ax --*` with no AX grant) · 2 = usage / bad flag /
 invalid config · 3 = client cmd with no running daemon.
 
 ### Verbose logging
@@ -563,10 +596,10 @@ swift test                       # tests — needs Xcode
 ./run.sh --no-tail               # same, skip the tail
 ./run.sh --release               # release → Perch.app (pre-publish verify)
 ./stop.sh                        # kill every running instance
-perch --doctor                   # health check (accessibility, screens, …)
-perch --dump-ax                  # list AX elements perch would label
-perch --dump-ax-tree             # raw AX tree, pre-filter (web triage)
-perch --dump-regions             # list containers `--regional` would label
+perch config --doctor            # health check (accessibility, screens, …)
+perch ax --dump                  # list AX elements perch would label
+perch ax --tree                  # raw AX tree, pre-filter (web triage)
+perch ax --regions               # list containers `overlay --regional` would label
 ```
 
 Architecture: hexagonal Core / Adapter / App split (see

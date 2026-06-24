@@ -16,6 +16,19 @@
 
 import CoreGraphics
 import Foundation
+import Palette
+import Toml
+
+/// A flat TOML document: literal section-header → key → value. perch
+/// reads its config through sill's `Toml.parseFlat`, whose
+/// `Document.tables` has exactly this shape — lenient (a typo drops one
+/// line, not the daemon) and keyed by the verbatim header text so
+/// `[behavior."<bundle>"]` and `[overlay.themes.<name>]` stay literal.
+/// The four hand-rolled family parsers folded into sill's `Toml` module
+/// in atelier Phase 1.6; this alias keeps the section-parser signatures
+/// readable. Values are read via `Toml.Value`'s accessors (`asString`,
+/// `asDouble`, `asStringArray`, …).
+private typealias TOMLDoc = [String: [String: Toml.Value]]
 
 // MARK: - Sub-structs
 
@@ -52,10 +65,13 @@ public struct LabelsConfig: Sendable {
 /// behaviour flags that affect the overlay specifically).
 public struct OverlayConfig: Sendable {
 
-    /// Theme palette — picks pill bg / accent / text / font kind
-    /// in one knob. Default `.system` keeps the historical adaptive
-    /// look (`NSColor.controlAccentColor` + dark pill tint).
-    public let theme: Theme
+    /// Canonical theme name (sill `canonicalThemeNames`, validated +
+    /// `random`-resolved at parse). Picks pill bg / accent / text /
+    /// font in one knob. Default `"system"` keeps the historical
+    /// adaptive look (`NSColor.controlAccentColor` + dark pill tint).
+    /// When a `[overlay.themes.<name>]` custom palette is selected this
+    /// stays `"system"` and `customThemeName` carries the name.
+    public let theme: String
 
     /// Accent override. When set to anything other than `"system"`,
     /// wins over the theme's accent — lets users mix a body theme
@@ -77,13 +93,15 @@ public struct OverlayConfig: Sendable {
     /// driver collapses to its instant baseline.
     public let animEnabled: Bool
 
-    /// Show AX-bound keyboard shortcut annotations on `--menu` pills.
+    /// Show AX-bound keyboard shortcut annotations on `overlay --menu` pills.
     public let showShortcuts: Bool
 
-    /// User-defined palettes from `[overlay.themes.<name>]` sections.
-    /// Keyed by the section name (e.g. `"my-theme"`). When
-    /// `[overlay].theme = "<name>"` matches a key here, the custom
-    /// palette wins over the built-in catalog.
+    /// User-defined palettes from `[overlay.themes.<name>]` sections,
+    /// each a full sill `ThemeSpec` (pill-bg → `bg`, accent, text,
+    /// miss → `error`, pill-bg-alpha → `bgAlpha`, font). Keyed by the
+    /// section name (e.g. `"my-theme"`). When `[overlay].theme =
+    /// "<name>"` matches a key here, the custom palette wins over the
+    /// built-in catalog.
     ///
     /// Example:
     /// ```toml
@@ -96,7 +114,7 @@ public struct OverlayConfig: Sendable {
     /// [overlay]
     /// theme = "my-theme"
     /// ```
-    public let customPalettes: [String: ThemePalette]
+    public let customPalettes: [String: ThemeSpec]
 
     /// When `[overlay].theme` matches a `[overlay.themes.<name>]`
     /// section, this is the name; otherwise nil. The resolver
@@ -116,11 +134,11 @@ public struct OverlayConfig: Sendable {
     public let modifierBadge: ModifierBadgeStyle
 
     public init(
-        theme: Theme, accent: String, pillShape: PillShape,
+        theme: String, accent: String, pillShape: PillShape,
         fontSize: Double, blurEnabled: Bool, animEnabled: Bool,
         showShortcuts: Bool, peekKey: String,
         modifierBadge: ModifierBadgeStyle,
-        customPalettes: [String: ThemePalette] = [:],
+        customPalettes: [String: ThemeSpec] = [:],
         customThemeName: String? = nil
     ) {
         self.theme = theme
@@ -196,7 +214,7 @@ public struct BorderConfig: Sendable {
 
 /// `[overlay.sound]` — audio feedback. `match` / `unmatch` /
 /// `activate` accept either a macOS system-sound name OR a file
-/// path (tilde-expanded). Empty / `"none"` silences.
+/// path (tilde-expanded). Empty (`""`) silences.
 public struct SoundConfig: Sendable {
     public let match: String
     public let unmatch: String
@@ -269,7 +287,7 @@ public struct BehaviorConfig: Sendable {
 }
 
 /// Effect-channel resolvers — per-app `[behavior."<bundle>"]` keys
-/// (e.g. `match-effect = "none"`) win over the global
+/// (e.g. `match-effect = "off"`) win over the global
 /// `[overlay.effect]` defaults. Stored on `BehaviorConfig` so the
 /// adapter only carries one config snapshot.
 extension BehaviorConfig {
@@ -321,7 +339,7 @@ public struct RegionalConfig: Sendable {
 public struct GridConfig: Sendable {
     public let cols: Int
     public let rows: Int
-    /// `--rgrid` cells per axis at each drill level. Smaller than
+    /// `overlay --rgrid` cells per axis at each drill level. Smaller than
     /// `cols`/`rows` so the recursive case picks with single-letter
     /// labels per level.
     public let recursiveCols: Int
@@ -443,11 +461,11 @@ public struct PerchConfig: Sendable {
 
     /// Return a copy of this config with `overlay.theme` (and
     /// optionally `overlay.customThemeName`) replaced. Used by the
-    /// `--theme=<name>` session override so the Controller doesn't
+    /// `overlay --theme <name>` session override so the Controller doesn't
     /// have to hand-construct a full PerchConfig with one field
     /// changed. Every other field carries over unchanged.
     public func withTheme(
-        _ theme: Theme, customName: String?
+        _ theme: String, customName: String?
     ) -> PerchConfig {
         let newOverlay = OverlayConfig(
             theme: theme,
@@ -493,13 +511,13 @@ public struct PerchConfig: Sendable {
         labels: LabelsConfig(
             alphabet: defaultAlphabet, prioritiseCenter: true),
         overlay: OverlayConfig(
-            theme: .system, accent: "system", pillShape: .pill,
+            theme: "system", accent: "system", pillShape: .pill,
             fontSize: 15, blurEnabled: true, animEnabled: true,
             showShortcuts: true, peekKey: "space",
             modifierBadge: .off),
         effect: EffectConfig(
-            appear: .pop, match: .none, unmatch: .none,
-            narrow: .none, intensity: .normal, durationScale: 1.0),
+            appear: .pop, match: .off, unmatch: .off,
+            narrow: .off, intensity: .normal, durationScale: 1.0),
         border: BorderConfig(
             effect: .off, glow: true, width: 1.5, cycleSeconds: 3.0),
         sound: SoundConfig(
@@ -529,82 +547,108 @@ public struct PerchConfig: Sendable {
 
     /// Parse a config source string. Public so tests can drive the
     /// clamping rules directly without touching disk.
+    ///
+    /// The UNIFORM scalar sections (`[labels]`/`[overlay]` scalars/
+    /// `[overlay.effect]`/`[overlay.border]`/`[overlay.sound]`/`[exclude]`/
+    /// `[regional]`/`[grid]` + the scalar `[hotkey]`/`[chord]` keys) are
+    /// driven by the SINGLE declarative `configSpec` (which ALSO emits the
+    /// JSON Schema — see `PerchConfig+Spec.swift`), decoded into a mutable
+    /// `Staged` seeded with the built-in defaults. The NON-uniform bits stay
+    /// bespoke below (custom palettes, per-app/bundle-id overrides, the theme
+    /// custom-palette interplay, the deprecation log, synonyms, and the
+    /// grammar-parsed `hotkey.active` / `labels.alphabet` / `chord.leader`).
+    /// The spec drives both decode and schema, so the two can never drift.
     public static func parse(_ source: String) -> PerchConfig {
-        let doc = TOML.parse(source)
+        // sill's flat skin — keyed by literal header text, lenient.
+        // perch's old single-line-only parser dropped the multi-line
+        // `[behavior].roles` array (silently falling back to
+        // `defaultRoles`); `Toml.parseFlat` accumulates it correctly.
+        let doc = Toml.parseFlat(source).tables
+
+        // Drive the uniform scalar sections off the one declarative spec.
+        var s = Staged()
+        configSpec.decode(doc, into: &s)
 
         return PerchConfig(
-            hotkey: parseHotkey(doc),
-            labels: parseLabels(doc),
-            overlay: parseOverlay(doc),
-            effect: parseEffect(doc),
-            border: parseBorder(doc),
-            sound: parseSound(doc),
-            behavior: parseBehavior(doc),
-            regional: parseRegional(doc),
-            grid: parseGrid(doc),
-            chord: parseChord(doc),
+            hotkey: assembleHotkey(doc, s),
+            labels: assembleLabels(doc, s),
+            overlay: assembleOverlay(doc, s),
+            effect: assembleEffect(s),
+            border: BorderConfig(
+                effect: s.borderEffect, glow: s.borderGlow,
+                width: s.borderWidth, cycleSeconds: s.borderCycleSeconds),
+            sound: SoundConfig(
+                match: s.soundMatch, unmatch: s.soundUnmatch,
+                activate: s.soundActivate, volume: s.volume),
+            behavior: assembleBehavior(doc, s),
+            regional: RegionalConfig(
+                minWidth: s.regMinWidth, minHeight: s.regMinHeight),
+            grid: GridConfig(
+                cols: s.gridCols, rows: s.gridRows,
+                recursiveCols: s.recursiveCols, recursiveRows: s.recursiveRows,
+                nestMinSize: s.nestMinSize, maxDepth: s.maxDepth),
+            chord: assembleChord(doc, s),
             search: parseSearch(doc))
     }
 
-    // MARK: - Section parsers
+    // MARK: - Section assembly (spec-driven `Staged` + bespoke fields)
 
-    private static func parseHotkey(_ doc: TOML.Document) -> HotkeyConfig {
+    /// `[hotkey]` — `cancel` came from the spec; `active` is bespoke
+    /// (HotkeyCombo modifier+key grammar — not a uniform scalar).
+    private static func assembleHotkey(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> HotkeyConfig {
         let hk = doc["hotkey"]?["active"]?.asString
             .flatMap(HotkeyCombo.parse) ?? defaultHotkey
-        let cancel = (doc["hotkey"]?["cancel"]?.asString)
-            .flatMap { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-            .flatMap { $0.isEmpty ? nil : $0 }
-            ?? defaultCancelKey
-        return HotkeyConfig(active: hk, cancel: cancel)
+        return HotkeyConfig(active: hk, cancel: s.cancel)
     }
 
-    private static func parseLabels(_ doc: TOML.Document) -> LabelsConfig {
+    /// `[labels]` — `prioritise-center` came from the spec; `alphabet`
+    /// is bespoke (`sanitiseAlphabet` de-dup/clean, not a plain scalar).
+    private static func assembleLabels(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> LabelsConfig {
         let alphabet = (doc["labels"]?["alphabet"]?.asString)
             .flatMap { sanitiseAlphabet($0) } ?? defaultAlphabet
-        let priority = doc["labels"]?["prioritise-center"]?.asBool ?? true
         return LabelsConfig(
-            alphabet: alphabet, prioritiseCenter: priority)
+            alphabet: alphabet, prioritiseCenter: s.prioritiseCenter)
     }
 
-    private static func parseOverlay(_ doc: TOML.Document) -> OverlayConfig {
-        let accent = (doc["overlay"]?["accent"]?.asString)
-            .flatMap(sanitiseAccent) ?? "system"
-
+    /// `[overlay]` — `accent`/`pill-shape`/`font-size`/`blur`/`anim`/
+    /// `shortcut-badge`/`peek-key` came from the spec; `theme` (custom-
+    /// palette interplay + `random`), `show-modifier-badge` (bool back-
+    /// compat + deprecation log), and the `[overlay.themes.<name>]`
+    /// custom palettes are bespoke.
+    private static func assembleOverlay(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> OverlayConfig {
         // [overlay.themes.<name>] user-defined palettes — same flat-
         // key shape as [behavior."<bundle>"]. Each section is a
         // (pill-bg, accent, text, miss, pill-bg-alpha, font) tuple
-        // matching ThemePalette.
+        // resolved into a sill ThemeSpec.
         let customPalettes = parseCustomPalettes(doc)
 
-        // Resolve [overlay].theme: raw string first, then check
-        // custom palettes, then the built-in enum. `.random`
-        // resolves to a concrete built-in here.
+        // Resolve [overlay].theme: raw string first, then check custom
+        // palettes, then sill's canonical name set. `random` resolves
+        // to a concrete name HERE (session-stable); an unknown name
+        // clamps silently to "system" per the TOML clamp-don't-reject
+        // rule (the loud-rejection path is the `overlay --theme` CLI override
+        // in Controller).
         let rawTheme = (doc["overlay"]?["theme"]?.asString)
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             ?? ""
-        let theme: Theme
+        let theme: String
         let customThemeName: String?
         if !rawTheme.isEmpty, customPalettes[rawTheme] != nil {
-            // Custom palette wins — store the name, leave Theme on
-            // .system so the built-in resolver can't accidentally
+            // Custom palette wins — store the name, leave theme on
+            // "system" so the built-in resolver can't accidentally
             // hide the custom palette later.
             customThemeName = rawTheme
-            theme = .system
+            theme = "system"
         } else {
             customThemeName = nil
-            theme = Theme.parse(rawTheme)?.resolvingRandom() ?? .system
+            theme = perchCanonicalThemeName(rawTheme) ?? "system"
         }
-        let shape = (doc["overlay"]?["pill-shape"]?.asString)
-            .flatMap(PillShape.parse) ?? .pill
-        let size = (doc["overlay"]?["font-size"]?.asDouble).map {
-            min(max($0, 8), 32)
-        } ?? 15
-        let blur = doc["overlay"]?["blur-enabled"]?.asBool ?? true
-        let anim = doc["overlay"]?["anim-enabled"]?.asBool ?? true
-        let showShortcuts = doc["overlay"]?["show-shortcuts"]?.asBool ?? true
-        let peekKey = (doc["overlay"]?["peek-key"]?.asString)
-            .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-            ?? "space"
         // show-modifier-badge is a string enum: "off" / "glyph" /
         // "action". The PR #92 transitional bool support ("true" →
         // .glyph) is gone — config edited after PR #96 must use the
@@ -613,8 +657,8 @@ public struct PerchConfig: Sendable {
         // who carry over old bool literals, but a raw TOML bool
         // (no quotes) now silently lands on .off + a warning.
         let badge: ModifierBadgeStyle
-        if let s = doc["overlay"]?["show-modifier-badge"]?.asString {
-            badge = ModifierBadgeStyle.parse(s) ?? .off
+        if let str = doc["overlay"]?["show-modifier-badge"]?.asString {
+            badge = ModifierBadgeStyle.parse(str) ?? .off
         } else if doc["overlay"]?["show-modifier-badge"]?.asBool != nil {
             Log.line("config: show-modifier-badge — bare bool no longer "
                      + "supported; use \"off\" / \"glyph\" / \"action\". "
@@ -624,175 +668,47 @@ public struct PerchConfig: Sendable {
             badge = .off
         }
         return OverlayConfig(
-            theme: theme, accent: accent, pillShape: shape,
-            fontSize: size, blurEnabled: blur, animEnabled: anim,
-            showShortcuts: showShortcuts, peekKey: peekKey,
+            theme: theme, accent: s.accent, pillShape: s.pillShape,
+            fontSize: s.fontSize, blurEnabled: s.blurEnabled,
+            animEnabled: s.animEnabled,
+            showShortcuts: s.showShortcuts, peekKey: s.peekKey,
             modifierBadge: badge,
             customPalettes: customPalettes,
             customThemeName: customThemeName)
     }
 
-    /// Walk every `[overlay.themes.<name>]` section and assemble a
-    /// `[name: ThemePalette]` dict. The TOML parser lands these as
-    /// flat keys (`"overlay.themes.my-theme"`), same as
-    /// `[behavior."<bundle>"]`. Unknown / malformed values fall
-    /// back to system defaults per typo-tolerance — a typo never
-    /// kills the palette.
-    private static func parseCustomPalettes(
-        _ doc: TOML.Document
-    ) -> [String: ThemePalette] {
-        var out: [String: ThemePalette] = [:]
-        // Plural `themes` (not `theme`) because `[overlay].theme` is
-        // a scalar (the selector); strict TOML 1.0 parsers reject
-        // `[overlay.themes.<name>]` since `theme` would have to be
-        // both a string AND a table parent. `themes` is a separate
-        // key path with no such conflict.
-        let prefix = "overlay.themes."
-        // Warn anyone still using the pre-PR #95 singular form so
-        // they don't silently lose their custom palette to the
-        // typo-tolerance fallthrough.
-        let deprecatedPrefix = "overlay.theme."
-        for rawKey in doc.keys
-            where rawKey.hasPrefix(deprecatedPrefix)
-            && !rawKey.hasPrefix(prefix) {
-            let name = String(rawKey.dropFirst(deprecatedPrefix.count))
-            Log.line("config: [overlay.theme.\(name)] is deprecated — "
-                     + "rename to [overlay.themes.\(name)] (plural). "
-                     + "The singular form is silently ignored.")
-        }
-        // Names reserved by built-in themes / sentinels — silently
-        // ignored if the user shadows them, since the catalog
-        // would never see the custom palette.
-        let reserved: Set<String> = Set(
-            Theme.allCases.map { $0.rawValue })
-        for (rawKey, section) in doc {
-            guard rawKey.hasPrefix(prefix) else { continue }
-            let name = String(rawKey.dropFirst(prefix.count))
-                .lowercased()
-            guard !name.isEmpty, !reserved.contains(name) else {
-                Log.line("config: skipping custom theme \"\(name)\" "
-                         + "— name shadows a built-in")
-                continue
-            }
-            let pillBg = parseHexValue(section["pill-bg"]?.asString)
-                ?? 0x000000
-            let accent = parseHexValue(section["accent"]?.asString)
-                ?? 0xFFFFFF
-            let text = parseHexValue(section["text"]?.asString)
-                ?? 0xFFFFFF
-            let miss = parseHexValue(section["miss"]?.asString)
-                ?? 0xEF4444
-            let alpha: CGFloat = {
-                guard let raw = section["pill-bg-alpha"]?.asDouble
-                else { return 0.55 }
-                return CGFloat(max(0, min(1, raw)))
-            }()
-            let font: ThemeFont = {
-                guard let raw = section["font"]?.asString
-                else { return .mono }
-                switch raw.trimmingCharacters(in: .whitespaces).lowercased() {
-                case "mono":    return .mono
-                case "rounded": return .rounded
-                case "system":  return .system
-                default:        return .mono
-                }
-            }()
-            out[name] = ThemePalette(
-                pillBgHex: pillBg, accentHex: accent,
-                textHex: text, missHex: miss,
-                pillBgAlpha: alpha, font: font)
-        }
-        return out
-    }
-
-    /// `"#rrggbb"` → `0xRRGGBB`. Trims + lowercases + validates 6
-    /// hex digits. Returns nil on malformed input so the caller can
-    /// fall back to a default.
-    private static func parseHexValue(_ s: String?) -> UInt32? {
-        guard var t = s?.trimmingCharacters(in: .whitespaces)
-            .lowercased() else { return nil }
-        if t.hasPrefix("#") { t.removeFirst() }
-        guard t.count == 6,
-              t.allSatisfy({ "0123456789abcdef".contains($0) })
-        else { return nil }
-        return UInt32(t, radix: 16)
-    }
-
-    private static func parseEffect(_ doc: TOML.Document) -> EffectConfig {
-        let eff = doc["overlay.effect"]
-        let appear = (eff?["appear"]?.asString)
-            .flatMap(AppearEffect.parse)?.resolvingRandom() ?? .pop
-        let match = (eff?["match"]?.asString)
-            .flatMap(MatchEffect.parse) ?? .none
-        let unmatch = (eff?["unmatch"]?.asString)
-            .flatMap(UnmatchEffect.parse) ?? .none
-        let narrow = (eff?["narrow"]?.asString)
-            .flatMap(MatchEffect.parse) ?? .none
+    /// `[overlay.effect]` — every field came from the spec. The only
+    /// non-decode bit is the parse-time warning when `narrow` is a
+    /// particle kind (it downgrades to `.fade` at runtime); re-derived
+    /// here from the resolved value so the user still sees it.
+    private static func assembleEffect(_ s: Staged) -> EffectConfig {
         // Particle kinds in the narrow context fall through to .fade
         // at runtime (`GhostDriver.spawn`) — warn the user once at
         // parse-time so they know the dispatch differs from what
         // they wrote, instead of debugging a missing burst later.
-        if narrow == .fireworks || narrow == .confetti {
+        if s.narrow == .fireworks || s.narrow == .confetti {
             Log.line("config: [overlay.effect].narrow = "
-                     + "\"\(narrow.rawValue)\" downgrades to "
+                     + "\"\(s.narrow.rawValue)\" downgrades to "
                      + "\"fade\" at runtime — per-pill particle "
                      + "bursts on a dense hint set would emit "
                      + "hundreds of simultaneous particles.")
         }
-        let intensity = (eff?["intensity"]?.asString)
-            .flatMap(EffectIntensity.parse) ?? .normal
-        let durScale: Double = {
-            guard let raw = eff?["duration-scale"]?.asDouble
-            else { return 1.0 }
-            return raw >= 0.1 && raw <= 5.0 ? raw : 1.0
-        }()
         return EffectConfig(
-            appear: appear, match: match, unmatch: unmatch,
-            narrow: narrow, intensity: intensity,
-            durationScale: durScale)
+            appear: s.appear, match: s.match, unmatch: s.unmatch,
+            narrow: s.narrow, intensity: s.intensity,
+            durationScale: s.durationScale)
     }
 
-    private static func parseBorder(_ doc: TOML.Document) -> BorderConfig {
-        let b = doc["overlay.border"]
-        let effect = (b?["effect"]?.asString)
-            .flatMap(BorderEffect.parse)?.resolvingRandom() ?? .off
-        let glow = b?["glow"]?.asBool ?? true
-        let width: Double = {
-            guard let raw = b?["width"]?.asDouble else { return 1.5 }
-            return raw >= 0.5 && raw <= 30 ? raw : 1.5
-        }()
-        let cycle: Double = {
-            guard let raw = b?["cycle-seconds"]?.asDouble
-            else { return 3.0 }
-            return raw >= 0 && raw <= 120 ? raw : 3.0
-        }()
-        return BorderConfig(
-            effect: effect, glow: glow, width: width,
-            cycleSeconds: cycle)
-    }
-
-    private static func parseSound(_ doc: TOML.Document) -> SoundConfig {
-        let s = doc["overlay.sound"]
-        let match = s?["match"]?.asString ?? ""
-        let unmatch = s?["unmatch"]?.asString ?? ""
-        let activate = s?["activate"]?.asString ?? ""
-        let volume: Double = {
-            guard let raw = s?["volume"]?.asDouble else { return 0.5 }
-            return max(0, min(1, raw))
-        }()
-        return SoundConfig(
-            match: match, unmatch: unmatch, activate: activate,
-            volume: volume)
-    }
-
-    private static func parseBehavior(_ doc: TOML.Document) -> BehaviorConfig {
-        let autoClick = doc["behavior"]?["auto-click-on-unique"]?.asBool ?? true
+    /// `[behavior]` — `auto-click-on-unique`/`min-size` came from the
+    /// spec, and `excludeApps` from the spec's `[exclude].apps`. The
+    /// `roles` / web-`roles` arrays (empty-entry filtering + the
+    /// web→global fallback) and the per-bundle-id `[behavior."<id>"]`
+    /// overrides are bespoke.
+    private static func assembleBehavior(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> BehaviorConfig {
         let roles = (doc["behavior"]?["roles"]?.asStringArray)
             .map { $0.filter { !$0.isEmpty } } ?? defaultRoles
-        let excludes = doc["behavior"]?["exclude-apps"]?.asStringArray ?? []
-        let minSize = (doc["behavior"]?["min-size"]?.asDouble).map {
-            max(0, $0)
-        } ?? 6
         let webRoles = (doc["behavior.web"]?["roles"]?.asStringArray)
             .map { $0.filter { !$0.isEmpty } } ?? roles
 
@@ -828,55 +744,16 @@ public struct PerchConfig: Sendable {
         }
 
         return BehaviorConfig(
-            autoClickOnUnique: autoClick, roles: roles,
-            webRoles: webRoles, excludeApps: excludes,
-            minSize: minSize, perApp: perApp)
+            autoClickOnUnique: s.autoClickOnUnique, roles: roles,
+            webRoles: webRoles, excludeApps: s.excludeApps,
+            minSize: s.minSize, perApp: perApp)
     }
 
-    private static func parseRegional(_ doc: TOML.Document) -> RegionalConfig {
-        let w = (doc["regional"]?["min-width"]?.asDouble)
-            .map { max(0, $0) } ?? 200
-        let h = (doc["regional"]?["min-height"]?.asDouble)
-            .map { max(0, $0) } ?? 100
-        return RegionalConfig(minWidth: w, minHeight: h)
-    }
-
-    private static func parseGrid(_ doc: TOML.Document) -> GridConfig {
-        let cols: Int = {
-            guard let raw = doc["grid"]?["cols"]?.asInt else { return 12 }
-            return raw >= 2 && raw <= 32 ? raw : 12
-        }()
-        let rows: Int = {
-            guard let raw = doc["grid"]?["rows"]?.asInt else { return 8 }
-            return raw >= 2 && raw <= 32 ? raw : 8
-        }()
-        let rCols: Int = {
-            guard let raw = doc["grid"]?["recursive-cols"]?.asInt
-            else { return 3 }
-            return raw >= 2 && raw <= 32 ? raw : 3
-        }()
-        let rRows: Int = {
-            guard let raw = doc["grid"]?["recursive-rows"]?.asInt
-            else { return 3 }
-            return raw >= 2 && raw <= 32 ? raw : 3
-        }()
-        let maxDepth: Int = {
-            guard let raw = doc["grid"]?["max-depth"]?.asInt
-            else { return 3 }
-            return raw >= 1 && raw <= 10 ? raw : 3
-        }()
-        let nestMin: Double = {
-            guard let raw = doc["grid"]?["nest-min-size"]?.asDouble
-            else { return 100 }
-            return raw >= 1 && raw <= 1000 ? raw : 100
-        }()
-        return GridConfig(
-            cols: cols, rows: rows, recursiveCols: rCols,
-            recursiveRows: rRows, nestMinSize: nestMin,
-            maxDepth: maxDepth)
-    }
-
-    private static func parseChord(_ doc: TOML.Document) -> ChordConfig {
+    /// `[chord]` — `timeout-ms` came from the spec; `leader` is bespoke
+    /// (first-char-only after trim+lowercase, not a plain scalar).
+    private static func assembleChord(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> ChordConfig {
         let leader: String = {
             guard let raw = doc["chord"]?["leader"]?.asString else {
                 return ""
@@ -886,12 +763,102 @@ public struct PerchConfig: Sendable {
                 .lowercased()
             return String(trimmed.prefix(1))
         }()
-        let timeoutMs = (doc["chord"]?["timeout-ms"]?.asDouble)
-            .map { max(0, min($0, 5000)) } ?? 600
-        return ChordConfig(leader: leader, timeoutMs: timeoutMs)
+        return ChordConfig(leader: leader, timeoutMs: s.timeoutMs)
     }
 
-    private static func parseSearch(_ doc: TOML.Document) -> SearchConfig {
+    /// Walk every `[overlay.themes.<name>]` section and assemble a
+    /// `[name: ThemeSpec]` dict (sill's pure spec). The TOML parser
+    /// lands these as flat keys (`"overlay.themes.my-theme"`), same as
+    /// `[behavior."<bundle>"]`. Unknown / malformed values fall
+    /// back to system defaults per typo-tolerance — a typo never
+    /// kills the palette.
+    private static func parseCustomPalettes(
+        _ doc: TOMLDoc
+    ) -> [String: ThemeSpec] {
+        var out: [String: ThemeSpec] = [:]
+        // Plural `themes` (not `theme`) because `[overlay].theme` is
+        // a scalar (the selector); strict TOML 1.0 parsers reject
+        // `[overlay.themes.<name>]` since `theme` would have to be
+        // both a string AND a table parent. `themes` is a separate
+        // key path with no such conflict.
+        let prefix = "overlay.themes."
+        // Warn anyone still using the pre-PR #95 singular form so
+        // they don't silently lose their custom palette to the
+        // typo-tolerance fallthrough.
+        let deprecatedPrefix = "overlay.theme."
+        for rawKey in doc.keys
+            where rawKey.hasPrefix(deprecatedPrefix)
+            && !rawKey.hasPrefix(prefix) {
+            let name = String(rawKey.dropFirst(deprecatedPrefix.count))
+            Log.line("config: [overlay.theme.\(name)] is deprecated — "
+                     + "rename to [overlay.themes.\(name)] (plural). "
+                     + "The singular form is silently ignored.")
+        }
+        // Names reserved by built-in themes / sentinels — silently
+        // ignored if the user shadows them, since the catalog
+        // would never see the custom palette.
+        let reserved: Set<String> = Set(canonicalThemeNames)
+        for (rawKey, section) in doc {
+            guard rawKey.hasPrefix(prefix) else { continue }
+            let name = String(rawKey.dropFirst(prefix.count))
+                .lowercased()
+            guard !name.isEmpty, !reserved.contains(name) else {
+                Log.line("config: skipping custom theme \"\(name)\" "
+                         + "— name shadows a built-in")
+                continue
+            }
+            let pillBg = parseHexValue(section["pill-bg"]?.asString)
+                ?? 0x000000
+            let accent = parseHexValue(section["accent"]?.asString)
+                ?? 0xFFFFFF
+            let text = parseHexValue(section["text"]?.asString)
+                ?? 0xFFFFFF
+            let miss = parseHexValue(section["miss"]?.asString)
+                ?? 0xEF4444
+            let alpha: Double = {
+                guard let raw = section["pill-bg-alpha"]?.asDouble
+                else { return 0.55 }
+                return max(0, min(1, raw))
+            }()
+            let font: FontKind = {
+                guard let raw = section["font"]?.asString
+                else { return .mono }
+                switch raw.trimmingCharacters(in: .whitespaces).lowercased() {
+                case "mono":    return .mono
+                case "rounded": return .rounded
+                case "system":  return .system
+                case "menu":    return .menu
+                default:        return .mono
+                }
+            }()
+            // Map perch's custom-palette keys onto a sill ThemeSpec:
+            // pill-bg → background, miss → error, pill-bg-alpha →
+            // backgroundAlpha. perch doesn't read
+            // muted/secondary/border/hover/selection for pills, so muted
+            // is a placeholder (= foreground) and the rest stay nil.
+            out[name] = ThemeSpec(
+                background: HexColor(pillBg),
+                foreground: HexColor(text),
+                muted: HexColor(text),
+                primary: HexColor(accent),
+                font: font,
+                error: HexColor(miss),
+                backgroundAlpha: alpha)
+        }
+        return out
+    }
+
+    /// Colour token → `0xRRGGBB` via sill's shared grammar
+    /// (`parseColorToken`): named colours, `#rgb`, `#rrggbb`,
+    /// `#rrggbbaa` (alpha ignored here — pill translucency is its own
+    /// knob). Returns nil on malformed input so the caller can fall
+    /// back to a default.
+    private static func parseHexValue(_ s: String?) -> UInt32? {
+        guard let s else { return nil }
+        return parseColorToken(s)?.rgb
+    }
+
+    private static func parseSearch(_ doc: TOMLDoc) -> SearchConfig {
         var synonyms: [String: [String]] = [:]
         if let section = doc["search.synonyms"] {
             for (rawKey, value) in section {
@@ -908,31 +875,7 @@ public struct PerchConfig: Sendable {
         return SearchConfig(synonyms: synonyms)
     }
 
-    // MARK: - Sanitisers
-
-    /// Drop duplicates and non-typeable characters, lowercase the
-    /// result. Empty after sanitising → fall back to the default
-    /// alphabet (returns `nil` so the call site can apply the
-    /// default).
-    private static func sanitiseAlphabet(_ s: String) -> String? {
-        var seen = Set<Character>()
-        var out = ""
-        for ch in s.lowercased() {
-            guard ch.isLetter, !seen.contains(ch) else { continue }
-            seen.insert(ch)
-            out.append(ch)
-        }
-        return out.isEmpty ? nil : out
-    }
-
-    /// Accept "system" or a `#rrggbb` literal. Returns canonical
-    /// lowercase, or `nil` on malformed input so the caller can clamp.
-    private static func sanitiseAccent(_ s: String) -> String? {
-        let t = s.trimmingCharacters(in: .whitespaces).lowercased()
-        if t == "system" || t == "accent" { return "system" }
-        guard t.hasPrefix("#"), t.count == 7,
-              t.dropFirst().allSatisfy({ "0123456789abcdef".contains($0) })
-        else { return nil }
-        return t
-    }
+    // Note: `sanitiseAlphabet` / `sanitiseAccent` now live in
+    // `PerchConfig+Spec.swift` (non-private static) so BOTH the spec's
+    // `apply` closures and this file's bespoke assembly share one copy.
 }

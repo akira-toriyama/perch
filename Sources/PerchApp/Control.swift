@@ -1,5 +1,5 @@
 // Daemon IPC over DistributedNotificationCenter. Same pattern as
-// stroke / facet: `perch --reload` / `--quit` post a notification
+// stroke / facet: `perch daemon --reload` / `daemon --quit` post a notification
 // here; the server's `installControlObserver` reacts on the main
 // thread.
 //

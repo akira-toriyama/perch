@@ -32,20 +32,21 @@ import ApplicationServices
 import AppKit
 import CoreGraphics
 import Foundation
+import PaletteKit
 import PerchCore
 
 /// How `SearchMode` paints its matches. The query strip + filter
 /// pipeline are identical; the only thing that varies is whether
 /// matches get positioned over an on-screen frame or stacked into
 /// a centred list. Picked per entry so the same code can drive
-/// `--search` (pills over visible elements) and `--menu` (list,
+/// `overlay --search` (pills over visible elements) and `overlay --menu` (list,
 /// because menu items have no visible frame until opened).
 public enum SearchRenderMode: Sendable {
     /// One numbered pill placed over each match's AX frame
-    /// (current `--search` behaviour).
+    /// (current `overlay --search` behaviour).
     case pillsOverElements
     /// A centred vertical list of matches under the query strip.
-    /// Used by `--menu` (issue #52) — menu items don't position
+    /// Used by `overlay --menu` (issue #52) — menu items don't position
     /// themselves until macOS opens the menu, so pinning a pill to
     /// `.zero` would stack every result at the screen origin.
     case verticalList
@@ -333,8 +334,8 @@ private final class SearchCanvas: NSView {
             roundedRect: stripRect, xRadius: 12, yRadius: 12)
         // Strip body uses the theme's pill bg (less opaque so the
         // user can still see what's behind), border in accent.
-        HintPainter.color(hex: palette.pillBgHex,
-                          alpha: min(palette.pillBgAlpha + 0.4, 1))
+        NSColor(hex: palette.pillBgHex,
+                min(palette.pillBgAlpha + 0.4, 1))
             .setFill()
         stripPath.fill()
         accent.withAlphaComponent(0.9).setStroke()
@@ -359,9 +360,9 @@ private final class SearchCanvas: NSView {
     }
 
     /// Per-match pill positioned over the match's AX frame
-    /// (`--search` default). Each pill is clamped into the canvas
+    /// (`overlay --search` default). Each pill is clamped into the canvas
     /// so a partially-off-screen match still renders inside.
-    /// `--search` targets the full app AX walk, where elements
+    /// `overlay --search` targets the full app AX walk, where elements
     /// rarely carry `kAXMenuItemCmd*` attributes, so the shortcut
     /// annotation is omitted here — the menu mode's vertical list
     /// is the only renderer that surfaces shortcuts (issue #58).
@@ -395,7 +396,7 @@ private final class SearchCanvas: NSView {
     }
 
     /// Vertical list of matches centred under the query strip
-    /// (`--menu`). All match pills share one width sized to the
+    /// (`overlay --menu`). All match pills share one width sized to the
     /// widest label so the column reads as a single Spotlight-style
     /// result list. Used when match frames are `.zero` (menu items
     /// have no on-screen frame).
@@ -455,7 +456,7 @@ private final class SearchCanvas: NSView {
     /// Build the (label, shortcut) attributed strings for one
     /// match. Label is the `<digit> <truncated-title>` pair every
     /// renderer needs; `shortcut` is the dimmer right-aligned
-    /// annotation that `--menu` surfaces. `shortcut` is `nil` when
+    /// annotation that `overlay --menu` surfaces. `shortcut` is `nil` when
     /// the element has no `UIElement.shortcut`, when
     /// `showShortcut` is false, OR when the caller is the
     /// pills-over-frames renderer that doesn't surface shortcuts.
@@ -507,19 +508,5 @@ private final class SearchCanvas: NSView {
         NSColor.white.withAlphaComponent(0.4).setStroke()
         p.lineWidth = 1
         p.stroke()
-    }
-
-    private static func accent(_ s: String) -> NSColor {
-        if s == "system" { return .controlAccentColor }
-        var t = s
-        if t.hasPrefix("#") { t.removeFirst() }
-        guard t.count == 6, let v = UInt32(t, radix: 16) else {
-            return .controlAccentColor
-        }
-        return NSColor(
-            srgbRed: CGFloat((v >> 16) & 0xFF) / 255,
-            green:    CGFloat((v >> 8) & 0xFF) / 255,
-            blue:     CGFloat(v & 0xFF) / 255,
-            alpha: 1)
     }
 }

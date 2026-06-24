@@ -16,7 +16,7 @@
 //                               d / space / Enter → mouseUp + exit
 //                               Esc → mouseUp (safety) + exit
 //
-// Step sizes during cursor movement mirror `--nudge`: bare 1 px,
+// Step sizes during cursor movement mirror `overlay --nudge`: bare 1 px,
 // Shift 10 px, Alt 100 px, Cmd screen-edge. The arrow / modifier
 // vocabulary is identical to nudge mode by design — once you
 // know nudge, you know drag positioning.
