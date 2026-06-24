@@ -429,17 +429,17 @@ auto-click-on-unique = true
 # default covers everything users typically reach for a mouse
 # to click; remove entries to declutter dense panels.
 roles = [
-    "Button",
-    "MenuItem",
-    "MenuButton",
-    "CheckBox",
-    "RadioButton",
-    "PopUpButton",
-    "Link",
-    "TabGroup",
-    "Tab",
-    "TextField",
-    "SearchField",
+  "Button",
+  "MenuItem",
+  "MenuButton",
+  "CheckBox",
+  "RadioButton",
+  "PopUpButton",
+  "Link",
+  "TabGroup",
+  "Tab",
+  "TextField",
+  "SearchField",
 ]
 
 
@@ -606,5 +606,5 @@ nest-min-size = 100
 # smaller groups (closer to leaf-sized — i.e. closer to what hint
 # mode already labels). Both clamp to >= 0.
 [regional]
-min-width = 200                    # default
-min-height = 100                   # asymmetric: articles are wide
+min-width = 200  # default
+min-height = 100 # asymmetric: articles are wide
