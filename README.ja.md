@@ -221,7 +221,7 @@ clamp 範囲が併記されている。
 | コマンド | モード | 用途 |
 |---|---|---|
 | *(なし)* | server | デーモンを実行 |
-| `config --validate` | standalone | config.toml を検証 |
+| `config --validate` | standalone | config.toml を schema 検証 (exit 0 = valid / 1 = schema 違反 / 2 = parse 不能) |
 | `config --doctor` | standalone | ヘルスチェック (AX / 設定 / デーモン / ホットキー) |
 | `config --emit-schema` | standalone | config.toml の JSON Schema (Draft-07) を stdout に出力 |
 | `overlay --activate` | client | ヒント overlay を表示 (ホットキーの代替) |

@@ -30,6 +30,7 @@
 import AppKit
 import Foundation
 import CLIKit
+import ConfigSchema
 import PerchCore
 import PerchAdapterMacOS
 
@@ -102,7 +103,10 @@ enum PerchApp {
           daemon --quit               terminate the running daemon
 
         config — settings (no daemon required)
-          config --validate           parse config.toml; exit 0 if valid
+          config --validate           validate config.toml against the schema;
+                                        exit 0 if valid, 1 on a schema violation
+                                        (bad type/enum/range, typo'd key), 2 if
+                                        unparseable
           config --doctor             health check: Accessibility, config,
                                         daemon, hotkey, screens, log file
           config --emit-schema        print the config.toml JSON Schema
@@ -308,12 +312,35 @@ enum PerchApp {
         }
     }
 
-    /// `config --validate` — parse config.toml and print a one-line
-    /// summary to stderr. `load()` is lenient (missing file → defaults,
-    /// malformed values → clamped best-effort), so this is a "parsed
-    /// summary" report that always exits 0; it never returns the exit 2
-    /// the help advertises for genuinely unparseable usage.
+    /// `config --validate` — STRUCTURAL validation against the same
+    /// `configSpec` that drives decode + `--emit-schema` (sill 1.29.0's
+    /// `Spec.validate` bridge, t-0029), then a one-line parsed summary.
+    ///
+    /// Exit codes: 2 if config.toml isn't parseable TOML at all (syntax
+    /// error); 1 if it parses but violates the schema (wrong type / bad enum
+    /// / out-of-range / typo'd key — the mismatches the lenient `load()`
+    /// silently clamps or ignores); 0 if structurally valid (then the
+    /// parsed summary prints, as before).
     private static func runValidate() -> Never {
+        let source = (try? String(contentsOfFile: PerchConfig.path,
+                                  encoding: .utf8)) ?? ""
+        let errors: [ValidationError]
+        do {
+            errors = try PerchConfig.validate(source)
+        } catch {
+            FileHandle.standardError.write(Data(
+                "perch: config.toml: not parseable — \(error)\n".utf8))
+            exit(2)
+        }
+        if !errors.isEmpty {
+            for e in errors {
+                FileHandle.standardError.write(Data("perch: \(e.message)\n".utf8))
+            }
+            FileHandle.standardError.write(Data(
+                "perch: \(errors.count) validation error(s)\n".utf8))
+            exit(1)
+        }
+
         let cfg = PerchConfig.load()
         // Per-app override count is the at-a-glance signal that
         // `[behavior."<bundle>"]` sections parsed — issue #37's
