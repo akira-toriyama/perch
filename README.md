@@ -220,7 +220,7 @@ Every knob has a heredoc explaining what it does + the clamp range.
 | Flag | Mode | Purpose |
 |---|---|---|
 | *(none)* | server | run the daemon |
-| `config --validate` | standalone | parse `~/.config/perch/config.toml`, exit 0/2 |
+| `config --validate` | standalone | validate `~/.config/perch/config.toml` against the schema; exit 0 (valid) / 1 (schema violation) / 2 (unparseable) |
 | `config --doctor` | standalone | health check (AX, config, daemon, hotkey) |
 | `config --emit-schema` | standalone | print the config.toml JSON Schema (Draft-07) to stdout |
 | `overlay --activate` | client | show hint overlay now (CLI alternative to the hotkey) |

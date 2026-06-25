@@ -14,6 +14,7 @@
 // sub-struct is small enough to memorise; PerchConfig itself
 // becomes a thin shell around the 11 nested structs.
 
+import ConfigSchema
 import CoreGraphics
 import Foundation
 import Palette
@@ -558,6 +559,20 @@ public struct PerchConfig: Sendable {
     /// custom-palette interplay, the deprecation log, synonyms, and the
     /// grammar-parsed `hotkey.active` / `labels.alphabet` / `chord.leader`).
     /// The spec drives both decode and schema, so the two can never drift.
+    /// Structural validation against the SAME `configSpec` that drives decode
+    /// + `--emit-schema` (sill 1.29.0's `Spec.validate` bridge, t-0029). This
+    /// is the STRICT counterpart to the lenient `load()` / `parse()` (which
+    /// clamp out-of-range values and ignore typo'd keys): it surfaces the
+    /// type / enum / range / unknown-key mismatches the loader would silently
+    /// accept — the "editor-green-but-load-accepts" gap. Returns every
+    /// violation (empty = structurally valid). Throws only if `source` is not
+    /// parseable TOML at all (a genuine syntax error, distinct from a schema
+    /// violation). One source for decode + emit + validate ⇒ they can't drift.
+    public static func validate(_ source: String) throws -> [ValidationError] {
+        let root = try Toml.parse(source)
+        return configSpec.validate(root)
+    }
+
     public static func parse(_ source: String) -> PerchConfig {
         // sill's flat skin — keyed by literal header text, lenient.
         // perch's old single-line-only parser dropped the multi-line

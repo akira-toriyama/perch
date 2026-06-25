@@ -68,7 +68,7 @@ let package = Package(
         // local, atomic sill↔perch editing, temporarily swap this line for
         // `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "1.27.0")),
+                 .upToNextMinor(from: "1.29.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module PerchCore reads config with
         // (`Toml.parseFlat`); the module name is unchanged so `import Toml`
@@ -131,6 +131,9 @@ let package = Package(
                 // perch keeps its OWN verb vocabulary + dispatch policy
                 // (reject-before-act ordering); CLIKit only tokenizes.
                 .product(name: "CLIKit", package: "sill"),
+                // ConfigSchema: shared schema engine. `config --validate`
+                // surfaces ValidationError from PerchConfig.validate (t-0029).
+                .product(name: "ConfigSchema", package: "sill"),
             ]),
         .testTarget(
             name: "PerchCoreTests",
