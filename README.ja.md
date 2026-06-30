@@ -602,7 +602,7 @@ swift test                       # テスト — Xcode 必須
 [facet](https://github.com/akira-toriyama/facet) と同じ構造。
 
 コミット規約: gitmoji + Conventional Commits
-([docs/commit-convention.md](docs/commit-convention.md))。
+([CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md))。
 ローカルフックの有効化:
 
 ```sh
