@@ -614,7 +614,7 @@ the diagnostic commands, the log-line format, and the bug
 signatures we've already seen.
 
 Commit convention: gitmoji + Conventional Commits
-([docs/commit-convention.md](docs/commit-convention.md)).
+([CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md)).
 Enable the local hook:
 
 ```sh

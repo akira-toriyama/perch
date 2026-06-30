@@ -927,9 +927,9 @@ re-confirmation.
   surface is bounded by the shared lib, not a local parser budget.
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
   *(reviewed 2026-05-24)* — type / scope grammar
-  `<type>(<scope>)<!>: <subject>`. `docs/commit-convention.md`
-  is the project-local rules; CI enforces this via
-  `commit-lint.yml`.
+  `<type>(<scope>)<!>: <subject>`. The rules are the account-wide
+  [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md);
+  CI enforces this via `commit-lint.yml`.
 - [Gitmoji](https://gitmoji.dev/)
   *(reviewed 2026-05-24)* — the leading emoji on each commit
   (`:sparkles:` feat, `:bug:` fix, `:lock:` security, `:memo:` docs,
