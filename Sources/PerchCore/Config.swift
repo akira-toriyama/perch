@@ -573,6 +573,19 @@ public struct PerchConfig: Sendable {
         return configSpec.validate(root)
     }
 
+    /// Warning lines the daemon load path (runServer + reload) emits for
+    /// schema violations — the validate-then-warn counterpart to the strict
+    /// `--validate` verb. Runs the SAME `configSpec.validate` used by
+    /// `validate()`, but maps each violation to a `config: …` log line
+    /// instead of an exit code: the daemon keeps loading with clamped
+    /// defaults (see the clamp policy, top of file). `[]` ⇒ clean or
+    /// unparseable (never throws; an unparseable file stays silent, matching
+    /// today's lenient load, and the lenient `load()` still returns a usable
+    /// config).
+    public static func loadWarnings(_ source: String) -> [String] {
+        ((try? validate(source)) ?? []).map { "config: \($0.message)" }
+    }
+
     public static func parse(_ source: String) -> PerchConfig {
         // sill's flat skin — keyed by literal header text, lenient.
         // perch's old single-line-only parser dropped the multi-line

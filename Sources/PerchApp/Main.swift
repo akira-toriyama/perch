@@ -369,6 +369,13 @@ enum PerchApp {
         // Best-effort: a failure is non-fatal, so it never blocks start.
         PerchConfig.installSchema()
 
+        // A1: validate-then-warn on the load path — surface the schema
+        // violations the lenient load() silently clamps/ignores, but DO NOT
+        // reject; the daemon keeps loading with clamped defaults.
+        let source = (try? String(contentsOfFile: PerchConfig.path,
+                                  encoding: .utf8)) ?? ""
+        for w in PerchConfig.loadWarnings(source) { Log.line(w) }
+
         let cfg = PerchConfig.load()
 
         let app = NSApplication.shared

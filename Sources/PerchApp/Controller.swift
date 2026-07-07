@@ -139,6 +139,11 @@ final class Controller {
 
     func reload(cause: String) {
         Log.line("config: reloading (\(cause))")
+        // Local name avoids shadowing the `source: AXUIElementSource`
+        // stored property used later in this method.
+        let configSource = (try? String(contentsOfFile: PerchConfig.path,
+                                        encoding: .utf8)) ?? ""
+        for w in PerchConfig.loadWarnings(configSource) { Log.line(w) }
         let new = PerchConfig.load()
         let hotkeyChanged = new.hotkey.active != config.hotkey.active
         config = new
