@@ -66,3 +66,31 @@ final class ConfigValidateTests: XCTestCase {
         XCTAssertThrowsError(try PerchConfig.validate("[overlay\nbad"))
     }
 }
+
+/// `PerchConfig.loadWarnings` — the validate-then-warn seam the DAEMON load
+/// path (runServer + reload) uses. Same schema check as `--validate`, but
+/// surfaced as warnings without rejecting: proves violations warn on the LOAD
+/// path, not only via the `config --validate` CLI verb.
+final class ConfigLoadWarnTests: XCTestCase {
+
+    func testLoadPathWarnsOnSchemaViolation() {
+        let warnings = PerchConfig.loadWarnings("""
+        [overlay]
+        shortcut-badge = "yes"
+        """)
+        XCTAssertFalse(warnings.isEmpty,
+                       "load path must warn on a schema violation")
+        XCTAssertTrue(warnings.contains { $0.contains("shortcut-badge") },
+                      "warning should name the offending key; got \(warnings)")
+    }
+
+    func testCleanConfigProducesNoWarnings() {
+        XCTAssertEqual(PerchConfig.loadWarnings(""), [])
+    }
+
+    func testUnparseableSourceProducesNoWarnings() {
+        // Matches today's silent lenient load — A1 only surfaces SCHEMA
+        // violations on a parseable doc, never a syntax-error warning.
+        XCTAssertEqual(PerchConfig.loadWarnings("[overlay\nbad"), [])
+    }
+}
