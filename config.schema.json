@@ -3,8 +3,94 @@
   "additionalProperties" : false,
   "properties" : {
     "behavior" : {
-      "additionalProperties" : true,
-      "description" : "`[behavior.\"<bundle-id>\"]` per-app overrides — set only the keys to override: roles / min-size / auto-click-on-unique / appear-effect / match-effect / unmatch-effect / narrow-effect. Missing keys inherit the global [behavior] / [overlay.effect] value.",
+      "additionalProperties" : {
+        "additionalProperties" : false,
+        "description" : "Per-app overrides — set only the keys to override; missing keys inherit the global [behavior] / [overlay.effect] value.",
+        "properties" : {
+          "appear-effect" : {
+            "description" : "Entrance-animation override.",
+            "enum" : [
+              "off",
+              "pop",
+              "cascade",
+              "fade-in",
+              "drop-in",
+              "bloom",
+              "random"
+            ],
+            "type" : "string"
+          },
+          "auto-click-on-unique" : {
+            "description" : "Auto-click-on-unique-match override.",
+            "type" : "boolean"
+          },
+          "match-effect" : {
+            "description" : "Winning-pill animation override.",
+            "enum" : [
+              "off",
+              "fade",
+              "explode",
+              "drop",
+              "rise",
+              "slide-left",
+              "slide-right",
+              "vibrate",
+              "fireworks",
+              "confetti",
+              "random"
+            ],
+            "type" : "string"
+          },
+          "min-size" : {
+            "description" : "Min element size (pt) override. Clamped >= 0.",
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "narrow-effect" : {
+            "description" : "Narrowing-survivors animation override.",
+            "enum" : [
+              "off",
+              "fade",
+              "explode",
+              "drop",
+              "rise",
+              "slide-left",
+              "slide-right",
+              "vibrate",
+              "fireworks",
+              "confetti",
+              "random"
+            ],
+            "type" : "string"
+          },
+          "roles" : {
+            "description" : "AX-roles allow-list override; [] allows none. Unset inherits [behavior].roles.",
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "unmatch-effect" : {
+            "description" : "Losing-pills animation override.",
+            "enum" : [
+              "off",
+              "shake",
+              "fade",
+              "drop",
+              "rise",
+              "slide-left",
+              "slide-right",
+              "vibrate",
+              "fireworks",
+              "confetti",
+              "random"
+            ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "description" : "AX walk + dispatch behaviour.",
       "properties" : {
         "auto-click-on-unique" : {
           "default" : true,
@@ -403,7 +489,45 @@
           "type" : "string"
         },
         "themes" : {
-          "additionalProperties" : true,
+          "additionalProperties" : {
+            "additionalProperties" : false,
+            "description" : "One user palette; every key optional with a per-key default.",
+            "properties" : {
+              "accent" : {
+                "description" : "Border / matched glow / prefix colour token. Default white.",
+                "type" : "string"
+              },
+              "font" : {
+                "description" : "Pill font family. Default mono.",
+                "enum" : [
+                  "mono",
+                  "rounded",
+                  "system",
+                  "menu"
+                ],
+                "type" : "string"
+              },
+              "miss" : {
+                "description" : "Red-flash override colour token.",
+                "type" : "string"
+              },
+              "pill-bg" : {
+                "description" : "Pill body colour token (named / #rgb / #rrggbb / #rrggbbaa). Default black.",
+                "type" : "string"
+              },
+              "pill-bg-alpha" : {
+                "description" : "Pill translucency 0..1 — lower = more frost shows. Default 0.55.",
+                "maximum" : 1,
+                "minimum" : 0,
+                "type" : "number"
+              },
+              "text" : {
+                "description" : "Unrolled label colour token. Default white.",
+                "type" : "string"
+              }
+            },
+            "type" : "object"
+          },
           "description" : "`[overlay.themes.<name>]` user-defined palettes — set `[overlay].theme = \"<name>\"` to select one. Keys: pill-bg / accent / text / miss (colour tokens), pill-bg-alpha (0..1), font (mono / rounded / system / menu). Names shadowing a built-in are ignored.",
           "type" : "object"
         }
@@ -433,7 +557,13 @@
       "additionalProperties" : false,
       "properties" : {
         "synonyms" : {
-          "additionalProperties" : true,
+          "additionalProperties" : {
+            "description" : "Synonyms for this word (bidirectional; the key itself and empty strings are dropped).",
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
           "description" : "`[search.synonyms]` fuzzy-match expansion table for overlay --search / overlay --menu / overlay --windows / overlay --emoji. Each key maps to a string array of synonyms (bidirectional; the key itself and empties are dropped).",
           "type" : "object"
         }

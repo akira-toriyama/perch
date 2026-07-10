@@ -47,18 +47,24 @@ final class ThemeTests: XCTestCase {
         for cut in ["nord", "cute", "kawaii", "paper", "monotone",
                     "mono-light", "mono-dark", "neon", "cyber", "vapor",
                     "onedark", "monokai", "solarized", "everforest",
-                    "rosepine", "catppuccin", "hacker"] {
+                    "rosepine", "catppuccin", "hacker",
+                    // pruned later by sill's WCAG contrast sweep (v1.37).
+                    "catppuccin-latte"] {
             XCTAssertNil(perchCanonicalThemeName(cut),
-                         "\(cut) should be cut from the Phase V catalog")
+                         "\(cut) should be cut from the catalog")
         }
     }
 
-    func testPhaseVCatalogAcceptsAllTwelveColorThemes() {
-        // The blessed 12 color themes + system are all valid overlay --theme values.
+    func testCatalogAcceptsAllColorThemes() {
+        // The blessed color themes + system are all valid overlay --theme
+        // values: the Phase V eleven (latte fell to sill's WCAG sweep) plus
+        // the sweep's contrast-verified neon trio, riding in via sill's
+        // catalog with no perch-local list.
         for name in ["terminal", "chomp", "rainbow", "cobalt2",
                      "shades-of-purple", "tokyo-hack", "github-dark",
                      "dracula", "catppuccin-mocha", "gruvbox",
-                     "github-light", "catppuccin-latte", "system"] {
+                     "github-light", "biolume", "midas", "spectre",
+                     "system"] {
             XCTAssertEqual(perchCanonicalThemeName(name), name,
                            "\(name) must be a valid catalog name")
         }
@@ -106,10 +112,9 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(perchPillAlpha(for: paletteFor("terminal")), 0.30)
         XCTAssertEqual(perchPillAlpha(for: paletteFor("dracula")), 0.30)
         XCTAssertEqual(perchPillAlpha(for: paletteFor("chomp")), 0.30)
-        // The two surviving light themes ride higher so the pale fill is
+        // The surviving light theme rides higher so the pale fill is
         // not washed out under the frost.
         XCTAssertEqual(perchPillAlpha(for: paletteFor("github-light")), 0.85)
-        XCTAssertEqual(perchPillAlpha(for: paletteFor("catppuccin-latte")), 0.85)
     }
 
     func testThemeSpecCarriesPerchAlpha() {
@@ -117,7 +122,6 @@ final class ThemeTests: XCTestCase {
         // inject it so the frosted pill stays translucent.
         XCTAssertEqual(perchThemeSpec("terminal").backgroundAlpha ?? -1, 0.30)
         XCTAssertEqual(perchThemeSpec("github-light").backgroundAlpha ?? -1, 0.85)
-        XCTAssertEqual(perchThemeSpec("catppuccin-latte").backgroundAlpha ?? -1, 0.85)
     }
 
     // MARK: - Miss color flows through spec.error (no perch override)
@@ -130,8 +134,9 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(perchThemeSpec("terminal").error.rgb, 0xFF3B3B)  // terminal's own
         XCTAssertEqual(perchThemeSpec("chomp").error.rgb, 0xFF0000)     // arcade ghost-red
         XCTAssertEqual(perchThemeSpec("dracula").error.rgb, 0xFF5555)   // dracula's own
-        // gruvbox ships no error → sill's shared default.
-        XCTAssertEqual(perchThemeSpec("gruvbox").error.rgb, defaultErrorHex)
+        // gruvbox ships its own since sill's WCAG sweep lifted it over AA
+        // (previously fell through to the shared default).
+        XCTAssertEqual(perchThemeSpec("gruvbox").error.rgb, 0xFC6452)
     }
 
     // MARK: - system theme (perch's dark-pill spec, NOT sill's panel)

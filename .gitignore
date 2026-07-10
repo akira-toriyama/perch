@@ -1,5 +1,9 @@
 # SwiftPM
 .build/
+# Isolated build dir for full-Xcode `swift test` runs (DEVELOPER_DIR
+# override) so its Swift-6.3 artifacts never clobber the CLT .build/ —
+# same split sill's scripts/test.sh uses.
+.build-xcode/
 .swiftpm/
 # Package.resolved IS tracked (not ignored): perch is an executable with an
 # external dependency (sill), so the lockfile is committed for reproducible

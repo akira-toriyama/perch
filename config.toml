@@ -94,7 +94,6 @@ prioritise-center = true
 #
 # Light (dark text on a light pill):
 #   "github-light"     — clean daytime white; link-blue, system font.
-#   "catppuccin-latte" — warm-grey lavender light; purple accent.
 #
 # Adaptive:
 #   "system"           — NSColor.controlAccentColor + dark pill tint —
@@ -141,7 +140,7 @@ accent = "system"
 # text          = "#ffffff"     # unrolled label color
 # miss          = "#dc2626"     # red-flash override
 # pill-bg-alpha = 0.55          # 0..1 — lower = more frost shows
-# font          = "rounded"     # "mono" / "rounded" / "system"
+# font          = "rounded"     # "mono" / "rounded" / "system" / "menu"
 
 # Pill geometry preset — independent of `theme` (theme picks colors
 # + font; this picks the body shape).
