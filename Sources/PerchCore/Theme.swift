@@ -42,8 +42,8 @@ import Palette
 /// themes ride higher (the pale fill would wash out under the frost
 /// otherwise); dark themes keep the historical 0.30. Derived from sill's
 /// `isLight` luminance test (background brightness) rather than a
-/// theme-name list, so new catalog light themes (`github-light` /
-/// `catppuccin-latte`, …) are handled automatically — no perch-local
+/// theme-name list, so new catalog light themes (`github-light`, …)
+/// are handled automatically — no perch-local
 /// theme-name list to drift out of sync with sill (atelier north star).
 public func perchPillAlpha(for spec: ThemeSpec) -> Double {
     spec.isLight ? 0.85 : 0.30

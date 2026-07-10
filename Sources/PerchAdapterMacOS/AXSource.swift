@@ -30,6 +30,7 @@ import AVFoundation
 import CoreGraphics
 import Foundation
 import PerchCore
+import ScreenCaptureKit
 import Vision
 
 public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
@@ -558,8 +559,8 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// recognized region.
     ///
     /// Coords pipeline (the easy one to get wrong):
-    ///   1. `CGDisplayCreateImage(mainDisplay)` → image in PIXEL
-    ///      coords (3840×2160 on a 4K @ 2x backing scale).
+    ///   1. ScreenCaptureKit captures the main display at native
+    ///      PIXEL size (3840×2160 on a 4K @ 2x backing scale).
     ///   2. Vision returns observation `boundingBox` in NORMALISED
     ///      bottom-left origin (0..1 in each axis, y-up).
     ///   3. Multiply by image pixel size, flip Y so the box is
@@ -576,7 +577,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
     /// the same pattern emoji uses (#55).
     ///
     /// **Screen Recording TCC grant** is required on first call.
-    /// `CGDisplayCreateImage` returns nil without the grant —
+    /// The ScreenCaptureKit capture errors without the grant —
     /// we log + return empty so the controller can dismiss the
     /// overlay silently rather than crashing.
     ///
@@ -594,8 +595,13 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
             return []
         }
         let displayID = CGMainDisplayID()
-        guard let image = CGDisplayCreateImage(displayID) else {
-            Log.line("vision: CGDisplayCreateImage failed — "
+        let scale = screen.backingScaleFactor
+        guard let image = captureMainDisplayImage(
+            displayID: displayID,
+            pixelWidth: Int(screen.frame.width * scale),
+            pixelHeight: Int(screen.frame.height * scale))
+        else {
+            Log.line("vision: display capture failed — "
                      + "Screen Recording grant likely missing "
                      + "(System Settings → Privacy & Security → "
                      + "Screen Recording → enable perch)")
@@ -616,7 +622,6 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
 
         let imageW = CGFloat(image.width)
         let imageH = CGFloat(image.height)
-        let scale = screen.backingScaleFactor
 
         var out: [UIElement] = []
         for obs in observations {
@@ -650,6 +655,51 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         }
         Log.line("vision: \(out.count) text region(s)")
         return out
+    }
+
+    /// One synchronous main-display frame for vision OCR, via
+    /// ScreenCaptureKit (`CGDisplayCreateImage` was obsoleted at macOS 15
+    /// — a hard compile error at the macOS-26 floor). SCK is async-only;
+    /// this bridges with a semaphore, which cannot deadlock here because
+    /// SCK completes on its own internal queues, never the caller's
+    /// thread — and the vision flow is already a blocking, explicitly
+    /// invoked fallback (`overlay --vision`). Returns nil without the
+    /// Screen Recording grant, preserving the old nil-on-no-grant
+    /// contract the caller logs about.
+    private func captureMainDisplayImage(
+        displayID: CGDirectDisplayID, pixelWidth: Int, pixelHeight: Int
+    ) -> CGImage? {
+        final class Box: @unchecked Sendable { var image: CGImage? }
+        let box = Box()
+        let sema = DispatchSemaphore(value: 0)
+        SCShareableContent.getExcludingDesktopWindows(
+            false, onScreenWindowsOnly: false
+        ) { content, error in
+            guard let display = content?.displays
+                .first(where: { $0.displayID == displayID }) else {
+                Log.line("vision: shareable-content lookup failed"
+                         + (error.map { " (\($0.localizedDescription))" } ?? ""))
+                sema.signal()
+                return
+            }
+            let filter = SCContentFilter(display: display, excludingWindows: [])
+            let config = SCStreamConfiguration()
+            config.width = pixelWidth
+            config.height = pixelHeight
+            config.showsCursor = false
+            SCScreenshotManager.captureImage(
+                contentFilter: filter, configuration: config
+            ) { image, error in
+                if let error {
+                    Log.line("vision: SCK capture failed "
+                             + "(\(error.localizedDescription))")
+                }
+                box.image = image
+                sema.signal()
+            }
+        }
+        sema.wait()
+        return box.image
     }
 
     // MARK: - Shared walk setup
@@ -1138,11 +1188,7 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         let pid = pid_t(pidPart) ?? 0
         var activated = false
         if pid != 0, let app = NSRunningApplication(processIdentifier: pid) {
-            if #available(macOS 14.0, *) {
-                activated = app.activate()
-            } else {
-                activated = app.activate(options: [.activateIgnoringOtherApps])
-            }
+            activated = app.activate()
         }
         let ok = raiseErr == .success
         Log.line("dispatch: AXRaise " + (ok ? "ok" : "failed")

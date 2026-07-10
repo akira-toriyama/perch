@@ -29,7 +29,10 @@ import PackageDescription
 
 let package = Package(
     name: "perch",
-    platforms: [.macOS(.v13)],
+    // macOS-26 floor (family t-tbar lazy-bump, applied on the first sill-pin
+    // bump past v2.0.0). String form — CLT's PackageDescription has no `.v26`
+    // case and raising tools-version breaks its manifest parse.
+    platforms: [.macOS("26.0")],
     products: [
         .executable(name: "perch", targets: ["PerchApp"]),
         .library(name: "PerchCore", targets: ["PerchCore"]),
@@ -57,10 +60,11 @@ let package = Package(
         // PerchAdapterMacOS target dep below). Pinned to a SemVer tag for
         // release/CI reproducibility; `.upToNextMinor` keeps it on a single
         // minor (a sill minor can still break, so don't auto-jump). Floor
-        // 1.10.0 = the release whose `Effects` module ships the border
-        // animator perch adopts here; it also clears the older 0.11.0 floor
-        // (sill removing its in-tree `Toml`, moved to the standalone
-        // swift-toml-edit repo below) and the `CLIKit` module — the
+        // 3.5.0 = the release whose `ConfigSchema` ships DynamicValue leaf
+        // values + the quoted-header typed open map (t-wnvm) — the typed
+        // `.dynamicTable` shapes in PerchConfig+Spec need both. Crossing
+        // sill v2.0.0 also brings the macOS-26 platform floor (applied to
+        // `platforms` above in the same move) and the `CLIKit` module — the
         // family's shared pure argv tokenizer (atelier Phase 3 M3). PerchApp consumes CLIKit so the yabai-style `perch
         // <domain> --<verb> VALUE` grammar gets arity-driven value consumption
         // (negative coords, `--theme ''` empty-clear, loud unknown-flag exit
@@ -68,7 +72,7 @@ let package = Package(
         // local, atomic sill↔perch editing, temporarily swap this line for
         // `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "1.29.0")),
+                 .upToNextMinor(from: "3.5.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module PerchCore reads config with
         // (`Toml.parseFlat`); the module name is unchanged so `import Toml`

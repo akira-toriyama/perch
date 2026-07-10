@@ -151,7 +151,7 @@ opacity so the pale fill stays legible under the frost).
   Pac-Man), `rainbow` (loud full-spectrum)
 - **Reference**: `cobalt2`, `shades-of-purple`, `tokyo-hack`
 - **Popular dark**: `github-dark`, `dracula`, `catppuccin-mocha`, `gruvbox`
-- **Light**: `github-light`, `catppuccin-latte`
+- **Light**: `github-light`
 - **Adaptive**: `system` (default — follows the macOS accent; the pill itself stays a dark frosted chip)
 - **Special**: `random` (picks a built-in per `daemon --reload`)
 

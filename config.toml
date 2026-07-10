@@ -94,7 +94,6 @@ prioritise-center = true
 #
 # Light (dark text on a light pill):
 #   "github-light"     — clean daytime white; link-blue, system font.
-#   "catppuccin-latte" — warm-grey lavender light; purple accent.
 #
 # Adaptive:
 #   "system"           — NSColor.controlAccentColor + dark pill tint —
