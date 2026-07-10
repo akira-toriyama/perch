@@ -206,12 +206,36 @@ public extension PerchConfig {
     }
 
     private static var overlayThemesSection: Sec {
-        .init("overlay.themes", kind: .dynamicTable,
+        // Typed inner shape (t-wnvm): emit + validate check the palette keys
+        // (a typo'd `pillbg` used to slip straight through to the silent
+        // per-key default). Every key optional; ranges/enums advisory — the
+        // lenient loader keeps its clamps and fallbacks.
+        let palette = ObjectShape(fields: [
+            SchemaField("pill-bg", .string,
+                        doc: "Pill body colour token (named / #rgb / #rrggbb "
+                           + "/ #rrggbbaa). Default black."),
+            SchemaField("accent", .string,
+                        doc: "Border / matched glow / prefix colour token. "
+                           + "Default white."),
+            SchemaField("text", .string,
+                        doc: "Unrolled label colour token. Default white."),
+            SchemaField("miss", .string,
+                        doc: "Red-flash override colour token."),
+            SchemaField("pill-bg-alpha", .number,
+                        doc: "Pill translucency 0..1 — lower = more frost "
+                           + "shows. Default 0.55.",
+                        minimum: 0, maximum: 1),
+            SchemaField("font", .string,
+                        doc: "Pill font family. Default mono.",
+                        enumDomain: ["mono", "rounded", "system", "menu"]),
+        ], doc: "One user palette; every key optional with a per-key default.")
+        return .init("overlay.themes", kind: .dynamicTable,
                 doc: "`[overlay.themes.<name>]` user-defined palettes — set "
                    + "`[overlay].theme = \"<name>\"` to select one. Keys: "
                    + "pill-bg / accent / text / miss (colour tokens), "
                    + "pill-bg-alpha (0..1), font (mono / rounded / system / "
-                   + "menu). Names shadowing a built-in are ignored.")
+                   + "menu). Names shadowing a built-in are ignored.",
+                dynamicValue: DynamicValue(keyPattern: nil, shape: palette))
     }
 
     private static var overlayEffectSection: Sec {
@@ -327,13 +351,45 @@ public extension PerchConfig {
 
     private static var behaviorPerAppSection: Sec {
         // Per-app `[behavior."<bundle-id>"]` overrides — literal-quote
-        // dynamic section names, parsed bespoke; schema-only here.
-        .init("behavior.\"<bundle-id>\"", kind: .dynamicTable,
+        // dynamic section names, parsed bespoke; schema/validate only here.
+        // Typed inner shape (t-wnvm): with the quote-header fold carrying it
+        // (sill 3.5.0), [behavior]'s static keys stay strict AND its
+        // arbitrary per-app sub-tables get these keys checked. keyPattern is
+        // nil on purpose — bundle ids aren't reliably reverse-DNS, so a
+        // typo'd STATIC key under [behavior] degrades to a type-mismatch
+        // ("expected table") instead of unknown-key, never false-rejecting
+        // a real id. All keys optional (nil = inherit the global); effect
+        // domains derive from the enums, so a new case can't drift.
+        let overrides = ObjectShape(fields: [
+            SchemaField("roles", .stringArray,
+                        doc: "AX-roles allow-list override; [] allows none. "
+                           + "Unset inherits [behavior].roles."),
+            SchemaField("min-size", .number,
+                        doc: "Min element size (pt) override. Clamped >= 0.",
+                        minimum: 0),
+            SchemaField("auto-click-on-unique", .boolean,
+                        doc: "Auto-click-on-unique-match override."),
+            SchemaField("appear-effect", .string,
+                        doc: "Entrance-animation override.",
+                        enumDomain: AppearEffect.allCases.map(\.rawValue)),
+            SchemaField("match-effect", .string,
+                        doc: "Winning-pill animation override.",
+                        enumDomain: MatchEffect.allCases.map(\.rawValue)),
+            SchemaField("unmatch-effect", .string,
+                        doc: "Losing-pills animation override.",
+                        enumDomain: UnmatchEffect.allCases.map(\.rawValue)),
+            SchemaField("narrow-effect", .string,
+                        doc: "Narrowing-survivors animation override.",
+                        enumDomain: MatchEffect.allCases.map(\.rawValue)),
+        ], doc: "Per-app overrides — set only the keys to override; missing "
+              + "keys inherit the global [behavior] / [overlay.effect] value.")
+        return .init("behavior.\"<bundle-id>\"", kind: .dynamicTable,
                 doc: "`[behavior.\"<bundle-id>\"]` per-app overrides — set "
                    + "only the keys to override: roles / min-size / "
                    + "auto-click-on-unique / appear-effect / match-effect / "
                    + "unmatch-effect / narrow-effect. Missing keys inherit "
-                   + "the global [behavior] / [overlay.effect] value.")
+                   + "the global [behavior] / [overlay.effect] value.",
+                dynamicValue: DynamicValue(keyPattern: nil, shape: overrides))
     }
 
     private static var regionalSection: Sec {
@@ -385,12 +441,19 @@ public extension PerchConfig {
     }
 
     private static var searchSynonymsSection: Sec {
+        // Typed LEAF values (t-wnvm, sill 3.5.0): word → array-of-strings.
+        // A scalar (`close = "shut"`) or a non-string element used to be
+        // silently dropped by the loader with no signal anywhere.
         .init("search.synonyms", kind: .dynamicTable,
                 doc: "`[search.synonyms]` fuzzy-match expansion table for "
                    + "overlay --search / overlay --menu / overlay --windows / "
                    + "overlay --emoji. Each key maps "
                    + "to a string array of synonyms (bidirectional; the key "
-                   + "itself and empties are dropped).")
+                   + "itself and empties are dropped).",
+                dynamicValue: DynamicValue(keyPattern: nil,
+                    leaf: SchemaField("<word>", .stringArray,
+                        doc: "Synonyms for this word (bidirectional; the "
+                           + "key itself and empty strings are dropped).")))
     }
 
     // MARK: - JSON Schema (taplo) — emitted from the SAME `configSpec`
