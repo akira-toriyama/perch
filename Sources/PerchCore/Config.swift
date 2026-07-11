@@ -602,9 +602,7 @@ public struct PerchConfig: Sendable {
             labels: assembleLabels(doc, s),
             overlay: assembleOverlay(doc, s),
             effect: assembleEffect(s),
-            border: BorderConfig(
-                effect: s.borderEffect, glow: s.borderGlow,
-                width: s.borderWidth, cycleSeconds: s.borderCycleSeconds),
+            border: assembleBorder(doc, s),
             sound: SoundConfig(
                 match: s.soundMatch, unmatch: s.soundUnmatch,
                 activate: s.soundActivate, volume: s.volume),
@@ -725,6 +723,38 @@ public struct PerchConfig: Sendable {
             appear: s.appear, match: s.match, unmatch: s.unmatch,
             narrow: s.narrow, intensity: s.intensity,
             durationScale: s.durationScale)
+    }
+
+    /// `[overlay.border]` — `effect`/`glow`/`width`/`color-cycle-seconds`
+    /// came from the spec. The only bespoke bit is the DEPRECATED
+    /// `color-cycle-ms` (integer ms) alias, superseded by
+    /// `color-cycle-seconds` (t-5qxd — config unit == runtime unit == seconds,
+    /// so the value reaches the animator unconverted). An old config still
+    /// loads: if the new key is absent we migrate the legacy ms→s (the same
+    /// 0..120000 range-fallback the retired `msToSecondsFallback` builder used)
+    /// and warn once; if both are present the new key wins.
+    private static func assembleBorder(
+        _ doc: TOMLDoc, _ s: Staged
+    ) -> BorderConfig {
+        // `color-cycle-seconds` decodes via the spec into s.borderCycleSeconds.
+        var cycleSeconds = s.borderCycleSeconds
+        let sect = doc["overlay.border"]
+        if let legacyMs = sect?["color-cycle-ms"]?.asDouble {
+            if sect?["color-cycle-seconds"] == nil {
+                cycleSeconds = (legacyMs >= 0 && legacyMs <= 120_000)
+                    ? legacyMs / 1000
+                    : PerchConfig.default.border.cycleSeconds
+                Log.line("config: [overlay.border].color-cycle-ms is deprecated "
+                         + "— use color-cycle-seconds (seconds). Converting "
+                         + "\(Int(legacyMs))ms → \(cycleSeconds)s.")
+            } else {
+                Log.line("config: [overlay.border].color-cycle-ms is deprecated "
+                         + "and ignored — color-cycle-seconds takes precedence.")
+            }
+        }
+        return BorderConfig(
+            effect: s.borderEffect, glow: s.borderGlow,
+            width: s.borderWidth, cycleSeconds: cycleSeconds)
     }
 
     /// `[behavior]` — `auto-click-on-unique`/`min-size` came from the

@@ -137,7 +137,8 @@ public extension PerchConfig {
                        + "Modifiers shift|ctrl|alt|cmd joined with `+`, "
                        + "then a key (e.g. \"shift+space\", \"ctrl+alt+j\")."),
                 // cancel — trim + lowercase; empty falls back to default.
-                .strLowerNonEmpty("cancel", \.cancel, default: "esc",
+                .strLowerNonEmpty("cancel", \.cancel,
+                    default: PerchConfig.default.hotkey.cancel,
                     doc: "Key that dismisses an active overlay (single key, "
                        + "no modifiers). Unknown names fall back to esc."),
             ])
@@ -150,7 +151,8 @@ public extension PerchConfig {
                     doc: "Characters used to label elements, in priority "
                        + "order. De-duplicated, non-letters dropped, "
                        + "lowercased; empty after cleaning = default."),
-                .bool("prioritise-center", \.prioritiseCenter, default: true,
+                .bool("prioritise-center", \.prioritiseCenter,
+                    default: PerchConfig.default.labels.prioritiseCenter,
                     doc: "Assign the easiest keys to elements closest to "
                        + "screen center when elements outnumber first-tier "
                        + "letters."),
@@ -168,40 +170,45 @@ public extension PerchConfig {
             // theme — custom-palette interplay + `random`; bespoke.
             // No enum: a `[overlay.themes.<name>]` custom name is valid
             // but runtime-dynamic, so a static enum would false-flag it.
-            .descOnly("theme", default: .string("system"),
+            .descOnly("theme", default: .string(PerchConfig.default.overlay.theme),
                 doc: "Pill color/typography theme. A sill catalog name "
                    + "(terminal / dracula / github-dark / … / system / "
                    + "random) OR a [overlay.themes.<name>] custom palette "
                    + "name. Unknown clamps to \"system\"."),
             // accent — "system" / "accent" alias, or a sill colour token.
             .strSanitised("accent", \.accent, sanitise: Self.sanitiseAccent,
-                default: "system",
+                default: PerchConfig.default.overlay.accent,
                 doc: "Accent override layered over the theme. \"system\" "
                    + "(default) keeps the theme accent; a sill colour "
                    + "token (named / #rgb / #rrggbb / #rrggbbaa) overrides "
                    + "it. Unrecognised falls back to \"system\"."),
             .enumStr("pill-shape", \.pillShape, PillShape.parse,
-                domain: PillShape.allCases.map(\.rawValue), default: "pill",
+                domain: PillShape.allCases.map(\.rawValue),
+                default: PerchConfig.default.overlay.pillShape.rawValue,
                 doc: "Pill geometry: pill / square / circle / underline / "
                    + "tag. Unknown clamps to \"pill\"."),
             .dblClampedFallback("font-size", \.fontSize, min: 8, max: 32,
-                default: 15,
+                default: PerchConfig.default.overlay.fontSize,
                 doc: "Pill label font size (pt). Clamped 8..32."),
-            .bool("blur-enabled", \.blurEnabled, default: true,
+            .bool("blur-enabled", \.blurEnabled,
+                default: PerchConfig.default.overlay.blurEnabled,
                 doc: "Frosted-glass NSVisualEffectView under the pills; "
                    + "false = solid dark fill."),
-            .bool("anim-enabled", \.animEnabled, default: true,
+            .bool("anim-enabled", \.animEnabled,
+                default: PerchConfig.default.overlay.animEnabled,
                 doc: "Global motion kill-switch — false collapses every "
                    + "effect to its instant baseline."),
-            .bool("shortcut-badge", \.showShortcuts, default: true,
+            .bool("shortcut-badge", \.showShortcuts,
+                default: PerchConfig.default.overlay.showShortcuts,
                 doc: "Show AX-bound keyboard-shortcut annotations on "
                    + "overlay --menu pills."),
-            .strLower("peek-key", \.peekKey, default: "space",
+            .strLower("peek-key", \.peekKey,
+                default: PerchConfig.default.overlay.peekKey,
                 doc: "Hold-to-peek key (trimmed + lowercased). Empty "
                    + "disables; unknown names disable silently."),
             // show-modifier-badge — bool back-compat + a log; bespoke.
             .descOnly("show-modifier-badge", domain: badgeDomain,
-                default: .string("off"),
+                default: .string(PerchConfig.default.overlay.modifierBadge.rawValue),
                 doc: "Modifier-badge corner annotation: off / glyph / "
                    + "action. Legacy bools true/false map to glyph/off."),
         ]
@@ -248,30 +255,33 @@ public extension PerchConfig {
                 .enumStrResolved("appear", \.appear, AppearEffect.parse,
                     resolve: { $0.resolvingRandom() },
                     domain: AppearEffect.allCases.map(\.rawValue),
-                    default: "pop",
+                    default: PerchConfig.default.effect.appear.rawValue,
                     doc: "Entrance animation as the overlay appears: off / "
                        + "pop / cascade / fade-in / drop-in / bloom / random."),
                 .enumStr("match", \.match, MatchEffect.parse,
-                    domain: MatchEffect.allCases.map(\.rawValue), default: "off",
+                    domain: MatchEffect.allCases.map(\.rawValue),
+                    default: PerchConfig.default.effect.match.rawValue,
                     doc: "Animation on the winning pill at resolve. Unknown "
                        + "clamps to \"off\"."),
                 .enumStr("unmatch", \.unmatch, UnmatchEffect.parse,
                     domain: UnmatchEffect.allCases.map(\.rawValue),
-                    default: "off",
+                    default: PerchConfig.default.effect.unmatch.rawValue,
                     doc: "Animation layered on the 200ms red flash for a "
                        + "missed key. Unknown clamps to \"off\"."),
                 .enumStr("narrow", \.narrow, MatchEffect.parse,
-                    domain: MatchEffect.allCases.map(\.rawValue), default: "off",
+                    domain: MatchEffect.allCases.map(\.rawValue),
+                    default: PerchConfig.default.effect.narrow.rawValue,
                     doc: "Per-pill exit animation when a typed prefix filters "
                        + "a pill out. fireworks/confetti downgrade to fade at "
                        + "runtime."),
                 .enumStr("intensity", \.intensity, EffectIntensity.parse,
                     domain: EffectIntensity.allCases.map(\.rawValue),
-                    default: "normal",
+                    default: PerchConfig.default.effect.intensity.rawValue,
                     doc: "Spatial magnitude scaler: subtle / normal / bold / "
                        + "wild (does not lengthen duration)."),
                 .dblRangeFallback("duration-scale", \.durationScale,
-                    min: 0.1, max: 5.0, default: 1.0,
+                    min: 0.1, max: 5.0,
+                    default: PerchConfig.default.effect.durationScale,
                     doc: "Multiplier on every animation duration. Clamped "
                        + "0.1..5.0; out-of-range falls back to 1.0."),
             ])
@@ -283,22 +293,26 @@ public extension PerchConfig {
                 .enumStrResolved("effect", \.borderEffect, BorderEffect.parse,
                     resolve: { $0.resolvingRandom() },
                     domain: BorderEffect.allCases.map(\.rawValue),
-                    default: "off",
+                    default: PerchConfig.default.border.effect.rawValue,
                     doc: "Border preset: off / neon / cyber / vapor / kawaii / "
                        + "rainbow / random."),
-                .bool("glow", \.borderGlow, default: true,
+                .bool("glow", \.borderGlow,
+                    default: PerchConfig.default.border.glow,
                     doc: "NSShadow bloom under the stroke (the neon-tube feel)."),
                 .dblRangeFallback("width", \.borderWidth, min: 0.5, max: 30,
-                    default: 1.5,
+                    default: PerchConfig.default.border.width,
                     doc: "Border line width (pt). Clamped 0.5..30; "
                        + "out-of-range falls back to 1.5."),
-                // color-cycle-ms — ms in config, seconds internally; the
-                // range fallback is on the RAW ms then /1000.
-                .msToSecondsFallback("color-cycle-ms", \.borderCycleSeconds,
-                    min: 0, max: 120_000, defaultMs: 3000,
-                    doc: "Hue rotation period (integer ms). Clamped 0..120000 "
-                       + "(0 locks the color); out-of-range falls back to "
-                       + "3000ms."),
+                // color-cycle-seconds — seconds in config AND internally, so
+                // the value flows to the animator unconverted (t-5qxd: config
+                // unit == runtime unit == seconds; no ms↔s bridge anywhere).
+                // The legacy integer `color-cycle-ms` is still accepted and
+                // migrated (÷1000) in `assembleBorder`.
+                .dblRangeFallback("color-cycle-seconds", \.borderCycleSeconds,
+                    min: 0, max: 120,
+                    default: PerchConfig.default.border.cycleSeconds,
+                    doc: "Hue rotation period (seconds). Clamped 0..120 "
+                       + "(0 locks the color); out-of-range falls back to 3.0."),
             ])
     }
 
@@ -306,14 +320,17 @@ public extension PerchConfig {
         .init("overlay.sound", doc: "Audio feedback. match / unmatch / "
                 + "activate take a macOS system-sound name OR a file path "
                 + "(tilde-expanded); empty silences.", fields: [
-                .str("match", \.soundMatch, default: "",
+                .str("match", \.soundMatch,
+                    default: PerchConfig.default.sound.match,
                     doc: "Sound on hint resolve (system-sound name or path)."),
-                .str("unmatch", \.soundUnmatch, default: "",
+                .str("unmatch", \.soundUnmatch,
+                    default: PerchConfig.default.sound.unmatch,
                     doc: "Sound on a missed keypress."),
-                .str("activate", \.soundActivate, default: "",
+                .str("activate", \.soundActivate,
+                    default: PerchConfig.default.sound.activate,
                     doc: "Sound when hint mode activates."),
                 .dblClampedFallback("volume", \.volume, min: 0, max: 1,
-                    default: 0.5,
+                    default: PerchConfig.default.sound.volume,
                     doc: "Master volume 0..1."),
             ])
     }
@@ -321,7 +338,8 @@ public extension PerchConfig {
     private static var excludeSection: Sec {
         .init("exclude", doc: "Bundle IDs perch never activates over.",
                   fields: [
-                .strArray("apps", \.excludeApps, default: [],
+                .strArray("apps", \.excludeApps,
+                    default: PerchConfig.default.behavior.excludeApps,
                     doc: "Bundle-id globs (`*` / `?`) perch ignores; `[]` = "
                        + "none."),
             ])
@@ -329,7 +347,8 @@ public extension PerchConfig {
 
     private static var behaviorSection: Sec {
         .init("behavior", doc: "AX walk + dispatch behaviour.", fields: [
-                .bool("auto-click-on-unique", \.autoClickOnUnique, default: true,
+                .bool("auto-click-on-unique", \.autoClickOnUnique,
+                    default: PerchConfig.default.behavior.autoClickOnUnique,
                     doc: "Auto-click when one candidate remains after partial "
                        + "input."),
                 // roles — array; empty entries dropped. Bespoke (also feeds
@@ -337,7 +356,8 @@ public extension PerchConfig {
                 .descArray("roles", item: nil, default: defaultRoles,
                     doc: "AX roles to label (no `AX` prefix). Empty entries "
                        + "dropped."),
-                .dblMinFallback("min-size", \.minSize, min: 0, default: 6,
+                .dblMinFallback("min-size", \.minSize, min: 0,
+                    default: PerchConfig.default.behavior.minSize,
                     doc: "Min frame size (pt, either axis) for an element to "
                        + "be labeled. Clamped >= 0. 0 disables."),
             ])
@@ -399,10 +419,11 @@ public extension PerchConfig {
     private static var regionalSection: Sec {
         .init("regional", doc: "Frame floor for regional-mode container "
                 + "labeling.", fields: [
-                .dblMinFallback("min-width", \.regMinWidth, min: 0, default: 200,
+                .dblMinFallback("min-width", \.regMinWidth, min: 0,
+                    default: PerchConfig.default.regional.minWidth,
                     doc: "Min container width (pt) to label. Clamped >= 0."),
                 .dblMinFallback("min-height", \.regMinHeight, min: 0,
-                    default: 100,
+                    default: PerchConfig.default.regional.minHeight,
                     doc: "Min container height (pt) to label. Clamped >= 0."),
             ])
     }
@@ -411,22 +432,25 @@ public extension PerchConfig {
         .init("grid", doc: "Single-pass + recursive grid density + "
                 + "nested-grid threshold.", fields: [
                 .intRangeFallback("cols", \.gridCols, min: 2, max: 32,
-                    default: 12,
+                    default: PerchConfig.default.grid.cols,
                     doc: "Single-pass overlay --grid columns. Clamped 2..32."),
                 .intRangeFallback("rows", \.gridRows, min: 2, max: 32,
-                    default: 8,
+                    default: PerchConfig.default.grid.rows,
                     doc: "Single-pass overlay --grid rows. Clamped 2..32."),
                 .intRangeFallback("recursive-cols", \.recursiveCols,
-                    min: 2, max: 32, default: 3,
+                    min: 2, max: 32,
+                    default: PerchConfig.default.grid.recursiveCols,
                     doc: "overlay --rgrid columns per drill level. Clamped 2..32."),
                 .intRangeFallback("recursive-rows", \.recursiveRows,
-                    min: 2, max: 32, default: 3,
+                    min: 2, max: 32,
+                    default: PerchConfig.default.grid.recursiveRows,
                     doc: "overlay --rgrid rows per drill level. Clamped 2..32."),
                 .intRangeFallback("max-depth", \.maxDepth, min: 1, max: 10,
-                    default: 3,
+                    default: PerchConfig.default.grid.maxDepth,
                     doc: "Max recursive overlay --rgrid drill depth. Clamped 1..10."),
                 .dblRangeFallback("nest-min-size", \.nestMinSize,
-                    min: 1, max: 1000, default: 100,
+                    min: 1, max: 1000,
+                    default: PerchConfig.default.grid.nestMinSize,
                     doc: "`,g` chord falls back to AXPress below this frame "
                        + "floor (pt). Clamped 1..1000."),
             ])
@@ -435,11 +459,11 @@ public extension PerchConfig {
     private static var chordSection: Sec {
         .init("chord", doc: "Chord-suffix action mode (#57).", fields: [
                 // leader — single-char prefix; bespoke.
-                .descOnly("leader", default: .string(""),
+                .descOnly("leader", default: .string(PerchConfig.default.chord.leader),
                     doc: "Chord leader (first char only after trim+lowercase). "
                        + "Empty (default) disables chord mode."),
                 .dblClampedFallback("timeout-ms", \.timeoutMs, min: 0, max: 5000,
-                    default: 600,
+                    default: PerchConfig.default.chord.timeoutMs,
                     doc: "Per-phase chord wait (ms). Clamped 0..5000."),
             ])
     }
@@ -674,21 +698,6 @@ private extension ConfigSchema.Field where Root == PerchConfig.Staged {
                   if let n = v.asDouble { c[keyPath: kp] = Swift.max(lo, n) }
               },
               def: .number(def), min: lo, doc: doc)
-    }
-
-    /// Integer-ms in config → seconds field, with a range CHECK on the RAW
-    /// ms then `/1000`, else fallback to `defaultMs/1000` — `color-cycle-ms`.
-    /// Reads as a number (the old parser used `asDouble`).
-    static func msToSecondsFallback(
-        _ key: String, _ kp: WritableKeyPath<Root, Double>,
-        min lo: Double, max hi: Double, defaultMs: Double, doc: String? = nil
-    ) -> Self {
-        .init(key: key, kind: .scalar(.integer),
-              apply: { c, v in
-                  guard let n = v.asDouble else { return }
-                  c[keyPath: kp] = (n >= lo && n <= hi) ? n / 1000 : defaultMs / 1000
-              },
-              def: .int(Int(defaultMs)), min: lo, max: hi, doc: doc)
     }
 
     /// String array, written as-is when present — `[exclude].apps`.

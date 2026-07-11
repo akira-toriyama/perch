@@ -282,12 +282,12 @@
           "additionalProperties" : false,
           "description" : "Neon-border preset around each pill.",
           "properties" : {
-            "color-cycle-ms" : {
-              "default" : 3000,
-              "description" : "Hue rotation period (integer ms). Clamped 0..120000 (0 locks the color); out-of-range falls back to 3000ms.",
-              "maximum" : 120000,
+            "color-cycle-seconds" : {
+              "default" : 3,
+              "description" : "Hue rotation period (seconds). Clamped 0..120 (0 locks the color); out-of-range falls back to 3.0.",
+              "maximum" : 120,
               "minimum" : 0,
-              "type" : "integer"
+              "type" : "number"
             },
             "effect" : {
               "default" : "off",

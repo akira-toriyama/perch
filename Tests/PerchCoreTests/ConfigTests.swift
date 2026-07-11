@@ -358,4 +358,47 @@ final class ConfigTests: XCTestCase {
             HotkeyCombo.parse("space"),
             HotkeyCombo(modifiers: [], key: "space"))
     }
+
+    // MARK: - [overlay.border] color-cycle unit (t-5qxd)
+    //
+    // The knob is `color-cycle-seconds` (seconds in config AND runtime — no
+    // ms↔s bridge). The retired `color-cycle-ms` (integer ms) is still
+    // accepted as a deprecated alias, migrated ÷1000.
+
+    func testColorCycleSecondsParses() {
+        // In-range value flows straight through (seconds == seconds).
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay.border]\ncolor-cycle-seconds = 5")
+                .border.cycleSeconds, 5.0)
+        // 0 is valid (locks the color).
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay.border]\ncolor-cycle-seconds = 0")
+                .border.cycleSeconds, 0.0)
+        // Out of 0..120 → falls back to the 3.0 default.
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay.border]\ncolor-cycle-seconds = 999")
+                .border.cycleSeconds, 3.0)
+    }
+
+    func testColorCycleMsLegacyMigratesToSeconds() {
+        // Deprecated integer-ms alias: migrated ÷1000 when the new key is absent.
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay.border]\ncolor-cycle-ms = 5000")
+                .border.cycleSeconds, 5.0)
+        // Out of the legacy 0..120000 ms range → 3.0 default (byte-identical to
+        // the retired msToSecondsFallback builder).
+        XCTAssertEqual(
+            PerchConfig.parse("[overlay.border]\ncolor-cycle-ms = 200000")
+                .border.cycleSeconds, 3.0)
+    }
+
+    func testColorCycleSecondsWinsOverLegacyMs() {
+        // Both present → the canonical seconds key wins; the legacy ms is ignored.
+        XCTAssertEqual(
+            PerchConfig.parse("""
+            [overlay.border]
+            color-cycle-seconds = 7
+            color-cycle-ms = 5000
+            """).border.cycleSeconds, 7.0)
+    }
 }

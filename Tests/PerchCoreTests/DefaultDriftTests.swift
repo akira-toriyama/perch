@@ -9,11 +9,12 @@ import XCTest
 /// drift. This locks that: re-hardcoding a `Staged` seed (or editing
 /// `.default`'s assembly) so the two disagree fails here. (A3 DRY — t-5qxd.)
 ///
-/// NOTE: the *shown* default (emitted JSON Schema) is intentionally NOT
-/// asserted equal here — some knobs emit in a different representation than
-/// they resolve to (e.g. `[overlay.border] color-cycle-ms = 3000` in the
-/// schema vs `cycleSeconds = 3.0` resolved). Locking shown==resolved needs
-/// that unit bridge and is tracked as a follow-up.
+/// NOTE: this asserts the RESOLVED-default path (empty-parse == `.default`).
+/// The *shown* default (each spec field's emitted `def:`) is locked to
+/// `.default` separately by `SchemaDefaultDerivationTests` (t-5qxd A3 #1).
+/// The former unit gap — `color-cycle-ms = 3000` emitted vs `cycleSeconds =
+/// 3.0` resolved — is CLOSED: the knob is now `color-cycle-seconds` (seconds
+/// in config AND runtime), so shown == resolved with no unit bridge.
 final class DefaultDriftTests: XCTestCase {
 
     func testEmptyParseEqualsBuiltInDefault() {
