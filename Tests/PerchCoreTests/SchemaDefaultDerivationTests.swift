@@ -16,10 +16,14 @@ import ConfigSchema
 /// Representative coverage: one field per `DefaultValue` case (string / bool /
 /// number / int / stringArray / enum-as-rawValue-string) across sections, plus
 /// the two knobs central to this task (`color-cycle-seconds`, `timeout-ms`).
-/// The three intentionally-remaining literals — `hotkey.active` (bespoke
-/// HotkeyCombo, no serializer yet), `labels.alphabet` / `behavior.roles`
-/// (already single-sourced via the shared `defaultAlphabet`/`defaultRoles`
-/// consts `.default` also uses) — are out of scope by construction.
+///
+/// `hotkey.active` stays a literal (a descOnly schema example; `HotkeyCombo` has
+/// no String serializer to derive it from, and there's no consumer yet to earn
+/// one — rule-of-three). It can't be locked by equality, but a parse-round-trip
+/// guard below asserts the advertised string still parses to
+/// `.default.hotkey.active` — catching drift without a serializer.
+/// `labels.alphabet` / `behavior.roles` need no guard: they already reference
+/// the shared `defaultAlphabet` / `defaultRoles` consts `.default` itself uses.
 final class SchemaDefaultDerivationTests: XCTestCase {
 
     private func def(_ section: String, _ key: String) -> ConfigSchema.DefaultValue? {
@@ -48,5 +52,16 @@ final class SchemaDefaultDerivationTests: XCTestCase {
         XCTAssertEqual(def("overlay.border", "effect"),
                        .string(d.border.effect.rawValue))
         XCTAssertEqual(def("chord", "timeout-ms"), .number(d.chord.timeoutMs))
+    }
+
+    /// `hotkey.active` is the one schema default kept as a literal (a descOnly
+    /// example; `HotkeyCombo` has no `parse` inverse to derive it from). Guard
+    /// it can't silently drift from the real built-in: the advertised default
+    /// string must parse back to `.default.hotkey.active`.
+    func testActiveSchemaDefaultParsesToBuiltIn() {
+        guard case .string(let shown)? = def("hotkey", "active") else {
+            return XCTFail("hotkey.active should carry a string schema default")
+        }
+        XCTAssertEqual(HotkeyCombo.parse(shown), PerchConfig.default.hotkey.active)
     }
 }
