@@ -43,58 +43,62 @@ import Toml
 public extension PerchConfig {
 
     /// Mutable staging struct the declarative spec decodes the UNIFORM
-    /// scalar sections into. Seeded with the SAME built-in defaults the
-    /// old section parsers fell back to, so "write only when the key is
-    /// present" reproduces every default path exactly. Sub-structs are
-    /// assembled from this after `configSpec.decode` (the bespoke
-    /// non-uniform fields are filled separately from the flat `doc`).
+    /// scalar sections into. Every seed is read from `PerchConfig.default`
+    /// (the ONE built-in-default source — "what perch does with no config
+    /// file"), so "write only when the key is present" reproduces the
+    /// no-file default path EXACTLY and by construction: a seed can no
+    /// longer drift from `.default`. Sub-structs are assembled from this
+    /// after `configSpec.decode` (the bespoke non-uniform fields are filled
+    /// separately from the flat `doc`). Guarded by `DefaultDriftTests`
+    /// (`parse("") == .default` for every uniform scalar). A3 — t-5qxd.
     struct Staged {
+        private static let d = PerchConfig.default
         // [hotkey] (active is bespoke — HotkeyCombo grammar)
-        var cancel = PerchConfig.defaultCancelKey
+        var cancel = Staged.d.hotkey.cancel
         // [labels] (alphabet is bespoke — sanitiseAlphabet)
-        var prioritiseCenter = true
+        var prioritiseCenter = Staged.d.labels.prioritiseCenter
         // [overlay] uniform scalars (theme / show-modifier-badge bespoke)
-        var accent = "system"
-        var pillShape: PillShape = .pill
-        var fontSize: Double = 15
-        var blurEnabled = true
-        var animEnabled = true
-        var showShortcuts = true
-        var peekKey = "space"
+        var accent = Staged.d.overlay.accent
+        var pillShape = Staged.d.overlay.pillShape
+        var fontSize = Staged.d.overlay.fontSize
+        var blurEnabled = Staged.d.overlay.blurEnabled
+        var animEnabled = Staged.d.overlay.animEnabled
+        var showShortcuts = Staged.d.overlay.showShortcuts
+        var peekKey = Staged.d.overlay.peekKey
         // [overlay.effect]
-        var appear: AppearEffect = .pop
-        var match: MatchEffect = .off
-        var unmatch: UnmatchEffect = .off
-        var narrow: MatchEffect = .off
-        var intensity: EffectIntensity = .normal
-        var durationScale: Double = 1.0
+        var appear = Staged.d.effect.appear
+        var match = Staged.d.effect.match
+        var unmatch = Staged.d.effect.unmatch
+        var narrow = Staged.d.effect.narrow
+        var intensity = Staged.d.effect.intensity
+        var durationScale = Staged.d.effect.durationScale
         // [overlay.border]
-        var borderEffect: BorderEffect = .off
-        var borderGlow = true
-        var borderWidth: Double = 1.5
-        var borderCycleSeconds: Double = 3.0
+        var borderEffect = Staged.d.border.effect
+        var borderGlow = Staged.d.border.glow
+        var borderWidth = Staged.d.border.width
+        var borderCycleSeconds = Staged.d.border.cycleSeconds
         // [overlay.sound]
-        var soundMatch = ""
-        var soundUnmatch = ""
-        var soundActivate = ""
-        var volume: Double = 0.5
+        var soundMatch = Staged.d.sound.match
+        var soundUnmatch = Staged.d.sound.unmatch
+        var soundActivate = Staged.d.sound.activate
+        var volume = Staged.d.sound.volume
         // [behavior] uniform scalars (roles/web-roles/per-app bespoke)
-        var autoClickOnUnique = true
-        var minSize: Double = 6
+        var autoClickOnUnique = Staged.d.behavior.autoClickOnUnique
+        var minSize = Staged.d.behavior.minSize
         // [exclude]
-        var excludeApps: [String] = []
+        var excludeApps = Staged.d.behavior.excludeApps
         // [regional]
-        var regMinWidth: Double = 200
-        var regMinHeight: Double = 100
+        var regMinWidth = Staged.d.regional.minWidth
+        var regMinHeight = Staged.d.regional.minHeight
         // [grid]
-        var gridCols = 12
-        var gridRows = 8
-        var recursiveCols = 3
-        var recursiveRows = 3
-        var maxDepth = 3
-        var nestMinSize: Double = 100
+        var gridCols = Staged.d.grid.cols
+        var gridRows = Staged.d.grid.rows
+        var recursiveCols = Staged.d.grid.recursiveCols
+        var recursiveRows = Staged.d.grid.recursiveRows
+        var maxDepth = Staged.d.grid.maxDepth
+        var nestMinSize = Staged.d.grid.nestMinSize
         // [chord] (leader is bespoke — single-char prefix)
-        var timeoutMs: Double = 600
+        var timeoutMs = Staged.d.chord.timeoutMs
 
         public init() {}
     }
