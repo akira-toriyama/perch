@@ -132,6 +132,10 @@ public extension PerchConfig {
         .init("hotkey", doc: "Activation + cancel binding.", fields: [
                 // active = "shift+space" — HotkeyCombo grammar (modifiers
                 // joined with `+`, then a key); parsed bespoke, schema-only.
+                // The one schema default kept literal (HotkeyCombo has no
+                // String serializer to derive it from .default.hotkey.active);
+                // a parse-round-trip in SchemaDefaultDerivationTests guards it
+                // against drift.
                 .descOnly("active", default: .string("shift+space"),
                     doc: "Global hotkey that activates hint mode. "
                        + "Modifiers shift|ctrl|alt|cmd joined with `+`, "
