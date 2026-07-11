@@ -292,13 +292,16 @@ public extension PerchConfig {
                     default: 1.5,
                     doc: "Border line width (pt). Clamped 0.5..30; "
                        + "out-of-range falls back to 1.5."),
-                // color-cycle-ms — ms in config, seconds internally; the
-                // range fallback is on the RAW ms then /1000.
-                .msToSecondsFallback("color-cycle-ms", \.borderCycleSeconds,
-                    min: 0, max: 120_000, defaultMs: 3000,
-                    doc: "Hue rotation period (integer ms). Clamped 0..120000 "
-                       + "(0 locks the color); out-of-range falls back to "
-                       + "3000ms."),
+                // color-cycle-seconds — seconds in config AND internally, so
+                // the value flows to the animator unconverted (t-5qxd: config
+                // unit == runtime unit == seconds; no ms↔s bridge anywhere).
+                // The legacy integer `color-cycle-ms` is still accepted and
+                // migrated (÷1000) in `assembleBorder`.
+                .dblRangeFallback("color-cycle-seconds", \.borderCycleSeconds,
+                    min: 0, max: 120,
+                    default: PerchConfig.default.border.cycleSeconds,
+                    doc: "Hue rotation period (seconds). Clamped 0..120 "
+                       + "(0 locks the color); out-of-range falls back to 3.0."),
             ])
     }
 
@@ -674,21 +677,6 @@ private extension ConfigSchema.Field where Root == PerchConfig.Staged {
                   if let n = v.asDouble { c[keyPath: kp] = Swift.max(lo, n) }
               },
               def: .number(def), min: lo, doc: doc)
-    }
-
-    /// Integer-ms in config → seconds field, with a range CHECK on the RAW
-    /// ms then `/1000`, else fallback to `defaultMs/1000` — `color-cycle-ms`.
-    /// Reads as a number (the old parser used `asDouble`).
-    static func msToSecondsFallback(
-        _ key: String, _ kp: WritableKeyPath<Root, Double>,
-        min lo: Double, max hi: Double, defaultMs: Double, doc: String? = nil
-    ) -> Self {
-        .init(key: key, kind: .scalar(.integer),
-              apply: { c, v in
-                  guard let n = v.asDouble else { return }
-                  c[keyPath: kp] = (n >= lo && n <= hi) ? n / 1000 : defaultMs / 1000
-              },
-              def: .int(Int(defaultMs)), min: lo, max: hi, doc: doc)
     }
 
     /// String array, written as-is when present — `[exclude].apps`.

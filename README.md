@@ -111,7 +111,7 @@ duration-scale = 1.0             # 0.1..5.0 — global tempo multiplier
 effect        = "off"            # off / neon / cyber / vapor / kawaii / rainbow / random
 glow          = true             # NSShadow bloom
 width         = 1.5
-color-cycle-ms = 3000            # hue rotation period (integer ms)
+color-cycle-seconds = 3.0        # hue rotation period (seconds)
 
 # Audio feedback. Each value: system-sound name ("Tink" / "Pop" / ...)
 # OR a file path ("~/foo.mp3" / "/path/click.wav"). Empty ("") silences.

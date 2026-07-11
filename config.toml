@@ -361,12 +361,13 @@ glow = true
 # pairs cleanly with the pill 10pt corner radius.
 width = 1.5
 
-# Hue rotation period in integer milliseconds (the family
-# spelling) — the border's hue rotates around the color wheel over
-# this period, returning to its base color every cycle. Set to 0
-# to lock the color (rainbow then collapses to a static white
-# border). Clamped 0..120000.
-color-cycle-ms = 3000
+# Hue rotation period in seconds — the border's hue rotates around
+# the color wheel over this period, returning to its base color every
+# cycle. Set to 0 to lock the color (rainbow then collapses to a
+# static white border). Clamped 0..120. (The old integer-ms
+# `color-cycle-ms` is deprecated but still accepted — it is migrated
+# to seconds with a warning.)
+color-cycle-seconds = 3.0
 
 
 # ---- Overlay sound -----------------------------------------------

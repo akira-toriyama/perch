@@ -114,7 +114,7 @@ duration-scale = 1.0             # 0.1..5.0 — 全 duration の倍率
 effect        = "off"            # off / neon / cyber / vapor / kawaii / rainbow / random
 glow          = true
 width         = 1.5
-color-cycle-ms = 3000            # 色相回転周期（整数 ms）
+color-cycle-seconds = 3.0        # 色相回転周期（秒）
 
 # サウンド — システムサウンド名 ("Tink" / "Pop" / ...) または
 # ファイルパス ("~/foo.mp3" 等)。空 ("") でサイレント。
