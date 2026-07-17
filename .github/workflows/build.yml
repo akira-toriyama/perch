@@ -23,6 +23,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Build-only: swift build/test and the smoke read and write
+          # locally, never push — drop the persisted checkout token. t-yaxa
+          persist-credentials: false
 
       # Shared Swift build (setup-xcode + SPM cache + build + test).
       - uses: akira-toriyama/.github/actions/swift-build@main
