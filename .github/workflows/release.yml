@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   release:
-    uses: akira-toriyama/glyph/.github/workflows/release.yml@v0.5.0
+    uses: akira-toriyama/glyph/.github/workflows/release.yml@v0.8.0
     with:
       app: Perch
       # yabai-style CLI (atelier Phase 3 M3): the post-build smoke is
