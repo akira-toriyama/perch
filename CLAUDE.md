@@ -928,15 +928,21 @@ re-confirmation.
   `config.toml` uses a flat dotted-section subset, but new `.toml`
   surface is bounded by the shared lib, not a local parser budget.
 - [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/)
-  *(reviewed 2026-05-24)* — type / scope grammar
-  `<type>(<scope>)<!>: <subject>`. The rules are the account-wide
-  [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md);
-  CI enforces this via `commit-lint.yml`.
+  *(reviewed 2026-07-20)* — **retired ancestor**, kept for
+  provenance only. Its `<type>(<scope>)<!>: <subject>` grammar is
+  no longer what we write: the leading `:code:` is the type now
+  (see Conventions). glyph's lint accepts a legacy `<type>(scope):`
+  token and ignores it, so old history keeps passing — that is
+  tolerance for the past, not a second legal form.
 - [Gitmoji](https://gitmoji.dev/)
-  *(reviewed 2026-05-24)* — the leading emoji on each commit
-  (`:sparkles:` feat, `:bug:` fix, `:lock:` security, `:memo:` docs,
-  `:test_tube:` test, …). Same convention as stroke / facet —
-  mirror that list when in doubt.
+  *(reviewed 2026-07-20)* — the vocabulary the leading `:code:` is
+  drawn from. Which code means what, and which bump it carries, is
+  `glyph rules` (`--md` for the table) — the machine source of
+  truth. Don't re-list it here and don't map codes back to the
+  retired `feat` / `fix` words. The prose rules are the
+  account-wide
+  [CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md);
+  CI enforces them via `commit-lint.yml`.
 
 ### CLI design
 
