@@ -613,12 +613,12 @@ Triaging a bug? Start with
 the diagnostic commands, the log-line format, and the bug
 signatures we've already seen.
 
-Commit convention: gitmoji + Conventional Commits
+Commit convention: gitmoji-driven
 ([CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md)).
-Enable the local hook:
+Install the local hook, once per clone:
 
 ```sh
-git config core.hooksPath scripts/hooks
+glyph hook install
 ```
 
 ## License
