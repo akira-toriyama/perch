@@ -601,12 +601,12 @@ swift test                       # テスト — Xcode 必須
 [stroke](https://github.com/akira-toriyama/stroke) と
 [facet](https://github.com/akira-toriyama/facet) と同じ構造。
 
-コミット規約: gitmoji + Conventional Commits
+コミット規約: gitmoji 駆動
 ([CONTRIBUTING.md](https://github.com/akira-toriyama/.github/blob/main/CONTRIBUTING.md))。
-ローカルフックの有効化:
+ローカルフックの導入（clone ごとに 1 回）:
 
 ```sh
-git config core.hooksPath scripts/hooks
+glyph hook install
 ```
 
 ## ライセンス
