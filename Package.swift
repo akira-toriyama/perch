@@ -72,7 +72,7 @@ let package = Package(
         // local, atomic sill↔perch editing, temporarily swap this line for
         // `.package(path: "../sill")`.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "3.5.0")),
+                 .upToNextMinor(from: "5.0.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module PerchCore reads config with
         // (`Toml.parseFlat`); the module name is unchanged so `import Toml`
@@ -80,7 +80,7 @@ let package = Package(
         // 2.0.0 only changes the nested `parse`/`.arrayOfTables` surface
         // (now `[Toml.Row]`), which perch doesn't use — parseFlat is unchanged.
         .package(url: "https://github.com/akira-toriyama/swift-toml-edit.git",
-                 .upToNextMajor(from: "2.0.0")),
+                 .upToNextMajor(from: "2.3.1")),
     ],
     targets: [
         .target(
