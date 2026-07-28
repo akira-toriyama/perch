@@ -2,8 +2,8 @@
 //
 // The STATIC palette catalog (the `terminal` / `dracula` / `gruvbox` /
 // … presets, their primary / foreground / background / font) now lives
-// in the shared `sill` library (plan atelier's north star: "facet の
-// theme 真似て" never said twice). perch consumes only sill's pure,
+// in the shared `sill` library (plan atelier's north star: "imitate
+// facet's theme" never said twice). perch consumes only sill's pure,
 // AppKit-free `Palette` module — `ThemeSpec`, `paletteFor`, `FontKind`,
 // `canonicalThemeNames` — and is the family's "pure twin", proving the
 // pure layer is reusable by a non-facet Core.
@@ -62,7 +62,7 @@ public let perchSystemPillBgHex: UInt32 = 0x000000
 /// perch's surface is a dark translucent pill that does NOT flip with
 /// the OS appearance, so it keeps white text on a black fill and only
 /// borrows the OS control-accent via the `primary` sentinel (0). This is
-/// the legitimate "bg は app 別" surface difference between facet's panel
+/// the legitimate "background is per-app" surface difference between facet's panel
 /// and perch's pill (atelier Q6: the dark pill stays a divergence; the
 /// concrete black `background` auto-derives `backgroundMode == .fixed`).
 /// `muted` is a placeholder — perch never reads it.
