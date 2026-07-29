@@ -71,8 +71,14 @@ let package = Package(
         // 2) for free, replacing perch's old flat `argv.contains` parser. For
         // local, atomic sill↔perch editing, temporarily swap this line for
         // `.package(path: "../sill")`.
+        // Floor 6.0.0. The breaking piece perch feels is `paletteFor` going
+        // FAILABLE (returns `ThemeSpec?` — the `?? .terminal` clamp is gone,
+        // sill t-0j0z): `perchThemeSpec` unwraps loudly on its pre-validated
+        // names. v6 also ships `RetiredTheme` tombstones, which replace
+        // perch's hand-copied cut-list entry for `catppuccin-latte` (the
+        // copy had already drifted — it said v1.37, the cut was v1.36.0).
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "5.0.0")),
+                 .upToNextMinor(from: "6.0.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module PerchCore reads config with
         // (`Toml.parseFlat`); the module name is unchanged so `import Toml`
