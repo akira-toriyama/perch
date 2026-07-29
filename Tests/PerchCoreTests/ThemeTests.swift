@@ -31,9 +31,7 @@ final class ThemeTests: XCTestCase {
 
     func testCanonicalNameRejectsTypoAndEmpty() {
         // Unknown → nil so the caller clamps to "system" (perch's
-        // loud-rejection / silent-clamp discipline). sill's paletteFor
-        // would silently return terminal — that's exactly what this
-        // guards against.
+        // loud-rejection / silent-clamp discipline).
         XCTAssertNil(perchCanonicalThemeName("frob"))
         XCTAssertNil(perchCanonicalThemeName(""))
         XCTAssertNil(perchCanonicalThemeName("   "))
@@ -44,15 +42,36 @@ final class ThemeTests: XCTestCase {
         // terminal / rainbow, or cut outright). A user config naming one
         // now clamps to `system` rather than silently resolving — this
         // pins the cut so a regression that re-adds them is caught.
+        // (Names cut AFTER Phase V are covered by the tombstone test
+        // below, derived from sill — this hand list once carried
+        // `catppuccin-latte` with the wrong version in its comment,
+        // exactly the drift a derived list can't have.)
         for cut in ["nord", "cute", "kawaii", "paper", "monotone",
                     "mono-light", "mono-dark", "neon", "cyber", "vapor",
                     "onedark", "monokai", "solarized", "everforest",
-                    "rosepine", "catppuccin", "hacker",
-                    // pruned later by sill's WCAG contrast sweep (v1.37).
-                    "catppuccin-latte"] {
+                    "rosepine", "catppuccin", "hacker"] {
             XCTAssertNil(perchCanonicalThemeName(cut),
                          "\(cut) should be cut from the catalog")
         }
+    }
+
+    func testRetiredNamesRejectWithTombstoneStory() {
+        // Derived from sill's `retiredThemeNames` tombstones, NOT a
+        // hand-copied list: whatever the catalog retires must reject,
+        // the did-you-mean hint must be the tombstone's `tryInstead`
+        // (sill's `suggest` short-circuits retired names there), and
+        // the death-certificate note must carry the retiring release.
+        XCTAssertFalse(retiredThemeNames.isEmpty, "sill's tombstone list is empty")
+        for tomb in retiredThemeNames {
+            XCTAssertNil(perchCanonicalThemeName(tomb.name), tomb.name)
+            XCTAssertEqual(perchThemeNameSuggestion(tomb.name), tomb.tryInstead, tomb.name)
+            let note = perchRetiredThemeNote(tomb.name)
+            XCTAssertNotNil(note, tomb.name)
+            XCTAssertTrue(note?.contains(tomb.retiredIn) ?? false,
+                          "note must name the retiring release: \(note ?? "nil")")
+        }
+        // A live name has no tombstone.
+        XCTAssertNil(perchRetiredThemeNote("terminal"))
     }
 
     func testCatalogAcceptsAllColorThemes() {
@@ -109,12 +128,12 @@ final class ThemeTests: XCTestCase {
         // perchPillAlpha is now a pure function of the spec's lightness
         // (background luminance > 0.5), NOT a theme-name table — so new
         // catalog light themes are handled with no perch-local list.
-        XCTAssertEqual(perchPillAlpha(for: paletteFor("terminal")), 0.30)
-        XCTAssertEqual(perchPillAlpha(for: paletteFor("dracula")), 0.30)
-        XCTAssertEqual(perchPillAlpha(for: paletteFor("chomp")), 0.30)
+        XCTAssertEqual(perchPillAlpha(for: Theme.terminal.spec), 0.30)
+        XCTAssertEqual(perchPillAlpha(for: Theme.dracula.spec), 0.30)
+        XCTAssertEqual(perchPillAlpha(for: Theme.chomp.spec), 0.30)
         // The surviving light theme rides higher so the pale fill is
         // not washed out under the frost.
-        XCTAssertEqual(perchPillAlpha(for: paletteFor("github-light")), 0.85)
+        XCTAssertEqual(perchPillAlpha(for: Theme.githubLight.spec), 0.85)
     }
 
     func testThemeSpecCarriesPerchAlpha() {

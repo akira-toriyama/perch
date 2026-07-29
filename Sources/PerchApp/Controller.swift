@@ -187,8 +187,8 @@ final class Controller {
     /// `overlay.customThemeName`; otherwise it validates against sill's
     /// canonical names (`perchCanonicalThemeName`, which also resolves
     /// `random`). Unknown names log + return config as-is — perch's
-    /// loud typo-rejection for the CLI surface (`paletteFor` itself is
-    /// silent, so the explicit validation must stay).
+    /// loud typo-rejection for the CLI surface. A retired catalog name
+    /// gets its sill tombstone verbatim instead of a did-you-mean guess.
     private func effectiveConfig() -> PerchConfig {
         guard let override = themeOverride else { return config }
         if config.overlay.customPalettes[override] != nil {
@@ -197,8 +197,9 @@ final class Controller {
         if let name = perchCanonicalThemeName(override) {
             return config.withTheme(name, customName: nil)
         }
-        let hint = perchThemeNameSuggestion(override)
-            .map { " Did you mean \"\($0)\"?" } ?? ""
+        let hint = perchRetiredThemeNote(override).map { " (\($0))" }
+            ?? perchThemeNameSuggestion(override).map { " Did you mean \"\($0)\"?" }
+            ?? ""
         Log.line("controller: --theme=\"\(override)\" — no matching "
                  + "built-in or [overlay.themes.\(override)] palette; "
                  + "ignoring." + hint)
