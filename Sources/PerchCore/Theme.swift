@@ -80,23 +80,24 @@ public let perchSystemSpec = ThemeSpec(
 /// the frosted-pill translucency (`backgroundAlpha`). `system` returns
 /// perch's own dark-pill spec. The name is assumed already canonical
 /// (validated + `random`-resolved at config parse via
-/// `perchCanonicalThemeName`); an unknown name falls through to sill's
-/// `paletteFor`, which clamps to `terminal`.
+/// `perchCanonicalThemeName`), so a miss on sill's failable `paletteFor`
+/// is a perch bug — crash loud rather than paint a wrong theme.
 public func perchThemeSpec(_ name: String) -> ThemeSpec {
     let n = name.lowercased()
     if n == "system" { return perchSystemSpec }
-    var spec = paletteFor(n)                    // sill canonical palette
+    guard var spec = paletteFor(n) else {       // sill canonical palette
+        preconditionFailure("perch: unknown theme name '\(name)' reached perchThemeSpec")
+    }
     spec.backgroundAlpha = perchPillAlpha(for: spec)  // perch frost overlay
     return spec
 }
 
 /// Validate a raw `[overlay].theme` / `overlay --theme ''` value against sill's
 /// `canonicalThemeNames`, returning the canonical name or `nil` for an
-/// unknown name so the caller can clamp to `system` + log (perch's
-/// loud-typo-rejection discipline — sill's `paletteFor` is silent and
-/// would mask a typo as `terminal`). `random` resolves HERE to a
-/// concrete name (excluding `system` / `random`) so the chosen theme is
-/// stable for the session; `system` and the built-ins pass through.
+/// unknown name so the caller can clamp to `system` + log. `random`
+/// resolves HERE to a concrete name (excluding `system` / `random`) so
+/// the chosen theme is stable for the session; `system` and the
+/// built-ins pass through.
 public func perchCanonicalThemeName(_ raw: String) -> String? {
     let t = raw.trimmingCharacters(in: .whitespaces).lowercased()
     if t.isEmpty { return nil }
@@ -113,6 +114,17 @@ public func perchCanonicalThemeName(_ raw: String) -> String? {
 /// surfaced through PerchCore so PerchApp (which doesn't link Palette)
 /// can enrich its loud CLI reject. `nil` when nothing is close enough.
 public func perchThemeNameSuggestion(_ raw: String) -> String? { suggest(raw) }
+
+/// Death-certificate note for a RETIRED catalog name — sill's
+/// `RetiredTheme` tombstone surfaced through PerchCore (same reason as
+/// `perchThemeNameSuggestion`: PerchApp doesn't link Palette). The
+/// truthful story for a name that was once perfectly correct, where the
+/// Levenshtein hint would fabricate a guess. `nil` when never retired.
+public func perchRetiredThemeNote(_ raw: String) -> String? {
+    guard let tomb = retiredTheme(raw) else { return nil }
+    let alt = tomb.tryInstead.map { " — try \"\($0)\"" } ?? ""
+    return "retired from the sill catalog in \(tomb.retiredIn) (\(tomb.reason))" + alt
+}
 
 // MARK: - Modifier badge
 
