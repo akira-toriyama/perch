@@ -260,7 +260,7 @@ enum PerchApp {
     }
 
     /// `daemon` — lifecycle verbs posted to the running daemon over DNC.
-    /// `--show` is the old `--status` read口 (greppable status file).
+    /// `--show` is the old `--status` read surface (greppable status file).
     private static func dispatchDaemon(_ argv: [String]) -> Never {
         let spec = CLIKit.Spec(arity: [
             "--reload": .flag, "--show": .flag, "--quit": .flag,
