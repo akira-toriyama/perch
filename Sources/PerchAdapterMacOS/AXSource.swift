@@ -290,8 +290,6 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
                  + "manual=\(errM.rawValue) enhanced=\(errE.rawValue)")
     }
 
-    // MARK: - UIElementSource
-
     public func enumerate() -> [UIElement] {
         guard let root = prepareWalkRoot() else { return [] }
         // Per-app overrides (#37) fold directly into the policy —
@@ -701,8 +699,6 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         sema.wait()
         return box.image
     }
-
-    // MARK: - Shared walk setup
 
     /// Reset per-enumeration state + resolve frontmost / wake gate
     /// / focused window / bounds. Returns the AX `window` to walk
@@ -1492,8 +1488,6 @@ public final class AXUIElementSource: UIElementSource, @unchecked Sendable {
         Log.line("dispatch: \(tag) failed (\(err.rawValue)) → id=\(id)")
         return false
     }
-
-    // MARK: - Internals
 
     /// Recursion context. Carries the depth ceiling so we can swap
     /// it (native → web) for the rest of a subtree without leaking

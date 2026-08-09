@@ -126,8 +126,6 @@ public func perchRetiredThemeNote(_ raw: String) -> String? {
     return "retired from the sill catalog in \(tomb.retiredIn) (\(tomb.reason))" + alt
 }
 
-// MARK: - Modifier badge
-
 /// What the modifier-badge corner annotation shows when a modifier
 /// is held during hint mode.
 ///   - `.off` — no badge at all
@@ -177,8 +175,6 @@ public enum PillShape: String, Sendable, CaseIterable {
         return PillShape(rawValue: t)
     }
 }
-
-// MARK: - Effects
 
 /// What perch does to the resolving (winning) pill on hint match.
 /// Mirrors wand's `[gesture.effect] match` vocabulary verbatim,

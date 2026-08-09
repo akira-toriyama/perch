@@ -275,8 +275,6 @@ public final class GridMode {
         typed = ""
     }
 
-    // MARK: - Key handling
-
     private func handle(
         kc: CGKeyCode, flags: CGEventFlags, char: String
     ) -> Bool {
@@ -504,8 +502,6 @@ public final class GridMode {
         Log.line("grid: \(action) → \(label) "
                  + "@ (\(Int(point.x)),\(Int(point.y)))")
     }
-
-    // MARK: - Cell generation
 
     /// Slice `unionFrame` (CG global coords, top-left origin) into
     /// `cols × rows` rectangles. Each rectangle becomes a synthetic

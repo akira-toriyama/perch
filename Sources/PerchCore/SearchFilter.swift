@@ -186,8 +186,6 @@ public enum SearchFilter {
         return max(score, 1)
     }
 
-    // MARK: - Synonym expansion
-
     /// Penalty subtracted from the subsequenceScore when a match
     /// landed via a synonym expansion (not the original token).
     /// Small enough that synonym matches still rank ahead of

@@ -254,8 +254,6 @@ public final class OverlayWindow {
         onCancel = nil
     }
 
-    // MARK: - Key handling
-
     /// Returns `true` if the event should be swallowed (the user
     /// is in hint mode, the key is one of ours), `false` otherwise.
     /// Letting modified keys (Cmd / Ctrl / Option) through means

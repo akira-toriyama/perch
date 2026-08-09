@@ -590,8 +590,6 @@ final class OverlayCanvas: NSView {
         tick()
     }
 
-    // MARK: - Effect-driver delegates
-
     /// Where a particle burst emits from. Match → winning pill;
     /// unmatch → every visible pill.
     private enum ParticleTarget {
@@ -690,8 +688,6 @@ final class OverlayCanvas: NSView {
         }
         painter.needsDisplay = true
     }
-
-    // MARK: - Layout
 
     private static let pillPadX: CGFloat = 12
     private static let pillPadY: CGFloat = 9

@@ -100,8 +100,6 @@ public final class HotkeyMonitor: @unchecked Sendable {
         if let h = handlerRef { RemoveEventHandler(h); handlerRef = nil }
     }
 
-    // MARK: - Key name → keycode
-
     /// Translate a config-style key name (`"space"`, `"esc"`,
     /// `"a"` …) to a Carbon virtual keycode. Returns `nil` for
     /// unknown names. Public because `OverlayWindow` needs the

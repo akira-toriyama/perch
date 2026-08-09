@@ -206,8 +206,6 @@ final class Controller {
         return config
     }
 
-    // MARK: - Hot flow
-
     /// Programmatic cancel — used by the `--cancel` IPC command.
     /// Tears down whichever mode owns the KeyTap (hint / regional
     /// / scroll / search). Idempotent; no-op when nothing is active.
@@ -681,8 +679,6 @@ final class Controller {
                 Log.debug("overlay: cancelled")
             })
     }
-
-    // MARK: - IPC
 
     /// Subscribe to app-activation notifications so we can pre-warm
     /// Chromium / Electron renderer-AX the moment the user switches
