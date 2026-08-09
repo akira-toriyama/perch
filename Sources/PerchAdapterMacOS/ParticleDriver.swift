@@ -113,8 +113,6 @@ final class ParticleDriver {
         tick()
     }
 
-    // MARK: - Per-particle state
-
     /// Live simulation state. Extends `HintPainter.Particle` with
     /// velocity so the driver can advance the system each tick
     /// without re-allocating the list.
@@ -127,8 +125,6 @@ final class ParticleDriver {
         var color: NSColor
         var alpha: CGFloat
     }
-
-    // MARK: - Velocity helpers
 
     /// Uniform random angle, 120-260 px/s speed × intensity.
     private static func randomFireworkVelocity(

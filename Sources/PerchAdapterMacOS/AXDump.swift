@@ -165,7 +165,6 @@ public enum AXDump {
         }
     }
 
-    // MARK: - AX read helpers
     //
     // Duplicated from AXSource intentionally — dump is a diagnostic
     // path, kept independent of the enumeration code so behaviour

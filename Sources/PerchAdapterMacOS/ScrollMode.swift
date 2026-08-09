@@ -99,8 +99,6 @@ public final class ScrollMode {
         Log.line("scroll: mode exited")
     }
 
-    // MARK: - Key handling
-
     /// Returns `true` to swallow the keypress, `false` to let it
     /// through. Esc + the recognised motion keys swallow; anything
     /// else exits scroll mode and lets the key through so the user
@@ -214,8 +212,6 @@ public final class ScrollMode {
         scroll(by: direction * Self.fullScreenHeight() * Int32(n))
         return true
     }
-
-    // MARK: - Dispatch
 
     /// Synthesise a wheel scroll event in pixel units. `delta > 0`
     /// scrolls visually upward (page content moves down) — same

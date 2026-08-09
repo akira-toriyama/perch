@@ -31,8 +31,6 @@ import Toml
 /// `asDouble`, `asStringArray`, …).
 private typealias TOMLDoc = [String: [String: Toml.Value]]
 
-// MARK: - Sub-structs
-
 /// `[hotkey]` — activation + cancel binding.
 public struct HotkeyConfig: Sendable {
     /// Global hotkey that activates hint mode. Default `shift+space`.
@@ -424,8 +422,6 @@ public struct BehaviorOverrides: Sendable, Equatable {
     }
 }
 
-// MARK: - PerchConfig
-
 public struct PerchConfig: Sendable {
 
     public let hotkey: HotkeyConfig
@@ -487,8 +483,6 @@ public struct PerchConfig: Sendable {
             chord: chord, search: search)
     }
 
-    // MARK: - Constants
-
     /// Resolved path of the user's config file.
     public static let path: String = {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
@@ -533,8 +527,6 @@ public struct PerchConfig: Sendable {
             nestMinSize: 100, maxDepth: 3),
         chord: ChordConfig(leader: "", timeoutMs: 600),
         search: SearchConfig(synonyms: [:]))
-
-    // MARK: - Load / parse
 
     /// Read the config file from disk and return a fully-resolved
     /// `PerchConfig`. Missing file → all defaults.
