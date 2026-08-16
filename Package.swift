@@ -78,7 +78,7 @@ let package = Package(
         // perch's hand-copied cut-list entry for `catppuccin-latte` (the
         // copy had already drifted — it said v1.37, the cut was v1.36.0).
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "6.0.0")),
+                 .upToNextMinor(from: "8.0.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module PerchCore reads config with
         // (`Toml.parseFlat`); the module name is unchanged so `import Toml`
