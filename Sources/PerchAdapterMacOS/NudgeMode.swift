@@ -83,8 +83,6 @@ public final class NudgeMode {
         Log.line("nudge: mode exited")
     }
 
-    // MARK: - Key handling
-
     private func handle(
         kc: CGKeyCode, flags: CGEventFlags, char: String
     ) -> Bool {
@@ -138,8 +136,6 @@ public final class NudgeMode {
         if flags.contains(.maskShift)     { return stepMedium }
         return stepSmall
     }
-
-    // MARK: - Dispatch
 
     /// Read current cursor position via `CGEvent(source:)?.location`
     /// — gives CG global coords (top-left origin, matches our other

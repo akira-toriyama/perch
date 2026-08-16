@@ -488,8 +488,6 @@ public extension PerchConfig {
                            + "key itself and empty strings are dropped).")))
     }
 
-    // MARK: - JSON Schema (taplo) — emitted from the SAME `configSpec`
-
     /// The `config.toml` JSON Schema (Draft-07). Drives `perch
     /// config --emit-schema` and the sidecar install — emitted by sill's shared
     /// `ConfigSchema.Spec.jsonSchema()` from the one `configSpec`, so it
@@ -551,8 +549,6 @@ public extension PerchConfig {
         return out.isEmpty ? nil : out
     }
 }
-
-// MARK: - Field builders (keypath + Toml accessor → declarative field)
 
 private extension ConfigSchema.Field where Root == PerchConfig.Staged {
 

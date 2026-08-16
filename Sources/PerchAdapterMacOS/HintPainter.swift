@@ -487,8 +487,6 @@ final class HintPainter: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    // MARK: - Neon border
-
     /// Stroke the pill border with the configured effect preset,
     /// resolved through sill `Effects` rather than perch's old
     /// hand-rolled hue table: sill's pure `resolveBorder` picks the
@@ -543,8 +541,6 @@ final class HintPainter: NSView {
                            brightness: 1, alpha: 1)
         }
     }
-
-    // MARK: - Modifier badge
 
     /// Compose the macOS modifier glyph string for the held flags.
     /// Order matches Apple's canonical glyph order (`⌃⌥⇧⌘`) so the
@@ -606,8 +602,6 @@ final class HintPainter: NSView {
         if flags.contains(.maskShift)     { return "Right" }
         return ""
     }
-
-    // MARK: - Pill geometry
 
     /// Per-pill geometry resolved from `[overlay].pill-shape`. The
     /// painter draws `path` (when `drawBody`) and `accentBar` (always
@@ -684,8 +678,6 @@ final class HintPainter: NSView {
             return PillGeometry(path: p, drawBody: true, accentBar: nil)
         }
     }
-
-    // MARK: - Theme resolution
 
     /// Resolved palette as `NSColor`s + font kind. `overlayAccent`
     /// (when non-"system") wins over the theme's accent so the

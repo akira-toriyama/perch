@@ -16,8 +16,6 @@ import Palette
 /// (background / foreground / muted / primary), not the old 0.1.0 names.
 final class ThemeTests: XCTestCase {
 
-    // MARK: - Name validation (perchCanonicalThemeName)
-
     func testCanonicalNamePassthroughAndCaseTrim() {
         XCTAssertEqual(perchCanonicalThemeName("dracula"), "dracula")
         XCTAssertEqual(perchCanonicalThemeName("  DRACULA  "), "dracula")
@@ -103,8 +101,6 @@ final class ThemeTests: XCTestCase {
         }
     }
 
-    // MARK: - sill-canonical adoption (the migration's headline)
-
     func testServesSillCanonicalValues() {
         // terminal: Phase V redefined it to classic green-on-near-black
         // (the old hacker green folds in here; the old Tokyo-Night
@@ -121,8 +117,6 @@ final class ThemeTests: XCTestCase {
         // github-dark (a Phase V newcomer perch never had): link-blue.
         XCTAssertEqual(perchThemeSpec("github-dark").primary.rgb, 0x2F81F7)
     }
-
-    // MARK: - App-specific overlay: translucency (perchPillAlpha)
 
     func testPillAlphaDerivedFromIsLight() {
         // perchPillAlpha is now a pure function of the spec's lightness
@@ -177,8 +171,6 @@ final class ThemeTests: XCTestCase {
         XCTAssertFalse(sys.isLight)                              // black → dark pill
     }
 
-    // MARK: - Config: theme name parsing
-
     func testConfigThemeName() {
         XCTAssertEqual(
             PerchConfig.parse("[overlay]\ntheme = \"dracula\"").overlay.theme,
@@ -205,8 +197,6 @@ final class ThemeTests: XCTestCase {
         XCTAssertNotEqual(name, "system")
         XCTAssertTrue(canonicalThemeNames.contains(name))
     }
-
-    // MARK: - Config: custom palettes ([overlay.themes.<name>])
 
     func testCustomPaletteParsedAsThemeSpec() {
         let src = """

@@ -66,7 +66,6 @@ final class ConfigValidateTests: XCTestCase {
         XCTAssertThrowsError(try PerchConfig.validate("[overlay\nbad"))
     }
 
-    // MARK: - typed dynamicTable inner keys (t-wnvm)
     //
     // The three open maps used to be bare-permissive: a typo'd INNER key
     // passed schema + validate and the loader silently fell back to the

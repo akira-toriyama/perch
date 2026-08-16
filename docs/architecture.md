@@ -29,7 +29,7 @@ or by a fixture (`SyntheticUIElementSource` in
               │                 │   - Labeler (alphabet assignment)
               │                 │   - TOML parser, PerchConfig
               │                 │   - UIElementSource protocol (the seam)
-              │                 │  AppKit / AX / Carbon 非依存
+              │                 │  no AppKit / AX / Carbon
               └────────┬────────┘
                        │
        ┌───────────────┴────────────────────────┐

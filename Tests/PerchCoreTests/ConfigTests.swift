@@ -162,8 +162,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.overlay.accent, "#ff0000")
     }
 
-    // MARK: - Per-app overrides (#37)
-
     /// A `[behavior."<bundle-id>"]` section parses into a
     /// `BehaviorOverrides` keyed by the bundle id, with only the
     /// keys the user explicitly set carrying values. The global
@@ -269,8 +267,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(cfg.behavior.perApp.isEmpty)
     }
 
-    // MARK: - [regional] frame floor (#34 follow-up)
-
     /// `[regional].min-width` / `min-height` populate the regional
     /// frame floor that `AXUIElementSource.enumerateRegions()` reads
     /// at walk time. Defaults to 200×100; explicit values override.
@@ -298,8 +294,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(cfg.regional.minWidth, 0)
         XCTAssertEqual(cfg.regional.minHeight, 100)
     }
-
-    // MARK: - [search.synonyms] (#53)
 
     /// `[search.synonyms]` populates `searchSynonyms`. Keys are
     /// lowercased; the entries flow through to
@@ -359,7 +353,6 @@ final class ConfigTests: XCTestCase {
             HotkeyCombo(modifiers: [], key: "space"))
     }
 
-    // MARK: - [overlay.border] color-cycle unit (t-5qxd)
     //
     // The knob is `color-cycle-seconds` (seconds in config AND runtime — no
     // ms↔s bridge). The retired `color-cycle-ms` (integer ms) is still

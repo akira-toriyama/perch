@@ -3,8 +3,6 @@ import XCTest
 
 final class SearchFilterTests: XCTestCase {
 
-    // MARK: - subsequenceScore
-
     /// Substring match scores at least as well as a same-length
     /// subsequence-with-gaps match. "Exact prefix still wins" — the
     /// no-regression guarantee from the issue (so typing the first
@@ -51,8 +49,6 @@ final class SearchFilterTests: XCTestCase {
             SearchFilter.subsequenceScore(query: "", target: "any"), 0)
     }
 
-    // MARK: - expand (synonym lookup)
-
     /// Synonym table is bidirectional within a group. Typing the
     /// key OR any value should bring back the whole group, so the
     /// user doesn't have to remember which form the config uses
@@ -79,8 +75,6 @@ final class SearchFilterTests: XCTestCase {
             SearchFilter.expand(token: "open", synonyms: syn),
             ["open"])
     }
-
-    // MARK: - rank (end-to-end)
 
     /// Acceptance: `Cls` against Safari-style labels surfaces
     /// "Close Tab" / "Close Window". This is the fuzzy-only path;
@@ -191,8 +185,6 @@ final class SearchFilterTests: XCTestCase {
             tokens: ["s"], elements: items)
         XCTAssertEqual(ranked.map(\.element.id), ["a", "b", "c"])
     }
-
-    // MARK: - helpers
 
     private func uiElement(id: String, label: String) -> UIElement {
         UIElement(id: id, role: "Button",

@@ -166,8 +166,6 @@ public final class SearchMode {
         Log.line("search: mode exited")
     }
 
-    // MARK: - Key handling
-
     private func handle(
         kc: CGKeyCode, flags: CGEventFlags, char: String
     ) -> Bool {
@@ -260,9 +258,6 @@ public final class SearchMode {
         return 53
     }
 }
-
-
-// MARK: - SearchCanvas (NSView)
 
 /// Minimal canvas for search mode: paints the query strip at top
 /// centre + numbered pills over each AX match. Doesn't share with

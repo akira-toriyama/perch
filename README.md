@@ -1,7 +1,5 @@
 # perch
 
-**English** · [日本語](README.ja.md)
-
 Keyboard-driven UI navigator for macOS. Press a global hotkey,
 type a two-letter label, click anything — no mouse, no trackpad.
 

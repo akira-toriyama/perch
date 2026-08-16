@@ -101,8 +101,6 @@ public final class DragMode {
         Log.line("drag: mode exited")
     }
 
-    // MARK: - Key handling
-
     private func handle(
         kc: CGKeyCode, flags: CGEventFlags, char: String
     ) -> Bool {
@@ -158,8 +156,6 @@ public final class DragMode {
         onExit()
         return false
     }
-
-    // MARK: - Drag verbs
 
     /// Phase transition: `.positioning` → `.dragging`. Posts a
     /// `leftMouseDown` at the current cursor. The receiving app
