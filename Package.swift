@@ -71,22 +71,30 @@ let package = Package(
         // 2) for free, replacing perch's old flat `argv.contains` parser. For
         // local, atomic sill↔perch editing, temporarily swap this line for
         // `.package(path: "../sill")`.
-        // Floor 6.0.0. The breaking piece perch feels is `paletteFor` going
-        // FAILABLE (returns `ThemeSpec?` — the `?? .terminal` clamp is gone,
-        // sill t-0j0z): `perchThemeSpec` unwraps loudly on its pre-validated
-        // names. v6 also ships `RetiredTheme` tombstones, which replace
-        // perch's hand-copied cut-list entry for `catppuccin-latte` (the
-        // copy had already drifted — it said v1.37, the cut was v1.36.0).
+        // Since v6 `paletteFor` is FAILABLE (returns `ThemeSpec?` — the
+        // `?? .terminal` clamp is gone, sill t-0j0z): `perchThemeSpec`
+        // unwraps loudly on its pre-validated names. v6 also ships
+        // `RetiredTheme` tombstones, which own the `catppuccin-latte`
+        // cut-list entry perch used to hand-copy (and mis-copy).
+        // COUPLED with the swift-toml-edit pin below: sill >= 8.1.0 requires
+        // swift-toml-edit 3.x, sill <= 8.0.x requires 2.x — so the two lines
+        // move TOGETHER or `swift package resolve` fails. Dependabot ignores
+        // akira-toriyama/*, so nothing else will warn about this.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "8.0.0")),
+                 .upToNextMinor(from: "8.8.4")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module PerchCore reads config with
         // (`Toml.parseFlat`); the module name is unchanged so `import Toml`
         // survives. Lives in its own repo since sill 0.11.0.
-        // 2.0.0 only changes the nested `parse`/`.arrayOfTables` surface
-        // (now `[Toml.Row]`), which perch doesn't use — parseFlat is unchanged.
+        // 3.0.0 routes the nested `Toml.parse` through the strict tiler, so
+        // it now THROWS on spellings the old line scanner accepted (triple
+        // quotes, `[]` headers, invalid bare keys, control chars in
+        // comments). perch feels that only in `PerchConfig.validate`
+        // (`config --validate` reports it and exits 2; the daemon load path
+        // `try?`s it into zero warnings and keeps going on `parseFlat`).
+        // `parseFlat` itself is UNCHANGED — still the lenient line scanner.
         .package(url: "https://github.com/akira-toriyama/swift-toml-edit.git",
-                 .upToNextMajor(from: "2.3.1")),
+                 .upToNextMajor(from: "3.0.0")),
     ],
     targets: [
         .target(
