@@ -81,7 +81,7 @@ let package = Package(
         // move TOGETHER or `swift package resolve` fails. Dependabot ignores
         // akira-toriyama/*, so nothing else will warn about this.
         .package(url: "https://github.com/akira-toriyama/sill.git",
-                 .upToNextMinor(from: "8.8.4")),
+                 .upToNextMinor(from: "8.9.0")),
         // swift-toml-edit — the family's ONE TOML implementation (Sill-1).
         // Provides the `Toml` module PerchCore reads config with
         // (`Toml.parseFlat`); the module name is unchanged so `import Toml`
