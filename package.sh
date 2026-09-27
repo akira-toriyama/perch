@@ -46,6 +46,23 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$PLIST" "$APP/Contents/Info.plist"
 cp "$BUILD_DIR/perch" "$APP/Contents/MacOS/perch"   # = CFBundleExecutable
+
+# Stamp the bundle's marketing version: the committed Info.plist value is
+# only a fallback for a tag-less tarball build, and it said 1.0.0 while
+# the tags stood at v4.0.0 — measured 2026-09-25, the v4.0.1 draft's
+# Perch.zip carried 1.0.0. The tag this build is FOR arrives as
+# RELEASE_TAG (glyph's release.yml states it on the build step): the
+# draft's tag exists as a git ref only once a human publishes, so `git
+# describe` in CI could only name the PREVIOUS release. Without
+# RELEASE_TAG (a local build) `git describe` stamps v4.0.0-3-g1e77545 →
+# 4.0.0-3-g1e77545; a clean tagged build is just 4.0.0.
+VERSION="${RELEASE_TAG:-$(git describe --tags --dirty 2>/dev/null || true)}"
+VERSION="${VERSION#v}"
+if [[ -n "$VERSION" ]]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" \
+    "$APP/Contents/Info.plist" >/dev/null 2>&1 || true
+fi
+
 # CFBundleIconFile = Perch (set in Info.plist) tells Launch Services
 # to look for Perch.icns in Resources/. Committed binary lives in
 # assets/; regenerate with scripts/make-icon.sh.
