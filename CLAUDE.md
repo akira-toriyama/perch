@@ -762,6 +762,27 @@ stray instances before relaunching.
   signs it with that identity (`--dev` → `Perch-dev.app` /
   `com.perch.perch.dev` to co-exist with a Homebrew install
   without TCC collision). Same pattern as stroke / facet.
+- **`setup-signing-cert.sh` widens the key's partition list** to
+  `apple-tool:,apple:,codesign:`, password asked on the terminal,
+  only when the key lacks `apple:`. `security import -A` leaves it
+  at `apple-tool:`, which keeps `codesign` out:
+  `errSecInternalComponent` over ssh, a SecurityAgent dialog in a
+  GUI session, a LaunchAgent's rebuild hanging there. A usable key
+  must stay a silent exit 0, because capsule's `verify.sh` runs the
+  script on every verify of the perch profile, unattended, output
+  in a log, and a failure stops the run; the Homebrew formula calls
+  it the same way during install. Without a terminal a key that
+  needs the list is exit 1 with a message, and the formula falls
+  back to ad-hoc with its warning. `-l "perch Local Signing"`
+  matters: without it every signing key in the keychain gets the
+  list. A wrong password exits 1 and changes nothing, which is why
+  the identity-present path checks too. Read it back with
+  `security dump-keychain -a` in a session with the keychain
+  unlocked (a locked one shows no `partition_id` entry). openssl is
+  `/usr/bin/openssl` without `-legacy`: PATH's may be a LibreSSL
+  that refuses the flag with the script's output hidden. Measured
+  2026-11-08 on macOS 26.5: a Tart VM's login keychain (canon
+  t-wc1c; the chord original is chord#237 / #238).
 - **`LSUIElement = true`** — no Dock icon, no menubar item. The
   daemon is intentionally invisible until the hotkey fires.
 

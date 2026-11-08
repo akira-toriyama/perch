@@ -61,7 +61,7 @@ Or build from source:
 ```sh
 git clone https://github.com/akira-toriyama/perch
 cd perch
-./setup-signing-cert.sh            # persistent TCC identity (once)
+./setup-signing-cert.sh            # persistent TCC identity (once; asks for your login password)
 ./run.sh                           # builds Perch-dev.app and launches
 ./install-cli.sh                   # symlink `perch` onto $PATH
 ```
